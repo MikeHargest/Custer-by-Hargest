@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Production/Build
+dist/
+out/
+build/
+*.exe
+*.dmg
+*.AppImage
+
+# IDE/Tools
+.vscode/
+.eslintcache
+*.tsbuildinfo
+.editorconfig.bak
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log*
+
+# Antigravity/Agent
+.gemini/
+errors.txt
+tmp_refactor.js
