@@ -68,13 +68,15 @@ interface ColorPickerProps {
   onChange: (color: string) => void
   onClose: () => void
   anchorRect?: DOMRect | null
+  inline?: boolean
 }
 
 export default function ColorPicker({
   color,
   onChange,
   onClose,
-  anchorRect
+  anchorRect,
+  inline
 }: ColorPickerProps): React.ReactElement {
   const rgb = hexToRgb(color) || [255, 62, 108]
   const initialHsb = rgbToHsb(...rgb)
@@ -99,6 +101,8 @@ export default function ColorPicker({
       const rect = popupRef.current.getBoundingClientRect()
       const threshold = 150 // Distance in pixels
 
+      if (inline) return
+
       const dist = Math.sqrt(
         Math.pow(Math.max(0, rect.left - e.clientX, e.clientX - rect.right), 2) +
           Math.pow(Math.max(0, rect.top - e.clientY, e.clientY - rect.bottom), 2)
@@ -120,7 +124,7 @@ export default function ColorPicker({
       document.removeEventListener('mousedown', clickHandler)
       document.removeEventListener('mousemove', mouseMoveHandler)
     }
-  }, [onClose])
+  }, [onClose, inline])
 
   // Build the current color hex from HSB
   const currentHex = useCallback(() => {
@@ -128,22 +132,59 @@ export default function ColorPicker({
     return rgbToHex(r, g, b)
   }, [hue, sat, bright])
 
-  // Sync hex display and emit onChange whenever HSB changes
+  // Sync with color prop changes from outside (e.g. from Settings modal)
   useEffect(() => {
-    const [r, g, b] = hsbToRgb(hue, sat, bright)
-    const hex = rgbToHex(r, g, b)
+    // Only update if it's actually different from our current internal state
+    const currentHexStr = currentHex()
+    if (color.toUpperCase() !== currentHexStr.toUpperCase()) {
+      const rgb = hexToRgb(color)
+      if (rgb) {
+        const [h, s, b] = rgbToHsb(...rgb)
+        setHue(h)
+        setSat(s)
+        setBright(b)
+        setHexInput(color.toUpperCase())
+      }
+    }
+  }, [color, currentHex])
+
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  const handleColorUpdate = useCallback((h: number, s: number, b: number) => {
+    const [r, g, bVal] = hsbToRgb(h, s, b)
+    const hex = rgbToHex(r, g, bVal)
     setHexInput(hex)
-    onChange(hex)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hue, sat, bright])
+    onChangeRef.current(hex)
+  }, [])
 
   // ===== Slider drag logic =====
-  const applyRatio = useCallback((channel: 'h' | 's' | 'b', ratio: number) => {
-    const clamped = Math.max(0, Math.min(1, ratio))
-    if (channel === 'h') setHue(Math.round(clamped * 360))
-    else if (channel === 's') setSat(Math.round(clamped * 100))
-    else setBright(Math.round(clamped * 100))
-  }, [])
+  // 1) Update local UI immediately for 60fps smoothness
+  const applyRatioLocal = useCallback(
+    (channel: 'h' | 's' | 'b', ratio: number) => {
+      const clamped = Math.max(0, Math.min(1, ratio))
+      let newH = hue
+      let newS = sat
+      let newB = bright
+
+      if (channel === 'h') {
+        newH = Math.round(clamped * 360)
+        setHue(newH)
+      } else if (channel === 's') {
+        newS = Math.round(clamped * 100)
+        setSat(newS)
+      } else {
+        newB = Math.round(clamped * 100)
+        setBright(newB)
+      }
+      return { newH, newS, newB }
+    },
+    [hue, sat, bright]
+  )
+
+  const throttleRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleSliderMouseDown = useCallback(
     (channel: 'h' | 's' | 'b', e: React.MouseEvent<HTMLDivElement>) => {
@@ -152,24 +193,45 @@ export default function ColorPicker({
       const track = e.currentTarget
       const rect = track.getBoundingClientRect()
 
-      // Immediately jump thumb to click position
+      // Immediately jump thumb to click position, and update globally
       const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
-      applyRatio(channel, x / rect.width)
+      const initVals = applyRatioLocal(channel, x / rect.width)
+      handleColorUpdate(initVals.newH, initVals.newS, initVals.newB)
 
       const onMove = (ev: MouseEvent): void => {
         ev.preventDefault()
         const r = track.getBoundingClientRect()
         const mx = Math.max(0, Math.min(ev.clientX - r.left, r.width))
-        applyRatio(channel, mx / r.width)
+
+        // Update local state instantly so the thumb moves smoothly
+        const result = applyRatioLocal(channel, mx / r.width)
+
+        // Throttle global app update (onChange) to save CPU/prevent heavy renders
+        if (!throttleRef.current) {
+          throttleRef.current = setTimeout(() => {
+            handleColorUpdate(result.newH, result.newS, result.newB)
+            throttleRef.current = null
+          }, 32) // ~30 times a second for global updates while dragging
+        }
       }
-      const onUp = (): void => {
+      const onUp = (ev: MouseEvent): void => {
+        // Clear any pending throttle and do one final precise update
+        if (throttleRef.current) {
+          clearTimeout(throttleRef.current)
+          throttleRef.current = null
+        }
+        const r = track.getBoundingClientRect()
+        const mx = Math.max(0, Math.min(ev.clientX - r.left, r.width))
+        const finalResult = applyRatioLocal(channel, mx / r.width)
+        handleColorUpdate(finalResult.newH, finalResult.newS, finalResult.newB)
+
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
       }
       document.addEventListener('mousemove', onMove)
       document.addEventListener('mouseup', onUp)
     },
-    [applyRatio]
+    [applyRatioLocal, handleColorUpdate]
   )
 
   // Handle hex input
@@ -182,6 +244,7 @@ export default function ColorPicker({
       setHue(h)
       setSat(s)
       setBright(b)
+      handleColorUpdate(h, s, b)
     }
   }
 
@@ -198,7 +261,17 @@ export default function ColorPicker({
     userSelect: 'none'
   }
 
-  if (anchorRect) {
+  if (inline) {
+    popupStyle.position = 'relative'
+    popupStyle.top = 'auto'
+    popupStyle.left = 'auto'
+    popupStyle.transform = 'none'
+    popupStyle.boxShadow = 'none'
+    popupStyle.border = 'none'
+    popupStyle.padding = '0'
+    popupStyle.width = '100%'
+    popupStyle.zIndex = 'auto'
+  } else if (anchorRect) {
     popupStyle.top = anchorRect.bottom + 6
     popupStyle.left = anchorRect.left
     // Make sure it doesn't overflow the viewport
@@ -284,6 +357,7 @@ export default function ColorPicker({
           onChange={(e) => {
             const v = Math.max(0, Math.min(360, parseInt(e.target.value) || 0))
             setHue(v)
+            handleColorUpdate(v, sat, bright)
           }}
         />
         <span style={{ ...labelStyle, width: '8px' }}>°</span>
@@ -308,6 +382,7 @@ export default function ColorPicker({
           onChange={(e) => {
             const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
             setSat(v)
+            handleColorUpdate(hue, v, bright)
           }}
         />
         <span style={{ ...labelStyle, width: '8px' }}>%</span>
@@ -332,6 +407,7 @@ export default function ColorPicker({
           onChange={(e) => {
             const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
             setBright(v)
+            handleColorUpdate(hue, sat, v)
           }}
         />
         <span style={{ ...labelStyle, width: '8px' }}>%</span>

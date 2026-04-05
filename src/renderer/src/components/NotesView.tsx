@@ -52,6 +52,22 @@ const findProjectRecursive = (projs: Project[], id: string | null): Project | un
   return undefined
 }
 
+const sanitizeFileName = (name: string): string => {
+  return (
+    name
+      .replace(/[<>:"/\\|?*]/g, '_')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 100) || 'Untitled'
+  )
+}
+
+const getFileName = (title: string, id: string, ext: string): string => {
+  const sanitized = sanitizeFileName(title)
+  const shortId = id.slice(0, 8)
+  return `${sanitized}_${shortId}.${ext}`
+}
+
 export default function NotesView({
   notes,
   setNotes,
@@ -70,6 +86,10 @@ export default function NotesView({
   const [textColorPickerRect, setTextColorPickerRect] = useState<DOMRect | null>(null)
   const quillRef = useRef<ReactQuill>(null)
   const saveTimers = useRef<{ [id: string]: ReturnType<typeof setTimeout> }>({})
+  const quillContentRef = useRef<string>('')
+  const [localTitle, setLocalTitle] = useState('')
+  const titleSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const lastActiveIdRef = useRef<string | null>(activeNoteId)
 
   const applyFormatting = (type: string, value?: string): void => {
     const quill = quillRef.current?.getEditor()
@@ -165,8 +185,12 @@ export default function NotesView({
       let targetDir = workspacePath + '/notes'
       if (pId !== 'default') {
         const project = findProjectRecursive(projects, pId)
-        if (project?.notesPath) {
-          targetDir = project.notesPath
+        if (project) {
+          if (project.notesPath) {
+            targetDir = project.notesPath
+          } else if (project.path) {
+            targetDir = `${project.path}/notes`
+          }
         }
       }
 
@@ -186,10 +210,14 @@ export default function NotesView({
       let targetDir = workspacePath + '/boards'
       if (pId !== 'default') {
         const project = findProjectRecursive(projects, pId)
-        // @ts-ignore
-        if (project?.boardsPath) {
+        if (project) {
           // @ts-ignore
-          targetDir = project.boardsPath
+          if (project.boardsPath) {
+            // @ts-ignore
+            targetDir = project.boardsPath
+          } else if (project.path) {
+            targetDir = `${project.path}/boards`
+          }
         }
       }
 
@@ -204,6 +232,13 @@ export default function NotesView({
   const activeNote = notes.find((n) => n.id === activeNoteId)
   const lastLoadedRef = useRef<string | null>(null)
 
+  // Sync local title when active note changes
+  useEffect(() => {
+    if (activeNote) {
+      setLocalTitle(activeNote.title)
+    }
+  }, [activeNoteId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Load content from file-system when note changes
   useEffect(() => {
     const loadContent = async (): Promise<void> => {
@@ -214,11 +249,30 @@ export default function NotesView({
           ? getBoardTargetDir(activeNote.projectId, activeNote.isTrash)
           : getNoteTargetDir(activeNote.projectId, activeNote.isTrash)
 
-        const ext = isBoard ? '.board' : '.md'
-        // @ts-ignore - window.api is injected
-        const diskContent = isBoard
-          ? await window.api.readBoard(targetDir, `${activeNoteId}${ext}`)
-          : await window.api.readNote(targetDir, `${activeNoteId}${ext}`)
+        const api = (window as any).api
+        let diskContent: string | null = null
+
+        if (isBoard) {
+          // Try .ibo first with title-based name
+          const iboName = getFileName(activeNote.title, activeNoteId, 'ibo')
+          diskContent = await api.readIbo(targetDir, iboName)
+          if (diskContent === null) {
+            // Fallback to legacy UUID-based name
+            diskContent = await api.readIbo(targetDir, `${activeNoteId}.ibo`)
+          }
+          if (diskContent === null) {
+            // Fallback to old .board format
+            diskContent = await api.readBoard(targetDir, `${activeNoteId}.board`)
+          }
+        } else {
+          const mdName = getFileName(activeNote.title, activeNoteId, 'md')
+          diskContent = await api.readNote(targetDir, mdName)
+          if (diskContent === null) {
+            // Fallback to legacy UUID-based name
+            diskContent = await api.readNote(targetDir, `${activeNoteId}.md`)
+          }
+        }
+
         // Only update state if disk has content, otherwise use what's in state
         if (diskContent !== null && diskContent !== activeNote.content) {
           setNotes((prev) =>
@@ -226,11 +280,13 @@ export default function NotesView({
           )
         } else if (diskContent === null && activeNote.content) {
           if (isBoard) {
-            // @ts-ignore
-            window.api.saveBoard(targetDir, `${activeNoteId}${ext}`, activeNote.content)
+            const iboName = getFileName(activeNote.title, activeNoteId, 'ibo')
+            // @ts-ignore - saveIbo has custom API signature
+            window.api.saveIbo(targetDir, iboName, activeNote.content)
           } else {
-            // @ts-ignore - write existing memory note to disk
-            window.api.saveNote(targetDir, `${activeNoteId}${ext}`, activeNote.content)
+            const mdName = getFileName(activeNote.title, activeNoteId, 'md')
+            // @ts-ignore - saveNote persists markdown content
+            window.api.saveNote(targetDir, mdName, activeNote.content)
           }
         }
       }
@@ -245,6 +301,40 @@ export default function NotesView({
     getNoteTargetDir,
     getBoardTargetDir
   ])
+
+  // Flush pending saves when switching notes
+  useEffect(() => {
+    const flushSave = (id: string): void => {
+      const noteToSave = notes.find((n) => n.id === id)
+      if (!noteToSave) return
+
+      const isBoard = noteToSave.type === 'tldraw'
+      const targetDir = isBoard
+        ? getBoardTargetDir(noteToSave.projectId, noteToSave.isTrash)
+        : getNoteTargetDir(noteToSave.projectId, noteToSave.isTrash)
+
+      if (targetDir) {
+        const fileName = getFileName(noteToSave.title, id, isBoard ? 'ibo' : 'md')
+        if (isBoard) {
+          // @ts-ignore - api defined in preload
+          window.api.saveIbo(targetDir, fileName, noteToSave.content)
+        } else {
+          // @ts-ignore - api defined in preload
+          window.api.saveNote(targetDir, fileName, noteToSave.content)
+        }
+      }
+    }
+
+    if (lastActiveIdRef.current && lastActiveIdRef.current !== activeNoteId) {
+      const prevId = lastActiveIdRef.current
+      if (saveTimers.current[prevId]) {
+        clearTimeout(saveTimers.current[prevId])
+        delete saveTimers.current[prevId]
+        flushSave(prevId)
+      }
+    }
+    lastActiveIdRef.current = activeNoteId
+  }, [activeNoteId, notes, getBoardTargetDir, getNoteTargetDir])
 
   useEffect(() => {
     if (!activeNoteId && filteredNotes.length > 0) {
@@ -279,7 +369,8 @@ export default function NotesView({
       type,
       projectId: noteProjId,
       isTrash: false,
-      lastModified: Date.now()
+      lastModified: Date.now(),
+      createdAt: Date.now()
     }
 
     const isBoard = type === 'tldraw'
@@ -292,13 +383,13 @@ export default function NotesView({
 
     // Save empty physical file
     if (targetDir) {
-      const ext = isBoard ? '.board' : '.md'
+      const fileName = getFileName(newNote.title, newNote.id, isBoard ? 'ibo' : 'md')
       if (isBoard) {
-        // @ts-ignore
-        window.api.saveBoard(targetDir, `${newNote.id}${ext}`, initialContent)
+        // @ts-ignore: saveIbo is a custom container API that bundles board JSON and media
+        window.api.saveIbo(targetDir, fileName, initialContent)
       } else {
-        // @ts-ignore - window.api is injected
-        window.api.saveNote(targetDir, `${newNote.id}${ext}`, initialContent)
+        // @ts-ignore: saveNote handles standard markdown note persisting
+        window.api.saveNote(targetDir, fileName, initialContent)
       }
     }
   }
@@ -311,7 +402,6 @@ export default function NotesView({
     const noteToDelete = notes.find((n) => n.id === id)
     if (!noteToDelete) return
     const isBoard = noteToDelete.type === 'tldraw'
-    const ext = isBoard ? '.board' : '.md'
 
     if (showTrash) {
       // Permanent Delete
@@ -322,12 +412,19 @@ export default function NotesView({
         ? getBoardTargetDir(noteToDelete.projectId, true)
         : getNoteTargetDir(noteToDelete.projectId, true)
       if (targetDir) {
+        const titleName = getFileName(noteToDelete.title, id, isBoard ? 'ibo' : 'md')
         if (isBoard) {
-          // @ts-ignore
-          window.api.deleteBoard(targetDir, `${id}${ext}`)
+          // @ts-ignore: Delete title-based .ibo file
+          window.api.deleteBoard(targetDir, titleName)
+          // @ts-ignore: Attempt deletion of legacy UUID-based .ibo
+          window.api.deleteBoard(targetDir, `${id}.ibo`)
+          // @ts-ignore: Fallback for older .board files
+          window.api.deleteBoard(targetDir, `${id}.board`)
         } else {
-          // @ts-ignore
-          window.api.deleteNote(targetDir, `${id}${ext}`)
+          // @ts-ignore: Delete title-based .md file
+          window.api.deleteNote(targetDir, titleName)
+          // @ts-ignore: Delete legacy UUID-based .md
+          window.api.deleteNote(targetDir, `${id}.md`)
         }
       }
     } else {
@@ -344,12 +441,19 @@ export default function NotesView({
       const newDir = isBoard ? getBoardTargetDir(pId, true) : getNoteTargetDir(pId, true)
 
       if (oldDir && newDir) {
+        const titleName = getFileName(noteToDelete.title, id, isBoard ? 'ibo' : 'md')
         if (isBoard) {
-          // @ts-ignore
-          window.api.moveBoard(oldDir, newDir, `${id}${ext}`)
+          // @ts-ignore: Move title-based .ibo to trash
+          window.api.moveBoard(oldDir, newDir, titleName)
+          // @ts-ignore: Move any existing UUID-based .ibo file to trash
+          window.api.moveBoard(oldDir, newDir, `${id}.ibo`)
+          // @ts-ignore: Support legacy format move
+          window.api.moveBoard(oldDir, newDir, `${id}.board`)
         } else {
-          // @ts-ignore - injected window.api
-          window.api.moveNote(oldDir, newDir, `${id}${ext}`)
+          // @ts-ignore: Move title-based .md to trash
+          window.api.moveNote(oldDir, newDir, titleName)
+          // @ts-ignore: Move legacy UUID-based .md to trash
+          window.api.moveNote(oldDir, newDir, `${id}.md`)
         }
       }
     }
@@ -368,83 +472,130 @@ export default function NotesView({
     setNotes(updatedNotes)
 
     const isBoard = noteToRestore.type === 'tldraw'
-    const ext = isBoard ? '.board' : '.md'
     const oldDir = isBoard ? getBoardTargetDir(pId, true) : getNoteTargetDir(pId, true)
     const newDir = isBoard ? getBoardTargetDir(pId, false) : getNoteTargetDir(pId, false)
 
     if (oldDir && newDir) {
+      const noteTitle = noteToRestore?.title || 'Untitled'
       if (isBoard) {
-        // @ts-ignore
-        window.api.moveBoard(oldDir, newDir, `${id}${ext}`)
+        const iboName = getFileName(noteTitle, id, 'ibo')
+        // @ts-ignore: Restore either format from trash
+        window.api.moveBoard(oldDir, newDir, iboName)
+        // @ts-ignore: Fallback for legacy UUID name
+        window.api.moveBoard(oldDir, newDir, `${id}.ibo`)
+        // @ts-ignore: Fallback for legacy board restoration
+        window.api.moveBoard(oldDir, newDir, `${id}.board`)
       } else {
-        // @ts-ignore - injected window.api
-        window.api.moveNote(oldDir, newDir, `${id}${ext}`)
+        const mdName = getFileName(noteTitle, id, 'md')
+        // @ts-ignore: Restore markdown note
+        window.api.moveNote(oldDir, newDir, mdName)
+        // @ts-ignore: Fallback for legacy UUID name
+        window.api.moveNote(oldDir, newDir, `${id}.md`)
       }
     }
   }
-
   const handleUpdateNote = useCallback(
     (id: string, updates: Partial<AppNote>): void => {
+      // Apply updates to React state immediately to ensure "total saving" and avoid data loss on switch
       setNotes((prev) =>
-        prev.map((n) => (n.id === id ? { ...n, ...updates, lastModified: Date.now() } : n))
+        prev.map((n) => {
+          if (n.id === id) {
+            return { ...n, ...updates, lastModified: Date.now() }
+          }
+          return n
+        })
       )
 
-      // If content was updated, write to disk
-      if (updates.content !== undefined) {
-        const targetNote = notes.find((n) => n.id === id)
-        const type = updates.type || targetNote?.type || 'markdown'
-        const noteProjectId = targetNote?.projectId || 'default'
-        const isBoard = type === 'tldraw'
+      // Build updatedNote for file-save logic
+      const targetNote = notes.find((n) => n.id === id)
+      if (!targetNote) return
+      const updatedNote = { ...targetNote, ...updates, lastModified: Date.now() }
 
-        let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
-        if (noteProjectId !== 'trash') {
-          const project = findProjectRecursive(projects, noteProjectId)
+      // Get targetDir dynamically
+      const type = updatedNote.type || 'markdown'
+      const isBoard = type === 'tldraw'
+      let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
+
+      const noteProjectId = updatedNote.projectId || 'default'
+      if (noteProjectId !== 'trash') {
+        const project = findProjectRecursive(projects, noteProjectId)
+        if (project) {
           if (isBoard) {
-            // @ts-ignore
-            if (project?.boardsPath) {
-              // @ts-ignore
-              targetDir = project.boardsPath
-            }
+            // @ts-ignore - boardsPath exists on Project but TS doesn't see it
+            if (project.boardsPath) targetDir = project.boardsPath
+            else if (project.path) targetDir = `${project.path}/boards`
           } else {
-            if (project?.notesPath) {
-              // @ts-ignore
-              targetDir = project.notesPath
-            }
+            if (project.notesPath) targetDir = project.notesPath
+            else if (project.path) targetDir = `${project.path}/notes`
           }
         }
+      }
 
-        if (targetDir) {
-          const ext = isBoard ? '.board' : '.md'
-          const contentToSave = updates.content
+      if (!targetDir) return
 
-          // Debounce saving to disk
-          if (saveTimers.current[id]) {
-            clearTimeout(saveTimers.current[id])
-          }
-          saveTimers.current[id] = setTimeout(() => {
+      // If title changed, immediately rename (delete old, save new)
+      if (updates.title !== undefined && targetNote.title !== updates.title) {
+        const oldFileName = getFileName(targetNote.title, id, isBoard ? 'ibo' : 'md')
+        if (isBoard) {
+          // @ts-ignore - api defined in preload
+          window.api.deleteBoard(targetDir, oldFileName)
+        } else {
+          // @ts-ignore - api defined in preload
+          window.api.deleteNote(targetDir, oldFileName)
+        }
+      }
+
+      // Save content
+      if (updates.content !== undefined || updates.title !== undefined) {
+        const contentToSave = updatedNote.content
+
+        if (saveTimers.current[id]) clearTimeout(saveTimers.current[id])
+        saveTimers.current[id] = setTimeout(
+          (): void => {
+            const noteTitle = updatedNote?.title || 'Untitled'
+            const fileName = getFileName(noteTitle, id, isBoard ? 'ibo' : 'md')
             if (isBoard) {
-              // @ts-ignore
-              window.api.saveBoard(targetDir, `${id}${ext}`, contentToSave)
+              // @ts-ignore - api defined in preload
+              window.api.saveIbo(targetDir, fileName, contentToSave)
+              // Cleanup legacy boards
+              // @ts-ignore - api defined in preload
+              window.api.deleteBoard(targetDir, `${id}.board`)
+              // @ts-ignore - api defined in preload
+              window.api.deleteBoard(targetDir, `${id}.ibo`)
             } else {
-              // @ts-ignore - window.api is injected
-              window.api.saveNote(targetDir, `${id}${ext}`, contentToSave)
+              // @ts-ignore - api defined in preload
+              window.api.saveNote(targetDir, fileName, contentToSave)
+              // @ts-ignore - api defined in preload
+              window.api.deleteNote(targetDir, `${id}.md`)
             }
-          }, 1000)
-        }
-      } else if (updates.title !== undefined) {
-        // Title update logic
+          },
+          updates.content !== undefined ? 1000 : 0
+        )
       }
     },
     [notes, workspacePath, projects, setNotes]
   )
 
+  const handleTitleChange = useCallback(
+    (newTitle: string) => {
+      setLocalTitle(newTitle)
+      if (titleSyncTimer.current) clearTimeout(titleSyncTimer.current)
+      titleSyncTimer.current = setTimeout(() => {
+        if (activeNoteId) {
+          handleUpdateNote(activeNoteId, { title: newTitle })
+        }
+      }, 300)
+    },
+    [activeNoteId, handleUpdateNote]
+  )
+
   const handleBoardChange = useCallback(
-    (content: string) => {
+    (content: string): void => {
       if (activeNote) {
         handleUpdateNote(activeNote.id, { content })
       }
     },
-    [activeNote?.id, handleUpdateNote]
+    [activeNote, handleUpdateNote]
   )
 
   const formatDate = (ts: number): string => {
@@ -476,11 +627,11 @@ export default function NotesView({
 
     const result: FlattenedItem[] = []
 
-    const traverse = (projectId: string | null, level: number, isRoot: boolean) => {
+    const traverse = (projectId: string | null, level: number, isRoot: boolean): void => {
       const project = extendedProjects.find((p) => p.id === projectId)
       const projectNotes = filteredNotes
         .filter((n) => (projectId === 'default' ? !n.projectId : n.projectId === projectId))
-        .sort((a, b) => b.lastModified - a.lastModified)
+        .sort((a, b) => (b.createdAt || b.lastModified) - (a.createdAt || a.lastModified))
 
       const subprojects = project?.subprojects || []
 
@@ -517,13 +668,14 @@ export default function NotesView({
   return (
     <>
       <div
+        className="notes-view-container"
         style={{
           display: 'flex',
           height: '100%',
           width: '100%',
           overflow: 'hidden',
-          padding: '0 10px 10px 10px',
-          background: 'var(--bg-color)'
+          padding: 0,
+          background: 'var(--card-bg)'
         }}
       >
         <div
@@ -531,16 +683,13 @@ export default function NotesView({
             display: 'flex',
             flexDirection: 'row-reverse',
             flex: 1,
-            background: 'var(--card-bg)',
-            borderRadius: 'var(--radius-lg)',
-            border: '1px solid rgba(255,255,255,0.05)',
             overflow: 'hidden'
           }}
         >
           <style>{`
         .ql-container {
           font-family: inherit;
-          font-size: 14px;
+          font-size: 16px;
           border: none !important;
           flex: 1;
           display: flex;
@@ -548,10 +697,10 @@ export default function NotesView({
         }
         .ql-editor {
           flex: 1;
-          padding: 16px 0 32px !important; /* Removed sides padding to use centering container */
+          padding: 0 0 32px !important; /* Top padding removed - divider margin handles spacing */
           line-height: 1.6;
           color: var(--text-primary);
-          max-width: 800px;
+          max-width: 700px;
           margin: 0 auto;
           width: 100%;
         }
@@ -561,7 +710,7 @@ export default function NotesView({
           font-style: normal !important;
         }
         .centered-container {
-          max-width: 800px;
+          max-width: 700px;
           margin: 0 auto;
           width: 100%;
           display: flex;
@@ -881,94 +1030,98 @@ export default function NotesView({
           >
             {activeNote ? (
               <>
-                <div
-                  style={{
-                    padding: '24px 32px 16px',
-                    borderBottom: '1px solid rgba(255,255,255,0.02)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '16px'
-                  }}
-                >
-                  <div style={{ flex: 1, display: 'flex' }}>
-                    <input
-                      type="text"
-                      value={activeNote.title}
-                      onChange={(e) => handleUpdateNote(activeNote.id, { title: e.target.value })}
-                      placeholder={activeNote.type === 'tldraw' ? 'Board Title' : 'Note Title'}
-                      style={{
-                        width: '100%',
-                        fontSize: '24px',
-                        fontWeight: 600,
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--text-primary)',
-                        outline: 'none',
-                        padding: 0,
-                        flex: 1
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => setShowSidebar(!showSidebar)}
-                    title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: showSidebar ? 0.6 : 0.4,
-                      flexShrink: 0,
-                      marginRight: '-12px'
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.4')
-                    }
-                  >
-                    <PanelRight size={18} />
-                  </button>
-                </div>
-
                 {activeNote.type === 'tldraw' ? (
-                  <div
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      flexDirection: 'column',
-                      height: '100%',
-                      width: '100%',
-                      overflow: 'hidden',
-                      position: 'relative'
-                    }}
-                  >
-                    <BoardsView
-                      key={activeNote.id}
-                      boardData={activeNote.content}
-                      onChange={handleBoardChange}
-                      theme={theme}
-                      setTheme={setTheme}
-                      showFPS={showFPS}
-                      isSidebarOpen={showSidebar}
-                    />
-                  </div>
-                ) : (
                   <>
                     <div
                       style={{
-                        padding: '12px 32px',
+                        padding: '8px 16px',
                         borderBottom: '1px solid rgba(255,255,255,0.05)',
                         display: 'flex',
                         alignItems: 'center',
-                        background: 'rgba(255,255,255,0.02)'
+                        justifyContent: 'space-between',
+                        background: 'transparent',
+                        minHeight: '44px',
+                        boxSizing: 'border-box'
                       }}
                     >
-                      <div className="centered-container" style={{ gap: '8px', flexWrap: 'wrap' }}>
+                      <input
+                        type="text"
+                        value={localTitle}
+                        onChange={(e) => handleTitleChange(e.target.value)}
+                        placeholder="Board Title"
+                        style={{
+                          flex: 1,
+                          fontSize: '14px',
+                          fontWeight: 400,
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-primary)',
+                          outline: 'none',
+                          padding: 0
+                        }}
+                      />
+                      <button
+                        onClick={() => setShowSidebar(!showSidebar)}
+                        title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: showSidebar ? 0.6 : 0.4,
+                          flexShrink: 0
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.4')
+                        }
+                      >
+                        <PanelRight size={18} />
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        flex: 1,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        height: '100%',
+                        width: '100%',
+                        overflow: 'hidden',
+                        position: 'relative'
+                      }}
+                    >
+                      <BoardsView
+                        key={activeNote.id}
+                        boardData={activeNote.content}
+                        onChange={handleBoardChange}
+                        theme={theme}
+                        setTheme={setTheme}
+                        showFPS={showFPS}
+                        isSidebarOpen={showSidebar}
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Toolbar at top */}
+                    <div
+                      style={{
+                        padding: '8px 16px',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        background: 'transparent'
+                      }}
+                    >
+                      <div
+                        className="centered-container"
+                        style={{ gap: '8px', flexWrap: 'wrap', flex: 1 }}
+                      >
                         <ToolbarButton onClick={() => applyFormatting('bold')} title="Bold">
                           <Bold size={16} />
                         </ToolbarButton>
@@ -1059,7 +1212,31 @@ export default function NotesView({
                           <Minus size={16} />
                         </ToolbarButton>
                       </div>
+                      <button
+                        onClick={() => setShowSidebar(!showSidebar)}
+                        title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: showSidebar ? 0.6 : 0.4,
+                          flexShrink: 0
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.4')
+                        }
+                      >
+                        <PanelRight size={18} />
+                      </button>
                     </div>
+
+                    {/* Title below toolbar */}
 
                     <div
                       style={{
@@ -1075,14 +1252,45 @@ export default function NotesView({
                         className="centered-container"
                         style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
                       >
-                        <div className="document-guide document-guide-left" />
-                        <div className="document-guide document-guide-right" />
+                        <input
+                          type="text"
+                          value={localTitle}
+                          onChange={(e) => handleTitleChange(e.target.value)}
+                          placeholder="Note Title"
+                          style={{
+                            width: '100%',
+                            fontSize: '32px',
+                            fontWeight: 600,
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-primary)',
+                            outline: 'none',
+                            padding: '24px 0 16px',
+                            lineHeight: 1.3
+                          }}
+                        />
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '2px',
+                            background: 'rgba(255,255,255,0.08)',
+                            marginBottom: '16px'
+                          }}
+                        />
                         <ReactQuill
                           key={activeNoteId}
-                          ref={quillRef}
+                          ref={(el) => {
+                            ;(quillRef as React.MutableRefObject<ReactQuill | null>).current = el
+                            if (el) {
+                              quillContentRef.current = activeNote.content || ''
+                            }
+                          }}
                           theme="snow"
-                          value={activeNote.content}
-                          onChange={(content) => handleUpdateNote(activeNote.id, { content })}
+                          defaultValue={activeNote.content}
+                          onChange={(content) => {
+                            quillContentRef.current = content
+                            handleUpdateNote(activeNote.id, { content })
+                          }}
                           placeholder="Start typing your notes here..."
                           modules={{ toolbar: false }}
                           style={{

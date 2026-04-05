@@ -1,7 +1,7 @@
 :root {
   --bg-color: #292929;
   --card-bg: #121212;
-  --text-primary: #f8fafc;
+  --text-primary: #EAEAEA;
   --text-secondary: #a1a1aa;
   --accent: #525252;
   --accent-hover: #606060;
@@ -11,8 +11,8 @@
   --success-hover: #d4d4d4;
   --timeline-task-bg: #0f0f0f;
 
-  --radius-lg: 12px;
-  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-md: 12px;
   --radius-sm: 4px;
 
   color-scheme: dark;
@@ -56,12 +56,36 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--card-bg);
+  background: transparent;
   border-radius: var(--radius-sm);
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
+:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar:horizontal {
+  height: 0;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: transparent;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .app-container {
@@ -71,10 +95,8 @@ body {
   background-color: var(--bg-color);
   overflow: hidden;
   border-radius: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.4),
-    0 24px 80px rgba(0, 0, 0, 0.75);
+  padding: 8px;
+  gap: 8px;
 }
 
 .main-content {
@@ -82,8 +104,9 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Prevent main-content from scrolling */
   position: relative;
+  background-color: transparent;
+  gap: 8px;
 }
 
 .header {
@@ -91,11 +114,14 @@ body {
   justify-content: space-between;
   align-items: center;
   height: auto;
-  padding: 10px;
+  padding: 8px 16px;
   flex-shrink: 0;
   position: relative;
   -webkit-app-region: drag;
   z-index: 100;
+  background-color: var(--card-bg);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* All interactive elements inside the header opt out of drag */
@@ -107,10 +133,22 @@ body {
   -webkit-app-region: no-drag;
 }
 
+/* Consolidate header actions */
 .header-actions {
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.views-wrapper {
+  background-color: var(--card-bg);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
 }
 
 .pin-btn {
@@ -133,6 +171,40 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-1px);
+}
+
+.view-tab {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 0 12px;
+  width: 72px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  font-weight: 500;
+  opacity: 0.7;
+  margin: 2px 3px;
+}
+
+.view-tab:hover {
+  opacity: 1;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.view-tab.active {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+  font-weight: 600;
+  opacity: 1;
+  box-shadow: none;
 }
 
 .pin-btn:active {
@@ -190,7 +262,7 @@ body {
 .timers-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  gap: 10px;
 }
 
 /* Timer Card Styles */
@@ -461,29 +533,92 @@ body {
 
 /* Sidebar Styles */
 .task-sidebar {
-  height: 100vh;
-  background-color: var(--card-bg);
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
-  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  height: 100%;
+  background-color: transparent;
+  border-right: none;
+  transition:
+    width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+    margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  will-change: width, margin-right;
+  flex-shrink: 0;
 }
 
 .task-sidebar.open {
-  width: 320px;
+  width: 300px;
+  margin-right: 0;
 }
 
 .task-sidebar.closed {
   width: 0px;
+  margin-right: -8px;
+  /* Offset the 8px gap in app-container */
 }
 
-.sidebar-content {
-  width: 320px;
-  height: 100%;
+.sidebar-block {
+  background-color: var(--card-bg);
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* Added to fix rounding collapse */
+}
+
+.sidebar-block:not(:last-child):not(.has-resizer-after) {
+  margin-bottom: 8px;
+}
+
+.sidebar-block.has-resizer-after {
+  margin-bottom: 0;
+}
+
+.sidebar-block:last-child {
+  flex: 1;
+}
+
+.sidebar-resizer {
+  height: 8px;
+  /* Reduced from 10px */
+  cursor: row-resize;
+  position: relative;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+}
+
+.sidebar-resizer::after {
+  content: '';
+  width: calc(100% - 32px);
+  height: 1px;
+  background: rgba(255, 255, 255, 0.05);
+  transition: all 0.2s ease;
+  border-radius: 1px;
+  opacity: 0;
+  /* Invisible by default */
+}
+
+.sidebar-resizer:hover::after,
+.sidebar-resizer.is-resizing::after {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  height: 2px;
+  opacity: 1;
+  /* Visible on hover/resize */
+}
+
+.sidebar-content {
+  width: 300px;
+  min-width: 300px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
 }
 
 .sidebar-header {
@@ -526,7 +661,7 @@ body {
   background: var(--accent);
   border: none;
   color: white;
-  border-radius: var(--radius-sm);
+  border-radius: 8px;
   width: 36px;
   height: 36px;
   display: flex;
@@ -665,6 +800,14 @@ body {
   opacity: 1;
 }
 
+/* Ensure the sidebar and blocks don't clip the dropdown */
+.task-sidebar:has(.project-dropdown),
+.sidebar-content:has(.project-dropdown),
+.sidebar-block:has(.project-dropdown) {
+  overflow: visible !important;
+  z-index: 99999;
+}
+
 .project-dropdown {
   position: absolute;
   top: 100%;
@@ -730,9 +873,12 @@ body {
   border: 1px solid var(--accent);
   color: var(--text-primary);
   border-radius: var(--radius-sm);
-  padding: 2px 6px;
+  padding: 2px 4px;
   font-size: 13px;
   outline: none;
+  resize: none;
+  font-family: inherit;
+  overflow: hidden;
 }
 
 .group-description-input {
@@ -825,7 +971,7 @@ body {
 .sidebar-tab-btn {
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: rgba(255, 255, 255, 0.2);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -836,22 +982,11 @@ body {
 }
 
 .sidebar-tab-btn:hover {
-  color: var(--text-primary);
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .sidebar-tab-btn.active {
-  color: var(--accent);
-}
-
-.sidebar-tab-btn.active::after {
-  content: '';
-  position: absolute;
-  bottom: -4px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background-color: var(--accent);
-  border-radius: 2px;
+  color: var(--text-secondary);
 }
 
 .group-tasks {
@@ -1223,20 +1358,7 @@ body {
   transform: none;
 }
 
-.premium-project-item .selection-glow {
-  position: absolute;
-  left: 6px;
-  top: 6px;
-  bottom: 6px;
-  width: 5px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
 
-.premium-project-item.selected .selection-glow {
-  opacity: 1;
-}
 
 .premium-task-card,
 .premium-subtask-item {
@@ -1255,7 +1377,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 8px 16px;
   width: 100%;
 }
 
@@ -1267,7 +1389,7 @@ body {
 }
 
 .premium-subtask-item .task-row {
-  padding: 10px 12px;
+  padding: 8px 12px;
   gap: 10px;
 }
 
@@ -1680,6 +1802,8 @@ body {
   justify-content: center;
   z-index: 9999;
   -webkit-app-region: drag;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-sizing: border-box;
 }
 
 .welcome-content {

@@ -150,13 +150,13 @@ const removeProjectFromTree = (
   let extracted: Project | null = null
   const projects = projs.reduce((acc: Project[], p) => {
     if (p.id === projectId) {
-      extracted = { ...p }
+      extracted = p
       return acc
     }
     if (p.subprojects && p.subprojects.length > 0) {
-      const result = removeProjectFromTree(p.subprojects, projectId)
-      if (result.extracted) extracted = result.extracted
-      acc.push({ ...p, subprojects: result.projects })
+      const childResult = removeProjectFromTree(p.subprojects, projectId)
+      if (childResult.extracted) extracted = childResult.extracted
+      acc.push({ ...p, subprojects: childResult.projects })
     } else {
       acc.push(p)
     }
@@ -164,6 +164,677 @@ const removeProjectFromTree = (
   }, [])
   return { projects, extracted }
 }
+
+interface EventRendererProps {
+  event: AppEvent
+  selectedProjectId: string
+  editingId: string | null
+  editingValue: string
+  cancelEditing: () => void
+  deleteEvent: (projectId: string, eventId: string) => void
+  updateEvent: (
+    projectId: string,
+    eventId: string,
+    field: 'title' | 'date' | 'time',
+    value: string
+  ) => void
+  setEditingValue: (val: string) => void
+  saveEventName: (projectId: string, eventId: string) => void
+  isExpanded: boolean
+  setExpandedEventId: (id: string | null) => void
+  projectColor?: string
+}
+
+const EventRenderer = memo(function EventRenderer({
+  event,
+  selectedProjectId,
+  editingId,
+  editingValue,
+  cancelEditing,
+  deleteEvent,
+  updateEvent,
+  setEditingValue,
+  saveEventName,
+  isExpanded,
+  setExpandedEventId,
+  projectColor
+}: EventRendererProps) {
+  return (
+    <div
+      key={event.id}
+      className="event-card premium-event-item"
+      style={{
+        position: 'relative',
+        background: 'rgba(255,255,255,0.03)',
+        borderRadius: '14px',
+        border: isExpanded ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
+        transition: 'all 0.2s',
+        overflow: 'hidden'
+      }}
+    >
+      <div
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 0,
+          bottom: 0,
+          width: '3px',
+          background: projectColor || 'var(--accent)'
+        }}
+      />
+      <div
+        style={{
+          padding: '8px 10px 8px 16px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer'
+        }}
+        onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flex: 1,
+            minWidth: 0
+          }}
+        >
+          {isExpanded ? (
+            <ChevronDown size={12} style={{ flexShrink: 0, color: 'var(--text-secondary)' }} />
+          ) : (
+            <ChevronRight size={12} style={{ flexShrink: 0, color: 'var(--text-secondary)' }} />
+          )}
+          {editingId === event.id ? (
+            <textarea
+              className="inline-edit-input"
+              value={editingValue}
+              onChange={(e) => {
+                setEditingValue(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = `${e.target.scrollHeight}px`
+              }}
+              onBlur={() => saveEventName(selectedProjectId, event.id)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  saveEventName(selectedProjectId, event.id)
+                }
+                if (e.key === 'Escape') cancelEditing()
+              }}
+              onClick={(e) => e.stopPropagation()}
+              autoFocus
+              ref={(el) => {
+                if (el) {
+                  el.style.height = 'auto'
+                  el.style.height = `${el.scrollHeight}px`
+                }
+              }}
+              style={{
+                width: '100%',
+                resize: 'none',
+                minHeight: '20px',
+                fontFamily: 'inherit',
+                lineHeight: '1.4',
+                padding: '2px 4px',
+                margin: '-3px 0'
+              }}
+            />
+          ) : (
+            <span
+              style={{
+                fontSize: '13px',
+                fontWeight: 400,
+                color: 'var(--text-primary)',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word'
+              }}
+            >
+              {event.title}
+            </span>
+          )}
+          {!isExpanded && (event.date || event.time) && (
+            <span
+              style={{
+                fontSize: '10px',
+                color: 'var(--text-secondary)',
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              {event.date && (
+                <>
+                  <Calendar size={9} />{' '}
+                  {new Date(event.date + 'T00:00:00').toLocaleDateString(undefined, {
+                    month: 'short',
+                    day: 'numeric'
+                  })}
+                </>
+              )}
+              {event.time && (
+                <>
+                  <Clock size={9} /> {event.time}
+                </>
+              )}
+            </span>
+          )}
+        </div>
+        <button
+          className="task-delete-btn"
+          onClick={(e) => {
+            e.stopPropagation()
+            deleteEvent(selectedProjectId, event.id)
+          }}
+          style={{ opacity: 0.5, flexShrink: 0 }}
+        >
+          <Trash2 size={12} />
+        </button>
+      </div>
+      {isExpanded && (
+        <div
+          style={{
+            padding: '0 8px 12px 16px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            borderTop: '1px solid rgba(255,255,255,0.04)'
+          }}
+        >
+          <div style={{ paddingTop: '8px' }}>
+            <label
+              style={{
+                fontSize: '10px',
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                marginBottom: '4px',
+                display: 'block'
+              }}
+            >
+              Title
+            </label>
+            <input
+              className="inline-edit-input"
+              value={event.title || ''}
+              onChange={(e) => updateEvent(selectedProjectId, event.id, 'title', e.target.value)}
+              style={{ width: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ flex: 1 }}>
+              <label
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '4px',
+                  display: 'block'
+                }}
+              >
+                Date
+              </label>
+              <input
+                type="date"
+                className="inline-edit-input"
+                value={event.date || ''}
+                onChange={(e) => updateEvent(selectedProjectId, event.id, 'date', e.target.value)}
+                style={{ width: '100%' }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label
+                style={{
+                  fontSize: '10px',
+                  color: 'var(--text-secondary)',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.05em',
+                  marginBottom: '4px',
+                  display: 'block'
+                }}
+              >
+                Time
+              </label>
+              <input
+                type="time"
+                className="inline-edit-input"
+                value={event.time || ''}
+                onChange={(e) => updateEvent(selectedProjectId, event.id, 'time', e.target.value)}
+                style={{ width: '100%' }}
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              marginTop: '8px'
+            }}
+          >
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setExpandedEventId(null)
+              }}
+              style={{
+                background: 'var(--accent)',
+                border: 'none',
+                color: 'white',
+                padding: '4px 12px',
+                borderRadius: '4px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                fontWeight: 600
+              }}
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+})
+
+interface TaskItemRendererProps {
+  task: TaskItem
+  project: Project
+  depth: number
+  toggleTask: (projectId: string, taskId: string) => void
+  toggleTaskExpansion: (projectId: string, taskId: string) => void
+  editingId: string | null
+  editingValue: string
+  setEditingValue: (val: string) => void
+  saveTaskName: (projectId: string, taskId: string) => void
+  cancelEditing: () => void
+  startEditing: (id: string, value: string) => void
+  deleteTask: (projectId: string, taskId: string) => void
+  getTaskTimelineDate: (projectId: string, taskId: string) => string | null
+  onTaskAdded: (projectId: string, name: string, parentId?: string, explicitId?: string) => void
+  isDragging: string | null
+  dropIndicator: any
+  startMouseDrag: (e: React.MouseEvent, info: any) => void
+  showTaskCounts: boolean
+}
+
+const TaskItemRenderer = memo(function TaskItemRenderer({
+  task,
+  project,
+  depth,
+  toggleTask,
+  toggleTaskExpansion,
+  editingId,
+  editingValue,
+  setEditingValue,
+  saveTaskName,
+  cancelEditing,
+  startEditing,
+  deleteTask,
+  getTaskTimelineDate,
+  onTaskAdded,
+  isDragging,
+  dropIndicator,
+  startMouseDrag,
+  showTaskCounts
+}: TaskItemRendererProps) {
+  const isSubtask = depth > 0
+
+  return (
+    <div key={task.id}>
+      <div
+        className={`${isSubtask ? 'premium-subtask-item' : 'premium-task-card'} depth-${depth} ${
+          task.completed ? 'completed' : ''
+        } ${
+          dropIndicator?.id === task.id &&
+          dropIndicator.position === 'inside' &&
+          dropIndicator.type === 'task'
+            ? 'drag-over-nest'
+            : ''
+        }`}
+        data-task-id={task.id}
+        data-project-id={project.id}
+        data-depth={depth}
+        onMouseDown={(e) => {
+          const target = e.target as HTMLElement
+          if (
+            target.closest('button') ||
+            target.closest('input') ||
+            target.closest('textarea') ||
+            target.closest('a')
+          )
+            return
+          startMouseDrag(e, { type: 'task', projectId: project.id, taskId: task.id })
+        }}
+        style={{
+          position: 'relative',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          opacity: isDragging === task.id ? 0.4 : 1,
+          borderTop:
+            dropIndicator?.id === task.id &&
+            dropIndicator.position === 'before' &&
+            dropIndicator.type === 'task'
+              ? '2px solid var(--accent)'
+              : undefined,
+          borderBottom:
+            dropIndicator?.id === task.id &&
+            dropIndicator.position === 'after' &&
+            dropIndicator.type === 'task'
+              ? '2px solid var(--accent)'
+              : undefined
+        }}
+      >
+        <div className="task-row">
+          <button
+            className="task-checkbox"
+            style={{
+              marginRight: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: task.completed ? 'var(--success)' : 'var(--text-secondary)'
+            }}
+            onClick={() => toggleTask(project.id, task.id)}
+          >
+            {task.completed ? <CheckSquare size={14} /> : <Square size={14} />}
+          </button>
+
+          <div
+            className="task-content"
+            onClick={() => toggleTaskExpansion(project.id, task.id)}
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              textAlign: 'left',
+              cursor: 'pointer',
+              minWidth: 0
+            }}
+          >
+            {editingId === task.id ? (
+              <textarea
+                className="inline-edit-input"
+                value={editingValue}
+                onChange={(e) => {
+                  setEditingValue(e.target.value)
+                  e.target.style.height = 'auto'
+                  e.target.style.height = `${e.target.scrollHeight}px`
+                }}
+                onBlur={() => saveTaskName(project.id, task.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault()
+                    saveTaskName(project.id, task.id)
+                  }
+                  if (e.key === 'Escape') cancelEditing()
+                }}
+                onClick={(e) => e.stopPropagation()}
+                autoFocus
+                ref={(el) => {
+                  if (el) {
+                    el.style.height = 'auto'
+                    el.style.height = `${el.scrollHeight}px`
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  resize: 'none',
+                  minHeight: '20px',
+                  fontFamily: 'inherit',
+                  lineHeight: '1.4',
+                  padding: '2px 4px',
+                  margin: '-3px 0'
+                }}
+              />
+            ) : (
+              <span
+                className="task-text"
+                style={{
+                  fontSize: '13px',
+                  fontWeight: 400,
+                  flex: 1,
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word'
+                }}
+              >
+                {task.text}
+              </span>
+            )}
+          </div>
+
+          {getTaskTimelineDate(project.id, task.id) && (
+            <span
+              style={{
+                fontSize: '10px',
+                background: 'rgba(255,255,255,0.06)',
+                padding: '2px 6px',
+                borderRadius: '4px',
+                color: 'var(--text-secondary)',
+                whiteSpace: 'nowrap',
+                marginRight: '4px'
+              }}
+            >
+              {getTaskTimelineDate(project.id, task.id)}
+            </span>
+          )}
+
+          <div
+            className="task-actions"
+            style={{ display: 'flex', alignItems: 'center', gap: '2px' }}
+          >
+            {depth < 2 && (
+              <button
+                className="task-edit-btn"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const subtaskName = `Subtask ${(task.subtasks?.length || 0) + 1}`
+                  const subtaskId = uuidv4()
+                  onTaskAdded(project.id, subtaskName, task.id, subtaskId)
+                  setTimeout(() => startEditing(subtaskId, subtaskName), 0)
+                }}
+                title="Add Subtask"
+              >
+                <Plus size={14} />
+              </button>
+            )}
+            <button
+              className="task-edit-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                startEditing(task.id, task.text)
+              }}
+              title="Edit Task"
+            >
+              <Pencil size={12} />
+            </button>
+            <button
+              className="task-delete-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                deleteTask(project.id, task.id)
+              }}
+              title="Delete Task"
+            >
+              <Trash2 size={12} />
+            </button>
+          </div>
+        </div>
+
+        {task.subtasks && task.subtasks.length > 0 && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              toggleTaskExpansion(project.id, task.id)
+            }}
+            style={{
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.08)',
+              borderRadius: '4px',
+              padding: '0px 8px',
+              height: '14px',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              opacity: 0.7,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginTop: '2px'
+            }}
+            title={task.isExpanded ? 'Свернуть' : 'Развернуть'}
+          >
+            {task.isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        )}
+
+        {task.isExpanded && (
+          <div className="subtasks-container">
+            {task.subtasks &&
+              task.subtasks.map((subtask) => (
+                <TaskItemRenderer
+                  key={subtask.id}
+                  task={subtask}
+                  project={project}
+                  depth={depth + 1}
+                  toggleTask={toggleTask}
+                  toggleTaskExpansion={toggleTaskExpansion}
+                  editingId={editingId}
+                  editingValue={editingValue}
+                  setEditingValue={setEditingValue}
+                  saveTaskName={saveTaskName}
+                  cancelEditing={cancelEditing}
+                  startEditing={startEditing}
+                  deleteTask={deleteTask}
+                  getTaskTimelineDate={getTaskTimelineDate}
+                  onTaskAdded={onTaskAdded}
+                  isDragging={isDragging}
+                  dropIndicator={dropIndicator}
+                  startMouseDrag={startMouseDrag}
+                  showTaskCounts={showTaskCounts}
+                />
+              ))}
+            <DropZone dzAction="inside" dzProject={project.id} dzTask={task.id} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+})
+
+interface TaskRendererProps {
+  project: Project
+  isRoot: boolean
+  toggleTask: (projectId: string, taskId: string) => void
+  toggleTaskExpansion: (projectId: string, taskId: string) => void
+  editingId: string | null
+  editingValue: string
+  setEditingValue: (val: string) => void
+  saveTaskName: (projectId: string, taskId: string) => void
+  cancelEditing: () => void
+  startEditing: (id: string, value: string) => void
+  deleteTask: (projectId: string, taskId: string) => void
+  getTaskTimelineDate: (projectId: string, taskId: string) => string | null
+  onTaskAdded: (projectId: string, name: string, parentId?: string, explicitId?: string) => void
+  isDragging: string | null
+  dropIndicator: any
+  startMouseDrag: (e: React.MouseEvent, info: any) => void
+  showTaskCounts: boolean
+}
+
+const TaskRenderer = memo(function TaskRenderer({
+  project,
+  isRoot,
+  toggleTask,
+  toggleTaskExpansion,
+  editingId,
+  editingValue,
+  setEditingValue,
+  saveTaskName,
+  cancelEditing,
+  startEditing,
+  deleteTask,
+  getTaskTimelineDate,
+  onTaskAdded,
+  isDragging,
+  dropIndicator,
+  startMouseDrag,
+  showTaskCounts
+}: TaskRendererProps) {
+  const projectTasks = project.tasks || []
+  return (
+    <div key={project.id}>
+      {!isRoot && projectTasks.length > 0 && (
+        <div
+          style={{
+            fontSize: '11px',
+            textTransform: 'uppercase',
+            color: 'var(--text-secondary)',
+            marginTop: '16px',
+            marginBottom: '8px',
+            paddingLeft: '4px',
+            opacity: 0.8,
+            borderBottom: '1px solid rgba(255,255,255,0.05)',
+            paddingBottom: '4px'
+          }}
+        >
+          {project.name}
+        </div>
+      )}
+      {projectTasks.map((task) => (
+        <TaskItemRenderer
+          key={task.id}
+          task={task}
+          project={project}
+          depth={0}
+          toggleTask={toggleTask}
+          toggleTaskExpansion={toggleTaskExpansion}
+          editingId={editingId}
+          editingValue={editingValue}
+          setEditingValue={setEditingValue}
+          saveTaskName={saveTaskName}
+          cancelEditing={cancelEditing}
+          startEditing={startEditing}
+          deleteTask={deleteTask}
+          getTaskTimelineDate={getTaskTimelineDate}
+          onTaskAdded={onTaskAdded}
+          isDragging={isDragging}
+          dropIndicator={dropIndicator}
+          startMouseDrag={startMouseDrag}
+          showTaskCounts={showTaskCounts}
+        />
+      ))}
+      {project.subprojects?.map((sub) => (
+        <TaskRenderer
+          key={sub.id}
+          project={sub}
+          isRoot={false}
+          toggleTask={toggleTask}
+          toggleTaskExpansion={toggleTaskExpansion}
+          editingId={editingId}
+          editingValue={editingValue}
+          setEditingValue={setEditingValue}
+          saveTaskName={saveTaskName}
+          cancelEditing={cancelEditing}
+          startEditing={startEditing}
+          deleteTask={deleteTask}
+          getTaskTimelineDate={getTaskTimelineDate}
+          onTaskAdded={onTaskAdded}
+          isDragging={isDragging}
+          dropIndicator={dropIndicator}
+          startMouseDrag={startMouseDrag}
+          showTaskCounts={showTaskCounts}
+        />
+      ))}
+      {projectTasks.length > 0 && <DropZone dzAction="project" dzProject={project.id} />}
+    </div>
+  )
+})
 
 interface ProjectRendererProps {
   project: Project
@@ -196,6 +867,7 @@ interface ProjectRendererProps {
   isDragging: string | null
   parentColor?: string
   openColorPickerFor: (projectId: string, rect: DOMRect) => void
+  showTaskCounts: boolean
 }
 
 const ProjectRenderer = memo(function ProjectRenderer({
@@ -221,7 +893,8 @@ const ProjectRenderer = memo(function ProjectRenderer({
   dropIndicator,
   isDragging,
   parentColor,
-  openColorPickerFor
+  openColorPickerFor,
+  showTaskCounts
 }: ProjectRendererProps): React.ReactElement {
   const isSelected = selectedProjectId === project.id
   const displayColor = project.color || parentColor || 'var(--accent)'
@@ -275,13 +948,12 @@ const ProjectRenderer = memo(function ProjectRenderer({
           onDragStart(e, { type: 'project', projectId: project.id, taskId: '' })
         }}
       >
-        <div className="selection-glow" style={{ background: displayColor }} />
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '4px 6px 4px 18px'
+            padding: '4px 6px 4px 8px'
           }}
         >
           {/* Move the chevron button down below the name */}
@@ -348,20 +1020,55 @@ const ProjectRenderer = memo(function ProjectRenderer({
               autoFocus
             />
           ) : (
-            <span
-              className="task-text"
+            <div
               style={{
                 flex: 1,
-                fontSize: '13px',
-                fontWeight: isSelected ? 600 : 400,
-                color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
+                display: 'flex',
+                alignItems: 'center',
+                minWidth: 0,
+                overflow: 'hidden'
               }}
             >
-              {project.name}
-            </span>
+              <span
+                className="task-text"
+                style={{
+                  fontSize: '13px',
+                  fontWeight: isSelected ? 600 : 400,
+                  color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {project.name}
+              </span>
+              {showTaskCounts &&
+                ((): React.ReactNode => {
+                  let count = 0
+                  const traverse = (tasks: TaskItem[]): void => {
+                    count += tasks.length
+                    tasks.forEach((t) => {
+                      if (t.subtasks) traverse(t.subtasks)
+                    })
+                  }
+                  if (project.tasks) traverse(project.tasks)
+                  if (count === 0) return null
+                  return (
+                    <span
+                      style={{
+                        marginLeft: '8px',
+                        fontSize: '11px',
+                        color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        opacity: 0.6,
+                        fontWeight: 500,
+                        flexShrink: 0
+                      }}
+                    >
+                      {count}
+                    </span>
+                  )
+                })()}
+            </div>
           )}
 
           <div
@@ -499,6 +1206,7 @@ const ProjectRenderer = memo(function ProjectRenderer({
               isDragging={isDragging}
               parentColor={displayColor}
               openColorPickerFor={openColorPickerFor}
+              showTaskCounts={showTaskCounts}
             />
           ))}
         </div>
@@ -510,7 +1218,7 @@ const ProjectRenderer = memo(function ProjectRenderer({
 interface TaskSidebarProps {
   isOpen: boolean
   projects: Project[]
-  setProjects: React.Dispatch<React.SetStateAction<Project[]>>
+  setProjects: (action: React.SetStateAction<Project[]>, skipHistory?: boolean) => void
   timelineTasks: TimelineTask[]
   selectedProjectId: string | null
   setSelectedProjectId: React.Dispatch<React.SetStateAction<string | null>>
@@ -519,9 +1227,10 @@ interface TaskSidebarProps {
   onTaskAdded: (projectId: string, name: string, parentId?: string, explicitId?: string) => void
   onTaskDeleted?: (taskName: string, taskId: string) => void
   onAssignTaskToTimer?: (timerId: string, taskText: string) => void
+  showTaskCounts: boolean
 }
 
-export default function TaskSidebar({
+export default memo(function TaskSidebar({
   isOpen,
   projects,
   setProjects,
@@ -532,7 +1241,8 @@ export default function TaskSidebar({
   onDeleteProject,
   onTaskAdded,
   onTaskDeleted,
-  onAssignTaskToTimer
+  onAssignTaskToTimer,
+  showTaskCounts
 }: TaskSidebarProps): React.ReactElement {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [dropIndicator, setDropIndicator] = useState<{
@@ -543,9 +1253,41 @@ export default function TaskSidebar({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState('')
   const editingValueRef = useRef(editingValue)
+
+  // Resizer state
+  const [projectsHeight, setProjectsHeight] = useState(300)
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false)
+  const [resizeStartY, setResizeStartY] = useState(0)
+  const [resizeStartHeight, setResizeStartHeight] = useState(300)
+
   useEffect(() => {
     editingValueRef.current = editingValue
   }, [editingValue])
+
+  useEffect(() => {
+    if (!isResizingSidebar) return
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaY = e.clientY - resizeStartY
+      const newHeight = resizeStartHeight + deltaY
+
+      // Constraints
+      if (newHeight > 60 && newHeight < 650) {
+        setProjectsHeight(newHeight)
+      }
+    }
+
+    const handleMouseUp = () => {
+      setIsResizingSidebar(false)
+    }
+
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isResizingSidebar, resizeStartY, resizeStartHeight])
 
   const projectsRef = useRef(projects)
   useEffect(() => {
@@ -565,9 +1307,10 @@ export default function TaskSidebar({
     },
     [onDeleteProject]
   )
-  const [activeTab, setActiveTab] = useState<'tasks' | 'events'>('tasks')
+  // Removed activeTab state because it was unused
   // Event creation form state
   const [expandedEventId, setExpandedEventId] = useState<string | null>(null)
+  const [isEventsExpanded, setIsEventsExpanded] = useState(true)
 
   // ===== EVENTS LOGIC =====
   const handleAddEvent = (projectId: string, title: string, eventId: string): void => {
@@ -808,9 +1551,17 @@ export default function TaskSidebar({
           return p
         })
       }
-      setProjects((prev) => updateRecursive(prev))
+      setProjects((prev) => updateRecursive(prev), true)
     },
     [setProjects]
+  )
+  const handleColorChange = useCallback(
+    (color: string) => {
+      if (colorPickerState) {
+        updateProjectColor(colorPickerState.projectId, color)
+      }
+    },
+    [colorPickerState?.projectId, updateProjectColor]
   )
 
   const toggleProjectExpansion = useCallback(
@@ -1492,275 +2243,14 @@ export default function TaskSidebar({
 
   const selectedProject = findProjectRecursive(projects, selectedProjectId)
 
-  const TaskItemRenderer = ({
-    task,
-    project,
-    depth
-  }: {
-    task: TaskItem
-    project: Project
-    depth: number
-  }): React.ReactElement => {
-    const isSubtask = depth > 0
-
-    return (
-      <div key={task.id}>
-        <div
-          className={`${isSubtask ? 'premium-subtask-item' : 'premium-task-card'} depth-${depth} ${
-            task.completed ? 'completed' : ''
-          } ${
-            dropIndicator?.id === task.id &&
-            dropIndicator.position === 'inside' &&
-            dropIndicator.type === 'task'
-              ? 'drag-over-nest'
-              : ''
-          }`}
-          data-task-id={task.id}
-          data-project-id={project.id}
-          data-depth={depth}
-          onMouseDown={(e) => {
-            const target = e.target as HTMLElement
-            if (
-              target.closest('button') ||
-              target.closest('input') ||
-              target.closest('textarea') ||
-              target.closest('a')
-            )
-              return
-            startMouseDrag(e, { type: 'task', projectId: project.id, taskId: task.id })
-          }}
-          style={{
-            position: 'relative',
-            cursor: isDragging ? 'grabbing' : 'grab',
-            opacity: isDragging === task.id ? 0.4 : 1,
-            borderTop:
-              dropIndicator?.id === task.id &&
-              dropIndicator.position === 'before' &&
-              dropIndicator.type === 'task'
-                ? '2px solid var(--accent)'
-                : undefined,
-            borderBottom:
-              dropIndicator?.id === task.id &&
-              dropIndicator.position === 'after' &&
-              dropIndicator.type === 'task'
-                ? '2px solid var(--accent)'
-                : undefined
-          }}
-        >
-          <div className="task-row">
-            <button
-              className="task-checkbox"
-              style={{
-                marginRight: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: task.completed ? 'var(--success)' : 'var(--text-secondary)'
-              }}
-              onClick={() => toggleTask(project.id, task.id)}
-            >
-              {task.completed ? <CheckSquare size={14} /> : <Square size={14} />}
-            </button>
-
-            <div
-              className="task-content"
-              onClick={() => toggleTaskExpansion(project.id, task.id)}
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                textAlign: 'left',
-                cursor: 'pointer',
-                minWidth: 0
-              }}
-            >
-              {editingId === task.id ? (
-                <input
-                  className="inline-edit-input"
-                  value={editingValue}
-                  onChange={(e) => setEditingValue(e.target.value)}
-                  onBlur={() => saveTaskName(project.id, task.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') saveTaskName(project.id, task.id)
-                    if (e.key === 'Escape') cancelEditing()
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  autoFocus
-                  style={{ width: '100%' }}
-                />
-              ) : (
-                <span
-                  className="task-text"
-                  style={{
-                    fontSize: '13px',
-                    fontWeight: isSubtask ? 400 : 500,
-                    flex: 1,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  {task.text}
-                </span>
-              )}
-            </div>
-
-            {getTaskTimelineDate(project.id, task.id) && (
-              <span
-                style={{
-                  fontSize: '10px',
-                  background: 'rgba(255,255,255,0.06)',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  color: 'var(--text-secondary)',
-                  whiteSpace: 'nowrap',
-                  marginRight: '4px'
-                }}
-              >
-                {getTaskTimelineDate(project.id, task.id)}
-              </span>
-            )}
-
-            <div
-              className="task-actions"
-              style={{ display: 'flex', alignItems: 'center', gap: '2px' }}
-            >
-              {depth < 2 && (
-                <button
-                  className="task-edit-btn"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    const subtaskName = `Subtask ${(task.subtasks?.length || 0) + 1}`
-                    const subtaskId = uuidv4()
-                    onTaskAdded(project.id, subtaskName, task.id, subtaskId)
-                    setTimeout(() => startEditing(subtaskId, subtaskName), 0)
-                  }}
-                  title="Add Subtask"
-                >
-                  <Plus size={14} />
-                </button>
-              )}
-              <button
-                className="task-edit-btn"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  startEditing(task.id, task.text)
-                }}
-                title="Edit Task"
-              >
-                <Pencil size={12} />
-              </button>
-              <button
-                className="task-delete-btn"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  deleteTask(project.id, task.id)
-                }}
-                title="Delete Task"
-              >
-                <Trash2 size={12} />
-              </button>
-            </div>
-          </div>
-
-          {task.subtasks && task.subtasks.length > 0 && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation()
-                toggleTaskExpansion(project.id, task.id)
-              }}
-              style={{
-                background: 'transparent',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '4px',
-                padding: '0px 8px',
-                height: '14px',
-                cursor: 'pointer',
-                color: 'var(--text-secondary)',
-                opacity: 0.7,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: '2px'
-              }}
-              title={task.isExpanded ? 'Свернуть' : 'Развернуть'}
-            >
-              {task.isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            </button>
-          )}
-
-          {task.isExpanded && (
-            <div className="subtasks-container">
-              {task.subtasks &&
-                task.subtasks.map((subtask) => (
-                  <TaskItemRenderer
-                    key={subtask.id}
-                    task={subtask}
-                    project={project}
-                    depth={depth + 1}
-                  />
-                ))}
-              <DropZone dzAction="inside" dzProject={project.id} dzTask={task.id} />
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  // ===== PROJECT DRAG & DROP FUNCTIONS =====
-
-  const TaskRenderer = ({
-    project,
-    isRoot
-  }: {
-    project: Project
-    isRoot: boolean
-  }): React.ReactElement => {
-    // Removed activeTasks as it was unused
-    const projectTasks = project.tasks || []
-    return (
-      <div key={project.id}>
-        {!isRoot && projectTasks.length > 0 && (
-          <div
-            style={{
-              fontSize: '11px',
-              textTransform: 'uppercase',
-              color: 'var(--text-secondary)',
-              marginTop: '16px',
-              marginBottom: '8px',
-              paddingLeft: '4px',
-              opacity: 0.8,
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
-              paddingBottom: '4px'
-            }}
-          >
-            {project.name}
-          </div>
-        )}
-        {projectTasks.map((task) => (
-          <TaskItemRenderer key={task.id} task={task} project={project} depth={0} />
-        ))}
-        {project.subprojects?.map((sub) => (
-          <TaskRenderer key={sub.id} project={sub} isRoot={false} />
-        ))}
-        {projectTasks.length > 0 && <DropZone dzAction="project" dzProject={project.id} />}
-      </div>
-    )
-  }
-
   return (
     <>
       <div className={`task-sidebar ${isOpen ? 'open' : 'closed'}`}>
-        {isOpen && (
-          <div className="sidebar-content">
-            <div className="sidebar-header">
-              <h2>Workflow</h2>
-            </div>
+        <div className="sidebar-content">
+          <div className="sidebar-block has-resizer-after">
             <div
               style={{
-                padding: '12px 20px 0 20px',
+                padding: '16px 12px 16px 20px',
                 flexShrink: 0,
                 position: 'relative',
                 zIndex: 10,
@@ -1773,17 +2263,19 @@ export default function TaskSidebar({
                   alignItems: 'center',
                   justifyContent: 'space-between',
                   marginBottom: '4px',
-                  padding: '4px 0'
+                  padding: '4px 8px 4px 0'
                 }}
               >
                 <h3
                   style={{
-                    fontSize: '11px',
+                    fontSize: '13px',
                     textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
+                    letterSpacing: '0.08em',
                     color: 'var(--text-secondary)',
+                    opacity: 0.8,
                     margin: 0,
-                    fontWeight: 700
+                    fontWeight: 600,
+                    paddingLeft: '8px'
                   }}
                 >
                   Projects
@@ -1795,14 +2287,37 @@ export default function TaskSidebar({
                       startEditing(newId, 'New Project')
                     }
                   }}
-                  className="task-add-btn group-btn"
+                  className="task-add-btn premium-sidebar-btn"
                   title="Add Project"
-                  style={{ width: '24px', height: '24px', padding: 0 }}
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '6px',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    padding: 0
+                  }}
                 >
                   <Plus size={14} />
                 </button>
               </div>
-              <div className="task-list" style={{ marginBottom: '8px' }}>
+              <div
+                className="task-list custom-scrollbar"
+                style={{
+                  marginBottom: '8px',
+                  height: `${projectsHeight}px`,
+                  maxHeight: '70vh',
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  scrollbarGutter: 'stable'
+                }}
+              >
                 {projects.length === 0 ? (
                   <div className="empty-tasks">No projects yet.</div>
                 ) : (
@@ -1831,486 +2346,354 @@ export default function TaskSidebar({
                       dropIndicator={dropIndicator}
                       isDragging={isDragging}
                       openColorPickerFor={openColorPickerFor}
+                      showTaskCounts={showTaskCounts}
                     />
                   ))
                 )}
               </div>
             </div>
+          </div>
 
+          {/* SIDEBAR RESIZER */}
+          <div
+            className={`sidebar-resizer ${isResizingSidebar ? 'is-resizing' : ''}`}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              setResizeStartY(e.clientY)
+              setResizeStartHeight(projectsHeight)
+              setIsResizingSidebar(true)
+            }}
+          />
+
+          {/* TASKS / EVENTS SECTION */}
+          <div
+            className="sidebar-block"
+            style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}
+          >
             <div
               style={{
-                height: '1px',
-                background: 'rgba(255,255,255,0.05)',
-                marginBottom: '16px'
+                padding: '16px 8px 16px 16px',
+                flex: 1,
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'visible'
               }}
-            />
-
-            {/* TASKS / EVENTS SECTION */}
-            <div style={{ padding: '0 16px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+            >
+              {/* TASKS SECTION */}
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  marginBottom: '12px'
+                  marginBottom: '8px',
+                  paddingRight: '8px'
                 }}
               >
-                <div style={{ display: 'flex', gap: '16px' }}>
-                  <button
-                    onClick={() => setActiveTab('tasks')}
-                    className={`sidebar-tab-btn ${activeTab === 'tasks' ? 'active' : ''}`}
-                  >
-                    TASKS
-                  </button>
-                  <button
-                    onClick={() => setActiveTab('events')}
-                    className={`sidebar-tab-btn ${activeTab === 'events' ? 'active' : ''}`}
-                  >
-                    EVENTS
-                  </button>
-                </div>
+                <h3
+                  style={{
+                    fontSize: '13px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.08em',
+                    color: 'var(--text-secondary)',
+                    opacity: 0.8,
+                    margin: 0,
+                    fontWeight: 600,
+                    paddingLeft: '8px'
+                  }}
+                >
+                  Tasks
+                </h3>
                 <button
-                  className="task-add-btn group-btn"
+                  className="task-add-btn premium-sidebar-btn"
                   onClick={(e) => {
                     e.stopPropagation()
-                    if (activeTab === 'tasks') {
-                      const taskId = uuidv4()
-                      onTaskAdded(selectedProjectId!, 'New task', undefined, taskId)
-                      setTimeout(() => startEditing(taskId, 'New task'), 0)
-                    } else {
-                      const eventId = uuidv4()
-                      handleAddEvent(selectedProjectId!, 'New Event', eventId)
-                      setTimeout(() => startEditing(eventId, 'New Event'), 0)
-                    }
+                    const taskId = uuidv4()
+                    onTaskAdded(selectedProjectId!, 'New task', undefined, taskId)
+                    setTimeout(() => startEditing(taskId, 'New task'), 0)
                   }}
-                  title={activeTab === 'tasks' ? 'Add task' : 'Add event'}
+                  title="Add task"
                   disabled={!selectedProjectId}
                   style={{
-                    width: '24px',
-                    height: '24px',
+                    width: '26px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '6px',
+                    color: 'var(--text-secondary)',
+                    cursor: selectedProjectId ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s ease',
                     padding: 0,
-                    opacity: selectedProjectId ? 1 : 0.4,
-                    cursor: selectedProjectId ? 'pointer' : 'not-allowed'
+                    opacity: selectedProjectId ? 1 : 0.4
                   }}
                 >
                   <Plus size={14} />
                 </button>
               </div>
 
-              {activeTab === 'tasks' ? (
-                <>
-                  <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '32px' }}>
-                    <DropZone dzAction="project" dzProject="default" />
-                    {selectedProject ? (
-                      <div
-                        className="project-tasks"
-                        style={{
-                          minHeight: '20px'
-                        }}
-                        data-project-container={selectedProject.id}
-                      >
-                        <TaskRenderer project={selectedProject} isRoot={true} />
+              <div
+                className="custom-scrollbar"
+                style={{
+                  flex: 1,
+                  overflowY: 'auto',
+                  overflowX: 'hidden',
+                  minHeight: '100px',
+                  scrollbarGutter: 'stable'
+                }}
+              >
+                <DropZone dzAction="project" dzProject="default" />
+                {selectedProject ? (
+                  <div
+                    className="project-tasks"
+                    style={{
+                      minHeight: '20px'
+                    }}
+                    data-project-container={selectedProject.id}
+                  >
+                    <TaskRenderer
+                      project={selectedProject}
+                      isRoot={true}
+                      toggleTask={toggleTask}
+                      toggleTaskExpansion={toggleTaskExpansion}
+                      editingId={editingId}
+                      editingValue={editingValue}
+                      setEditingValue={setEditingValue}
+                      saveTaskName={saveTaskName}
+                      cancelEditing={cancelEditing}
+                      startEditing={startEditing}
+                      deleteTask={deleteTask}
+                      getTaskTimelineDate={getTaskTimelineDate}
+                      onTaskAdded={onTaskAdded}
+                      isDragging={isDragging}
+                      dropIndicator={dropIndicator}
+                      startMouseDrag={startMouseDrag}
+                      showTaskCounts={showTaskCounts}
+                    />
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      padding: '24px 12px',
+                      textAlign: 'center',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px',
+                      fontStyle: 'italic',
+                      opacity: 0.5
+                    }}
+                  >
+                    Select a project to view tasks
+                  </div>
+                )}
+                <DropZone dzAction="project" dzProject="default" />
+              </div>
+
+              {/* SEPARATOR */}
+              <div
+                style={{
+                  height: '1px',
+                  background: 'rgba(255,255,255,0.05)',
+                  margin: '16px -8px 16px -16px'
+                }}
+              />
+
+              {/* EVENTS SECTION */}
+              <div
+                onClick={() => setIsEventsExpanded((prev) => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '8px',
+                  paddingRight: '8px',
+                  cursor: 'pointer'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: '0',
+                      display: 'flex',
+                      alignItems: 'center'
+                    }}
+                  >
+                    {isEventsExpanded ? (
+                      <div style={{ width: 14, display: 'flex', justifyContent: 'center' }}>
+                        <ChevronDown size={14} />
                       </div>
                     ) : (
-                      <div
-                        style={{
-                          padding: '32px 16px',
-                          textAlign: 'center',
-                          color: 'var(--text-secondary)',
-                          fontSize: '13px',
-                          opacity: 0.5
-                        }}
-                      >
-                        Select a project above to manage tasks
+                      <div style={{ width: 14, display: 'flex', justifyContent: 'center' }}>
+                        <ChevronRight size={14} />
                       </div>
                     )}
-                    <DropZone dzAction="project" dzProject="default" />
-                    {(!selectedProject?.tasks || selectedProject.tasks.length === 0) &&
-                      selectedProjectId && (
-                        <div
-                          style={{
-                            padding: '24px 12px',
-                            textAlign: 'center',
-                            color: 'var(--text-secondary)',
-                            fontSize: '13px',
-                            fontStyle: 'italic',
-                            background: 'rgba(255,255,255,0.02)',
-                            borderRadius: '8px',
-                            border: '1px dashed rgba(255,255,255,0.05)',
-                            cursor: 'pointer'
-                          }}
-                          onClick={() => {
-                            const taskId = uuidv4()
-                            onTaskAdded(selectedProjectId!, 'New task', undefined, taskId)
-                            setTimeout(() => startEditing(taskId, 'New task'), 0)
-                          }}
-                        >
-                          No tasks in this project.
-                          <br />
-                          Click to add one.
-                        </div>
-                      )}
-                    {!selectedProjectId && (
-                      <div
+                  </button>
+                  <h3
+                    style={{
+                      fontSize: '13px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.08em',
+                      color: 'var(--text-secondary)',
+                      opacity: 0.8,
+                      margin: 0,
+                      fontWeight: 600,
+                      paddingLeft: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    Events
+                    {selectedProject?.events && selectedProject.events.length > 0 && (
+                      <span
                         style={{
-                          padding: '24px 12px',
-                          textAlign: 'center',
+                          fontSize: '11px',
                           color: 'var(--text-secondary)',
-                          fontSize: '13px',
-                          fontStyle: 'italic'
+                          opacity: 0.6,
+                          fontWeight: 500,
+                          flexShrink: 0
                         }}
                       >
-                        Select a project to view tasks
-                      </div>
+                        {selectedProject.events.length}
+                      </span>
                     )}
-                  </div>
-                </>
-              ) : (
-                (() => {
-                  const sortedEvents = selectedProject?.events
-                    ? [...selectedProject.events].sort((a, b) => {
-                        const dateA = a.date
-                          ? new Date(`${a.date}T${a.time || '00:00'}`)
-                          : new Date(8640000000000000)
-                        const dateB = b.date
-                          ? new Date(`${b.date}T${b.time || '00:00'}`)
-                          : new Date(8640000000000000)
-                        return dateA.getTime() - dateB.getTime()
-                      })
-                    : []
+                  </h3>
+                </div>
+                <button
+                  className="task-add-btn premium-sidebar-btn"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    const eventId = uuidv4()
+                    handleAddEvent(selectedProjectId!, 'New Event', eventId)
+                    setTimeout(() => startEditing(eventId, 'New Event'), 0)
+                  }}
+                  title="Add event"
+                  disabled={!selectedProjectId}
+                  style={{
+                    width: '26px',
+                    height: '26px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: 'rgba(255, 255, 255, 0.03)',
+                    border: '1px solid rgba(255, 255, 255, 0.06)',
+                    borderRadius: '6px',
+                    color: 'var(--text-secondary)',
+                    cursor: selectedProjectId ? 'pointer' : 'not-allowed',
+                    transition: 'all 0.2s ease',
+                    padding: 0,
+                    opacity: selectedProjectId ? 1 : 0.4
+                  }}
+                >
+                  <Plus size={14} />
+                </button>
+              </div>
 
-                  return (
-                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ flex: 1, overflowY: 'auto', paddingBottom: '32px' }}>
-                        {selectedProjectId ? (
-                          sortedEvents.length > 0 ? (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                              {sortedEvents.map((event) => {
-                                const isExpanded = expandedEventId === event.id
-                                return (
-                                  <div
-                                    key={event.id}
-                                    className="event-card premium-event-item"
-                                    style={{
-                                      position: 'relative',
-                                      background: 'rgba(255,255,255,0.03)',
-                                      borderRadius: 'var(--radius-sm)',
-                                      border: isExpanded
-                                        ? '1px solid rgba(255,255,255,0.08)'
-                                        : '1px solid transparent',
-                                      transition: 'all 0.2s',
-                                      overflow: 'hidden'
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        position: 'absolute',
-                                        left: 0,
-                                        top: 0,
-                                        bottom: 0,
-                                        width: '3px',
-                                        background: selectedProject?.color || 'var(--accent)'
-                                      }}
-                                    />
-                                    {/* Collapsed header row */}
-                                    <div
-                                      style={{
-                                        padding: '10px 10px 10px 16px',
-                                        display: 'flex',
-                                        justifyContent: 'space-between',
-                                        alignItems: 'center',
-                                        cursor: 'pointer'
-                                      }}
-                                      onClick={() =>
-                                        setExpandedEventId(isExpanded ? null : event.id)
-                                      }
-                                    >
-                                      <div
-                                        style={{
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: '8px',
-                                          flex: 1,
-                                          minWidth: 0
-                                        }}
-                                      >
-                                        {isExpanded ? (
-                                          <ChevronDown
-                                            size={12}
-                                            style={{
-                                              flexShrink: 0,
-                                              color: 'var(--text-secondary)'
-                                            }}
-                                          />
-                                        ) : (
-                                          <ChevronRight
-                                            size={12}
-                                            style={{
-                                              flexShrink: 0,
-                                              color: 'var(--text-secondary)'
-                                            }}
-                                          />
-                                        )}
-                                        {editingId === event.id ? (
-                                          <input
-                                            className="inline-edit-input"
-                                            value={editingValue}
-                                            onChange={(e) => setEditingValue(e.target.value)}
-                                            onBlur={() =>
-                                              saveEventName(selectedProjectId, event.id)
-                                            }
-                                            onKeyDown={(e) => {
-                                              if (e.key === 'Enter')
-                                                saveEventName(selectedProjectId, event.id)
-                                              if (e.key === 'Escape') cancelEditing()
-                                            }}
-                                            onClick={(e) => e.stopPropagation()}
-                                            autoFocus
-                                            style={{ width: '100%', marginLeft: '4px' }}
-                                          />
-                                        ) : (
-                                          <span
-                                            style={{
-                                              fontSize: '13px',
-                                              fontWeight: 600,
-                                              color: 'var(--text-primary)',
-                                              overflow: 'hidden',
-                                              textOverflow: 'ellipsis',
-                                              whiteSpace: 'nowrap'
-                                            }}
-                                          >
-                                            {event.title}
-                                          </span>
-                                        )}
-                                        {!isExpanded && (event.date || event.time) && (
-                                          <span
-                                            style={{
-                                              fontSize: '10px',
-                                              color: 'var(--text-secondary)',
-                                              flexShrink: 0,
-                                              display: 'flex',
-                                              alignItems: 'center',
-                                              gap: '4px'
-                                            }}
-                                          >
-                                            {event.date && (
-                                              <>
-                                                <Calendar size={9} />{' '}
-                                                {new Date(
-                                                  event.date + 'T00:00:00'
-                                                ).toLocaleDateString(undefined, {
-                                                  month: 'short',
-                                                  day: 'numeric'
-                                                })}
-                                              </>
-                                            )}
-                                            {event.time && (
-                                              <>
-                                                <Clock size={9} /> {event.time}
-                                              </>
-                                            )}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <button
-                                        className="task-delete-btn"
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleDeleteEvent(selectedProjectId, event.id)
-                                        }}
-                                        style={{ opacity: 0.5, flexShrink: 0 }}
-                                      >
-                                        <Trash2 size={12} />
-                                      </button>
-                                    </div>
-                                    {/* Expanded details */}
-                                    {isExpanded && (
-                                      <div
-                                        style={{
-                                          padding: '0 10px 12px 16px',
-                                          display: 'flex',
-                                          flexDirection: 'column',
-                                          gap: '8px',
-                                          borderTop: '1px solid rgba(255,255,255,0.04)'
-                                        }}
-                                      >
-                                        <div style={{ paddingTop: '10px' }}>
-                                          <label
-                                            style={{
-                                              fontSize: '10px',
-                                              color: 'var(--text-secondary)',
-                                              textTransform: 'uppercase',
-                                              letterSpacing: '0.05em',
-                                              marginBottom: '4px',
-                                              display: 'block'
-                                            }}
-                                          >
-                                            Title
-                                          </label>
-                                          <input
-                                            className="inline-edit-input"
-                                            value={event.title}
-                                            onChange={(e) =>
-                                              handleUpdateEvent(
-                                                selectedProjectId,
-                                                event.id,
-                                                'title',
-                                                e.target.value
-                                              )
-                                            }
-                                            style={{ width: '100%' }}
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '8px' }}>
-                                          <div style={{ flex: 1 }}>
-                                            <label
-                                              style={{
-                                                fontSize: '10px',
-                                                color: 'var(--text-secondary)',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em',
-                                                marginBottom: '4px',
-                                                display: 'block'
-                                              }}
-                                            >
-                                              Date
-                                            </label>
-                                            <input
-                                              type="date"
-                                              className="inline-edit-input"
-                                              value={event.date || ''}
-                                              onChange={(e) =>
-                                                handleUpdateEvent(
-                                                  selectedProjectId,
-                                                  event.id,
-                                                  'date',
-                                                  e.target.value
-                                                )
-                                              }
-                                              style={{ width: '100%' }}
-                                              onClick={(e) => e.stopPropagation()}
-                                            />
-                                          </div>
-                                          <div style={{ flex: 1 }}>
-                                            <label
-                                              style={{
-                                                fontSize: '10px',
-                                                color: 'var(--text-secondary)',
-                                                textTransform: 'uppercase',
-                                                letterSpacing: '0.05em',
-                                                marginBottom: '4px',
-                                                display: 'block'
-                                              }}
-                                            >
-                                              Time
-                                            </label>
-                                            <input
-                                              type="time"
-                                              className="inline-edit-input"
-                                              value={event.time || ''}
-                                              onChange={(e) =>
-                                                handleUpdateEvent(
-                                                  selectedProjectId,
-                                                  event.id,
-                                                  'time',
-                                                  e.target.value
-                                                )
-                                              }
-                                              style={{ width: '100%' }}
-                                              onClick={(e) => e.stopPropagation()}
-                                            />
-                                          </div>
-                                        </div>
-                                        <div
-                                          style={{
-                                            display: 'flex',
-                                            justifyContent: 'flex-end',
-                                            alignItems: 'center',
-                                            marginTop: '8px'
-                                          }}
-                                        >
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation()
-                                              setExpandedEventId(null)
-                                            }}
-                                            style={{
-                                              background: 'var(--accent)',
-                                              border: 'none',
-                                              color: 'white',
-                                              padding: '4px 12px',
-                                              borderRadius: '4px',
-                                              fontSize: '12px',
-                                              cursor: 'pointer',
-                                              fontWeight: 600
-                                            }}
-                                          >
-                                            Done
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-                                  </div>
-                                )
-                              })}
-                            </div>
-                          ) : (
-                            <div
-                              style={{
-                                padding: '24px 12px',
-                                textAlign: 'center',
-                                color: 'var(--text-secondary)',
-                                fontSize: '13px',
-                                fontStyle: 'italic',
-                                background: 'rgba(255,255,255,0.02)',
-                                borderRadius: '8px',
-                                border: '1px dashed rgba(255,255,255,0.05)',
-                                cursor: 'pointer'
-                              }}
-                              onClick={() => {
-                                const eventId = uuidv4()
-                                handleAddEvent(selectedProjectId!, 'New Event', eventId)
-                                setTimeout(() => startEditing(eventId, 'New Event'), 0)
-                              }}
-                            >
-                              No events scheduled.
-                              <br />
-                              Click to add one.
-                            </div>
-                          )
-                        ) : (
+              {isEventsExpanded && (
+                <div
+                  className="custom-scrollbar"
+                  style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    minHeight: '100px',
+                    paddingBottom: '32px',
+                    scrollbarGutter: 'stable'
+                  }}
+                >
+                  {selectedProjectId ? (
+                    (() => {
+                      const sortedEvents = selectedProject?.events
+                        ? [...selectedProject.events].sort((a, b) => {
+                            const dateA = a.date
+                              ? new Date(`${a.date}T${a.time || '00:00'}`)
+                              : new Date(8640000000000000)
+                            const dateB = b.date
+                              ? new Date(`${b.date}T${b.time || '00:00'}`)
+                              : new Date(8640000000000000)
+                            return dateA.getTime() - dateB.getTime()
+                          })
+                        : []
+
+                      if (sortedEvents.length === 0) {
+                        return (
                           <div
                             style={{
                               padding: '24px 12px',
                               textAlign: 'center',
                               color: 'var(--text-secondary)',
                               fontSize: '13px',
-                              fontStyle: 'italic'
+                              fontStyle: 'italic',
+                              opacity: 0.5
                             }}
                           >
-                            Select a project to view events
+                            No events yet
                           </div>
-                        )}
-                      </div>
+                        )
+                      }
+
+                      return (
+                        <div
+                          className="events-list"
+                          style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+                        >
+                          {sortedEvents.map((event) => {
+                            const isExpanded = expandedEventId === event.id
+                            return (
+                              <EventRenderer
+                                key={event.id}
+                                event={event}
+                                selectedProjectId={selectedProjectId!}
+                                editingId={editingId}
+                                editingValue={editingValue}
+                                cancelEditing={cancelEditing}
+                                deleteEvent={handleDeleteEvent}
+                                updateEvent={handleUpdateEvent}
+                                setEditingValue={setEditingValue}
+                                saveEventName={saveEventName}
+                                isExpanded={isExpanded}
+                                setExpandedEventId={setExpandedEventId}
+                                projectColor={selectedProject?.color}
+                              />
+                            )
+                          })}
+                        </div>
+                      )
+                    })()
+                  ) : (
+                    <div
+                      style={{
+                        padding: '24px 12px',
+                        textAlign: 'center',
+                        color: 'var(--text-secondary)',
+                        fontSize: '13px',
+                        fontStyle: 'italic',
+                        opacity: 0.5
+                      }}
+                    >
+                      Select a project to view events
                     </div>
-                  )
-                })()
+                  )}
+                </div>
               )}
             </div>
           </div>
-        )}
+        </div>
       </div>
 
       {/* Color Picker Popup */}
       {colorPickerState && (
         <ColorPicker
           color={findProjectRecursive(projects, colorPickerState.projectId)?.color || '#ff3e6c'}
-          onChange={(color) => updateProjectColor(colorPickerState.projectId, color)}
+          onChange={handleColorChange}
           onClose={() => setColorPickerState(null)}
           anchorRect={colorPickerState.anchorRect}
         />
       )}
     </>
   )
-}
+})

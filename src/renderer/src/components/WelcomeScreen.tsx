@@ -51,10 +51,10 @@ function WelcomeScreen({ onWorkspaceSelected }: WelcomeScreenProps): React.React
         style={
           {
             position: 'absolute',
-            top: '12px',
-            right: '12px',
+            top: '22px',
+            right: '16px',
             display: 'flex',
-            gap: '6px',
+            gap: '8px',
             alignItems: 'center',
             zIndex: 10,
             WebkitAppRegion: 'no-drag'
@@ -66,13 +66,15 @@ function WelcomeScreen({ onWorkspaceSelected }: WelcomeScreenProps): React.React
             // @ts-ignore - preload api
             window.api.minimizeWindow()
           }}
+          title="Minimize"
           style={{
             width: '12px',
             height: '12px',
-            background: '#f5bf50',
+            background: '#febc2e',
             border: 'none',
             cursor: 'pointer',
-            borderRadius: '50%'
+            borderRadius: '50%',
+            padding: 0
           }}
         />
         <button
@@ -80,13 +82,15 @@ function WelcomeScreen({ onWorkspaceSelected }: WelcomeScreenProps): React.React
             // @ts-ignore - preload api
             window.api.maximizeWindow()
           }}
+          title="Maximize"
           style={{
             width: '12px',
             height: '12px',
-            background: '#61c554',
+            background: '#28c840',
             border: 'none',
             cursor: 'pointer',
-            borderRadius: '50%'
+            borderRadius: '50%',
+            padding: 0
           }}
         />
         <button
@@ -94,13 +98,15 @@ function WelcomeScreen({ onWorkspaceSelected }: WelcomeScreenProps): React.React
             // @ts-ignore - preload api
             window.api.closeWindow()
           }}
+          title="Close"
           style={{
             width: '12px',
             height: '12px',
-            background: '#ed6a5e',
+            background: '#ff5f57',
             border: 'none',
             cursor: 'pointer',
-            borderRadius: '50%'
+            borderRadius: '50%',
+            padding: 0
           }}
         />
       </div>

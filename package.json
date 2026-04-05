@@ -1,6 +1,6 @@
 {
   "name": "project-manager",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -29,6 +29,7 @@
     "dompurify": "^3.3.1",
     "electron-store": "^11.0.2",
     "framer-motion": "^12.35.0",
+    "jszip": "^3.10.1",
     "konva": "^10.2.0",
     "lucide-react": "^0.575.0",
     "nanoid": "^5.1.6",
@@ -46,6 +47,7 @@
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.1.0",
     "@electron-toolkit/tsconfig": "^2.0.0",
+    "@types/jszip": "^3.4.0",
     "@types/node": "^22.19.1",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

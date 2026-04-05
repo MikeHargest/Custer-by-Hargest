@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand } from 'lucide-react'
+import { useState, useCallback } from 'react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout } from 'lucide-react'
 import { UITheme } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { DEFAULT_THEME } from '../App'
@@ -15,6 +15,8 @@ interface SettingsModalProps {
   setShowFPS: (show: boolean) => void
   useGPU: boolean
   setUseGPU: (use: boolean) => void
+  showTaskCounts: boolean
+  setShowTaskCounts: (show: boolean) => void
 }
 
 export default function SettingsModal({
@@ -26,28 +28,33 @@ export default function SettingsModal({
   showFPS,
   setShowFPS,
   useGPU,
-  setUseGPU
+  setUseGPU,
+  showTaskCounts,
+  setShowTaskCounts
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'performance' | 'shortcuts'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts'>(
     'general'
   )
 
-  if (!isOpen) return null
+  const handleUpdate = useCallback(
+    (key: keyof UITheme, value: string): void => {
+      setTheme((prev) => ({ ...prev, [key]: value }))
+    },
+    [setTheme]
+  )
 
-  const handleUpdate = (key: keyof UITheme, value: string): void => {
-    setTheme((prev) => ({ ...prev, [key]: value }))
-  }
-
-  const handleReset = (): void => {
+  const handleReset = useCallback((): void => {
     setTheme(DEFAULT_THEME)
-  }
+  }, [setTheme])
 
   const handleOpenPicker = (key: keyof UITheme, rect: DOMRect): void => {
     setActivePicker(key)
     setPickerAnchor(rect)
   }
+
+  if (!isOpen) return null
 
   return (
     <div
@@ -139,6 +146,7 @@ export default function SettingsModal({
 
             {[
               { id: 'general', label: 'General', icon: <Settings size={16} /> },
+              { id: 'projects', label: 'Projects', icon: <Layout size={16} /> },
               { id: 'canvas', label: 'Canvas', icon: <Compass size={16} /> },
               { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> }
             ].map((tab) => (
@@ -246,7 +254,7 @@ export default function SettingsModal({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     {(Object.keys(DEFAULT_THEME) as Array<keyof UITheme>)
-                      .filter((key) => key !== 'boardAccent')
+                      .filter((key) => key !== 'boardAccent' && key !== 'boardBg')
                       .map((key) => (
                         <ColorPickerItem
                           key={key}
@@ -462,6 +470,80 @@ export default function SettingsModal({
                       >
                         Soon
                       </span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'projects' && (
+                <motion.div
+                  key="projects"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
+                    Project Settings
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0 0 24px 0',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Manage project display and general behavior.
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '10px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setShowTaskCounts(!showTaskCounts)}
+                    >
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Show Task Count</div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-secondary)',
+                            marginTop: '2px'
+                          }}
+                        >
+                          Display total tasks and subtasks for each project.
+                        </div>
+                      </div>
+                      <button
+                        style={{
+                          width: '36px',
+                          height: '20px',
+                          borderRadius: '10px',
+                          background: showTaskCounts ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          position: 'relative',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <motion.div
+                          animate={{ x: showTaskCounts ? 16 : 2 }}
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            background: '#fff',
+                            borderRadius: '50%',
+                            position: 'absolute',
+                            top: '3px'
+                          }}
+                        />
+                      </button>
                     </div>
                   </div>
                 </motion.div>

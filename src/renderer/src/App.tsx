@@ -4,9 +4,9 @@ import {
   Timer as TimerIcon,
   Settings as SettingsIcon,
   Pin,
-  PanelLeftClose,
-  PanelLeftOpen,
-  FolderOpen
+  PanelLeft,
+  FolderOpen,
+  User
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import TimerCard from './components/TimerCard'
@@ -16,6 +16,7 @@ import TimelineView from './components/TimelineView'
 import NotesView from './components/NotesView'
 import WelcomeScreen from './components/WelcomeScreen'
 import SettingsModal from './components/SettingsModal'
+import WorkspaceProfile from './components/WorkspaceProfile'
 import WindowResizeHandles from './components/WindowResizeHandles'
 import ProjectOverview from './components/ProjectOverview'
 
@@ -24,7 +25,7 @@ export const DEFAULT_THEME: UITheme = {
   bgColor: '#292929',
   cardBg: '#121212',
   accent: '#525252',
-  textPrimary: '#f8fafc',
+  textPrimary: '#EAEAEA',
   boardAccent: '#71717a',
   boardBg: '#1b1b1b',
   timelineTaskBg: '#0f0f0f',
@@ -45,7 +46,9 @@ function App() {
     'overview'
   )
   const [showSettings, setShowSettings] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
   const [showFPS, setShowFPS] = useState(false)
+  const [showTaskCounts, setShowTaskCounts] = useState(true)
   const [useGPU, setUseGPU] = useState(true)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true)
@@ -56,6 +59,7 @@ function App() {
   // Use refs to always capture latest state for history snapshots
   const projectsRef = useRef(projects)
   const timelineTasksRef = useRef(timelineTasks)
+  const focusedAreaRef = useRef<'app' | 'board' | 'notes'>('app')
 
   useEffect(() => {
     projectsRef.current = projects
@@ -94,27 +98,9 @@ function App() {
     })
   }, [])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        if (
-          document.activeElement?.tagName === 'INPUT' ||
-          document.activeElement?.tagName === 'TEXTAREA'
-        ) {
-          // Let the browser handle undo in text fields
-          return
-        }
-        e.preventDefault()
-        handleUndo()
-      }
-    }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [handleUndo])
-
-  const allProjects = useMemo(() => {
+  const allProjects = useMemo((): Project[] => {
     const flat: Project[] = []
-    const traverse = (projs: Project[], depth = 0) => {
+    const traverse = (projs: Project[], depth = 0): void => {
       projs.forEach((p) => {
         flat.push({ ...p, depth })
         if (p.subprojects) traverse(p.subprojects, depth + 1)
@@ -124,11 +110,11 @@ function App() {
     return flat
   }, [projects])
 
-  const selectedProject = useMemo(() => {
+  const selectedProject = useMemo((): Project | undefined => {
     return allProjects.find((p) => p.id === selectedProjectId)
   }, [allProjects, selectedProjectId])
 
-  const addProject = async (name: string, parentId?: string): Promise<string | void> => {
+  const addProject = async (name: string, parentId?: string): Promise<string | undefined> => {
     pushToHistory()
     const newId = uuidv4()
 
@@ -146,8 +132,7 @@ function App() {
     if (!basePath) return
 
     // Initialize project folder via IPC
-    // @ts-ignore
-    const projectPath = await window.api.initProjectFolder(basePath, name)
+    const projectPath = await (window as any).api.initProjectFolder(basePath, name)
     const notesPath = projectPath ? projectPath + '/notes' : ''
     const boardsPath = projectPath ? projectPath + '/boards' : ''
 
@@ -254,8 +239,7 @@ function App() {
 
     const projectToDelete = findProject(projects, id)
     if (projectToDelete?.path) {
-      // @ts-ignore
-      window.api.deleteProjectFolder(projectToDelete.path)
+      ;(window as any).api.deleteProjectFolder(projectToDelete.path)
     }
 
     const deleteRecursive = (projs: Project[]): Project[] => {
@@ -286,15 +270,14 @@ function App() {
   }
 
   const loadData = useCallback(async () => {
-    // @ts-ignore - preload api
-    const savedWorkspace = await window.api.getStoreValue('workspace-path')
+    const api = (window as any).api
+    const savedWorkspace = await api.getStoreValue('workspace-path')
     if (savedWorkspace) {
       setWorkspacePath(savedWorkspace)
 
       // Try reading data from workspace file
       const workspaceFile = savedWorkspace + '/workspace_data.json'
-      // @ts-ignore - preload api
-      const workspaceData = await window.api.readWorkspaceJson(workspaceFile)
+      const workspaceData = await api.readWorkspaceJson(workspaceFile)
 
       if (workspaceData) {
         // Force cleanup of legacy data if not already done for this workspace
@@ -321,18 +304,41 @@ function App() {
           // Note: isCleanedV1 will be saved by the auto-save effect
         } else {
           if (workspaceData.timers) setTimers(workspaceData.timers)
-          if (workspaceData.projects) setProjects(workspaceData.projects)
+          if (workspaceData.projects) {
+            const ensurePathsRecursive = (projs: Project[]): Project[] => {
+              return projs.map((p) => ({
+                ...p,
+                notesPath: p.notesPath || (p.path ? p.path + '/notes' : ''),
+                boardsPath: p.boardsPath || (p.path ? p.path + '/boards' : ''),
+                subprojects: p.subprojects ? ensurePathsRecursive(p.subprojects) : []
+              }))
+            }
+            setProjects(ensurePathsRecursive(workspaceData.projects))
+          }
           if (workspaceData.timelineTasks) setTimelineTasks(workspaceData.timelineTasks)
           if (workspaceData.theme) setTheme(workspaceData.theme)
           if (workspaceData.notes) setNotes(workspaceData.notes)
           if (workspaceData.showFPS !== undefined) setShowFPS(workspaceData.showFPS)
+          if (workspaceData.showTaskCounts !== undefined)
+            setShowTaskCounts(workspaceData.showTaskCounts)
           if (workspaceData.useGPU !== undefined) setUseGPU(workspaceData.useGPU)
+
+          // Auto-restore last session
+          const lastView = await api.getStoreValue('last-view')
+          const lastProj = await api.getStoreValue('last-project-id')
+          const lastNote = await api.getStoreValue('last-note-id')
+
+          if (lastView) setCurrentView(lastView)
+          if (lastProj) setSelectedProjectId(lastProj)
+          if (lastNote) setActiveNoteId(lastNote)
         }
       } else {
         // Fresh start for a new workspace
         // Initialize default project folder
-        // @ts-ignore
-        const defaultProjectPath = await window.api.initProject(savedWorkspace, 'My Project')
+        const defaultProjectPath = await (window as any).api.initProject(
+          savedWorkspace,
+          'My Project'
+        )
         const defaultNotesPath = defaultProjectPath + '/notes'
         const defaultBoardsPath = defaultProjectPath + '/boards'
 
@@ -370,8 +376,7 @@ function App() {
         'timeline-tasks',
         'markdown-notes',
         'notes-directory',
-        'projects-export-path',
-        'workspace-path' // Clear this to force welcome screen on next actual launch
+        'projects-export-path'
       ]
       for (const key of keysToClear) {
         // @ts-ignore - preload api
@@ -384,20 +389,58 @@ function App() {
     setIsLoadingWorkspace(false)
   }, [])
 
-  // Force hard reset to Welcome Screen for the user
-  useEffect(() => {
-    const forceReset = async () => {
-      setWorkspacePath(null)
-      // @ts-ignore
-      await window.api.setStoreValue('workspace-path', null)
-    }
-    forceReset()
-  }, [])
-
   // Load from store on mount
-  useEffect(() => {
-    loadData()
+  useEffect((): void => {
+    const sync = async (): Promise<void> => {
+      await loadData()
+    }
+    void sync()
   }, [loadData])
+
+  useEffect((): (() => void) => {
+    const handleGlobalMouseDown = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement
+      if (target.closest('.boards-view-container')) {
+        focusedAreaRef.current = 'board'
+      } else if (target.closest('.notes-view-container')) {
+        focusedAreaRef.current = 'notes'
+      } else {
+        focusedAreaRef.current = 'app'
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        if (focusedAreaRef.current !== 'app') return // Isolated board/notes handle their own
+
+        const active = document.activeElement as HTMLElement
+        if (
+          active?.tagName === 'INPUT' ||
+          active?.tagName === 'TEXTAREA' ||
+          active?.isContentEditable ||
+          e.defaultPrevented
+        ) {
+          return
+        }
+        e.preventDefault()
+        handleUndo()
+      }
+    }
+
+    const onFocus = (): void => {
+      void loadData()
+    }
+
+    window.addEventListener('mousedown', handleGlobalMouseDown)
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      window.removeEventListener('mousedown', handleGlobalMouseDown)
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [handleUndo, loadData])
 
   useEffect(() => {
     const root = document.documentElement
@@ -430,7 +473,7 @@ function App() {
       const workspaceFile = workspacePath + '/workspace_data.json'
       // Strip 'content' from notes to avoid bloated global save (content is saved individually)
       const lightweightNotes = notes.map((n) => {
-        const { content, ...metaOnly } = n
+        const { content: _, ...metaOnly } = n
         return metaOnly
       })
 
@@ -441,6 +484,7 @@ function App() {
         theme,
         notes: lightweightNotes,
         showFPS,
+        showTaskCounts,
         useGPU,
         isCleanedV1: true // Mark as clean
       }
@@ -459,6 +503,7 @@ function App() {
     theme,
     notes,
     showFPS,
+    showTaskCounts,
     useGPU,
     isLoadingWorkspace
   ])
@@ -470,6 +515,17 @@ function App() {
       window.api.setStoreValue('workspace-path', workspacePath)
     }
   }, [workspacePath])
+
+  // Session persistence
+  useEffect(() => {
+    if (!workspacePath || isLoadingWorkspace) return
+    // @ts-ignore
+    window.api.setStoreValue('last-view', currentView)
+    // @ts-ignore
+    window.api.setStoreValue('last-project-id', selectedProjectId)
+    // @ts-ignore
+    window.api.setStoreValue('last-note-id', activeNoteId)
+  }, [currentView, selectedProjectId, activeNoteId, workspacePath, isLoadingWorkspace])
 
   const addTimer = () => {
     setTimers((prev) => [
@@ -590,6 +646,18 @@ function App() {
   const urlParams = new URLSearchParams(window.location.search)
   const miniTimerId = urlParams.get('mini')
 
+  const handleSetProjects = useCallback(
+    (action: React.SetStateAction<Project[]>, skipHistory?: boolean) => {
+      if (!skipHistory) pushToHistory()
+      setProjects(action)
+    },
+    [pushToHistory, setProjects]
+  )
+
+  const handleSetTheme = useCallback((action: React.SetStateAction<UITheme>) => {
+    setTheme(action)
+  }, [])
+
   if (miniTimerId) {
     return <MiniTimer timerId={miniTimerId} />
   }
@@ -608,10 +676,7 @@ function App() {
       <TaskSidebar
         isOpen={isSidebarOpen}
         projects={projects}
-        setProjects={(action) => {
-          pushToHistory()
-          setProjects(action)
-        }}
+        setProjects={handleSetProjects}
         timelineTasks={timelineTasks}
         selectedProjectId={selectedProjectId}
         setSelectedProjectId={setSelectedProjectId}
@@ -628,41 +693,62 @@ function App() {
         onAssignTaskToTimer={(timerId, taskText) => {
           updateTimer(timerId, { taskName: taskText })
         }}
+        showTaskCounts={showTaskCounts}
       />
       <div className="main-content">
-        <header
-          className="header"
-          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-        >
+        <header className="header">
           <div
             className="header-left"
-            style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+            style={
+              {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                WebkitAppRegion: 'no-drag'
+              } as any
+            }
           >
-            <button
-              className="pin-btn"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            <div
               style={{
-                background: isSidebarOpen
-                  ? 'rgba(255, 255, 255, 0.08)'
-                  : 'rgba(255, 255, 255, 0.03)',
-                borderColor: isSidebarOpen
-                  ? 'rgba(255, 255, 255, 0.15)'
-                  : 'rgba(255, 255, 255, 0.08)'
+                display: 'flex',
+                alignItems: 'center',
+                padding: '2px'
               }}
             >
-              {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
-            </button>
+              <button
+                className="sidebar-toggle-btn"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: isSidebarOpen ? 0.6 : 0.4,
+                  transition: 'opacity 0.2s',
+                  width: '32px',
+                  height: '32px'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+                }
+              >
+                <PanelLeft size={18} />
+              </button>
+            </div>
 
             {/* View Toggle - Segmented Control Style */}
             <div
               className="view-toggle"
               style={{
                 display: 'flex',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
+                background: 'transparent',
                 padding: '2px',
-                marginLeft: '4px',
                 position: 'relative',
                 borderRadius: 'var(--radius-md)'
               }}
@@ -675,29 +761,8 @@ function App() {
               ].map((view) => (
                 <button
                   key={view.id}
+                  className={`view-tab ${currentView === view.id ? 'active' : ''}`}
                   onClick={() => setCurrentView(view.id as any)}
-                  style={{
-                    background: currentView === view.id ? 'var(--card-bg)' : 'transparent',
-                    border:
-                      currentView === view.id
-                        ? '1px solid rgba(255, 255, 255, 0.1)'
-                        : '1px solid transparent',
-                    color:
-                      currentView === view.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    padding: '0',
-                    width: '88px',
-                    height: '28px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '12px',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                    fontWeight: currentView === view.id ? '600' : '500',
-                    boxShadow: currentView === view.id ? '0 2px 8px rgba(0,0,0,0.4)' : 'none',
-                    opacity: currentView === view.id ? 1 : 0.7
-                  }}
                 >
                   {view.label}
                 </button>
@@ -707,95 +772,120 @@ function App() {
 
           <div
             className="header-right"
-            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+            style={
+              {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '16px',
+                WebkitAppRegion: 'no-drag'
+              } as any
+            }
           >
-            <button className="pin-btn" onClick={() => setShowSettings(true)} title="Settings">
-              <SettingsIcon size={18} />
-            </button>
-            <SettingsModal
-              isOpen={showSettings}
-              onClose={() => setShowSettings(false)}
-              theme={theme}
-              setTheme={setTheme}
-              showFPS={showFPS}
-              setShowFPS={setShowFPS}
-              useGPU={useGPU}
-              setUseGPU={setUseGPU}
-              onSaveThemeAsDefault={() => {
-                // @ts-ignore
-                window.api.setStoreValue('default-theme', theme)
+            {/* Consolidated Action Menu */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                padding: '2px'
               }}
-            />
-            <button
-              className="pin-btn"
-              onClick={() => setWorkspacePath(null)}
-              title="Change Workspace"
             >
-              <FolderOpen size={18} />
-            </button>
-            <button
-              className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
-              onClick={toggleAlwaysOnTop}
-              title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
-            >
-              <Pin size={18} />
-            </button>
+              <button
+                className="pin-btn"
+                onClick={() => setShowProfile(true)}
+                title="Profile & Workspace"
+                style={{ background: 'transparent', border: 'none' }}
+              >
+                <User size={18} />
+              </button>
+              <button
+                className="pin-btn"
+                onClick={() => setShowSettings(true)}
+                title="Settings"
+                style={{ background: 'transparent', border: 'none' }}
+              >
+                <SettingsIcon size={18} />
+              </button>
+              <button
+                className="pin-btn"
+                onClick={() => setWorkspacePath(null)}
+                title="Change Workspace"
+                style={{ background: 'transparent', border: 'none' }}
+              >
+                <FolderOpen size={18} />
+              </button>
+              <button
+                className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
+                onClick={toggleAlwaysOnTop}
+                title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
+                style={{
+                  background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: 'none',
+                  color: isAlwaysOnTop ? 'var(--accent)' : 'inherit'
+                }}
+              >
+                <Pin size={18} />
+              </button>
+            </div>
 
             {/* Window controls */}
             <div
               style={{
                 display: 'flex',
-                gap: '6px',
-                alignItems: 'center',
-                marginLeft: '8px'
+                gap: '8px',
+                alignItems: 'center'
               }}
             >
               <button
-                onClick={() => (window.api as any).minimizeWindow()}
+                onClick={() => (window as any).api.minimizeWindow()}
                 style={{
                   width: '12px',
                   height: '12px',
-                  background: '#f5bf50',
-                  border: 'none',
+                  borderRadius: '50%',
+                  background: '#febc2e',
                   cursor: 'pointer',
-                  borderRadius: '50%'
+                  border: 'none',
+                  padding: 0
                 }}
+                title="Minimize"
               />
               <button
-                onClick={() => (window.api as any).maximizeWindow()}
+                onClick={() => (window as any).api.maximizeWindow()}
                 style={{
                   width: '12px',
                   height: '12px',
-                  background: '#61c554',
-                  border: 'none',
+                  borderRadius: '50%',
+                  background: '#28c840',
                   cursor: 'pointer',
-                  borderRadius: '50%'
+                  border: 'none',
+                  padding: 0
                 }}
+                title="Maximize"
               />
               <button
-                onClick={() => (window.api as any).closeWindow()}
+                onClick={() => (window as any).api.closeWindow()}
                 style={{
                   width: '12px',
                   height: '12px',
-                  background: '#ed6a5e',
-                  border: 'none',
+                  borderRadius: '50%',
+                  background: '#ff5f57',
                   cursor: 'pointer',
-                  borderRadius: '50%'
+                  border: 'none',
+                  padding: 0
                 }}
+                title="Close"
               />
             </div>
           </div>
         </header>
 
-        <div
-          className="views-wrapper"
-          style={{
-            flex: 1,
-            overflow: 'hidden',
-            display: 'flex',
-            flexDirection: 'column'
-          }}
-        >
+        <WorkspaceProfile
+          isOpen={showProfile}
+          onClose={() => setShowProfile(false)}
+          workspacePath={workspacePath}
+          projectCount={allProjects.length}
+        />
+
+        <div className="views-wrapper">
           {/* All views always rendered — hidden ones use display:none so timers keep running */}
           <div style={{ display: currentView === 'overview' ? 'contents' : 'none' }}>
             {selectedProject ? (
@@ -843,7 +933,7 @@ function App() {
               activeNoteId={activeNoteId}
               setActiveNoteId={setActiveNoteId}
               theme={theme}
-              setTheme={setTheme}
+              setTheme={handleSetTheme}
               showFPS={showFPS}
             />
           </div>
@@ -853,7 +943,7 @@ function App() {
               display: currentView === 'clock' ? 'flex' : 'none',
               flexDirection: 'column',
               flex: 1,
-              padding: '0 10px 10px 10px',
+              padding: '10px 10px 0 10px',
               overflowY: 'auto'
             }}
           >
@@ -870,7 +960,7 @@ function App() {
               </button>
             </div>
 
-            <main className="timers-list">
+            <main className="timers-list" style={{ padding: '0 0 16px 0' }}>
               {timers.length === 0 ? (
                 <div className="empty-state" style={{ padding: '60px 0' }}>
                   <TimerIcon size={64} />
@@ -900,9 +990,11 @@ function App() {
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
         theme={theme}
-        setTheme={setTheme}
+        setTheme={handleSetTheme}
         showFPS={showFPS}
         setShowFPS={setShowFPS}
+        showTaskCounts={showTaskCounts}
+        setShowTaskCounts={setShowTaskCounts}
         useGPU={useGPU}
         setUseGPU={setUseGPU}
         onSaveThemeAsDefault={async () => {

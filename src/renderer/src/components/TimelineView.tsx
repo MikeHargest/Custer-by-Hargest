@@ -470,25 +470,23 @@ export default function TimelineView({
       className="timeline-view"
       style={{
         flex: 1,
-        padding: '0 10px 10px 10px',
         display: 'flex',
         flexDirection: 'column',
+        height: '100%',
         width: '100%',
         overflow: 'hidden',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        background: 'var(--card-bg)'
       }}
     >
       <div
         className="timeline-card"
         style={{
-          background: 'var(--card-bg)',
-          borderRadius: 'var(--radius-lg)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
           flex: 1,
-          boxShadow: 'var(--shadow)',
           position: 'relative',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          overflow: 'hidden'
         }}
       >
         <div
@@ -1294,9 +1292,7 @@ export default function TimelineView({
                   gridTemplateColumns: 'repeat(7, 1fr)',
                   gap: '1px',
                   background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  borderTopLeftRadius: '8px',
-                  borderTopRightRadius: '8px'
+                  borderBottom: '1px solid rgba(255,255,255,0.05)'
                 }}
               >
                 {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
@@ -1322,10 +1318,6 @@ export default function TimelineView({
                   gridAutoRows: 'minmax(120px, 1fr)',
                   gap: '1px',
                   background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  borderTop: 'none',
-                  borderBottomLeftRadius: '8px',
-                  borderBottomRightRadius: '8px',
                   flex: 1
                 }}
               >

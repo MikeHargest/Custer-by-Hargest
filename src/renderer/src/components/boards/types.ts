@@ -35,7 +35,7 @@ export interface VideoElement extends BaseElement {
 
 export interface PathElement extends BaseElement {
   type: 'path'
-  points: { x: number; y: number }[]
+  points: { x: number; y: number; width?: number }[]
   color: string
   size: number
 }

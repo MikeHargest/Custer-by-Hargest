@@ -290,6 +290,23 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
         </div>
       ) : (
         <>
+          <div
+            className={`timer-task-container ${isDragOver ? 'drag-over' : ''} ${data.taskName ? 'has-task' : ''}`}
+          >
+            {data.taskName ? (
+              <>
+                <span className="timer-task-text" title={data.taskName}>
+                  {data.taskName}
+                </span>
+                <button className="timer-task-clear" onClick={clearTask} title="Clear task">
+                  <X size={14} />
+                </button>
+              </>
+            ) : (
+              <span>Drag task here</span>
+            )}
+          </div>
+
           {!hasStarted && !isFinished && !data.isStopwatch ? (
             <div className="timer-display">
               <div className="time-input-group">
@@ -339,24 +356,7 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
             </div>
           )}
 
-          <div
-            className={`timer-task-container ${isDragOver ? 'drag-over' : ''} ${data.taskName ? 'has-task' : ''}`}
-          >
-            {data.taskName ? (
-              <>
-                <span className="timer-task-text" title={data.taskName}>
-                  {data.taskName}
-                </span>
-                <button className="timer-task-clear" onClick={clearTask} title="Clear task">
-                  <X size={14} />
-                </button>
-              </>
-            ) : (
-              <span>Drag task here</span>
-            )}
-          </div>
-
-          {/* Thin progress bar below task container */}
+          {/* Thin progress bar below timer display */}
           {!data.isStopwatch && getTotalSeconds() > 0 && (
             <div className="timer-progress-track">
               <div className="timer-progress-fill" style={{ width: `${progress}%` }} />

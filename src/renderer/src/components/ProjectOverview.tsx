@@ -257,7 +257,7 @@ export default function ProjectOverview({
                 </select>
               </MetaField>
 
-              <hr style={dividerStyle} />
+              <hr style={{ ...dividerStyle, marginLeft: '-24px', marginRight: '-24px' }} />
 
               <MetaField
                 icon={
@@ -285,7 +285,7 @@ export default function ProjectOverview({
                 </div>
               </MetaField>
 
-              <hr style={dividerStyle} />
+              <hr style={{ ...dividerStyle, marginLeft: '-24px', marginRight: '-24px' }} />
 
               <MetaField icon={<Calendar size={14} />} label="Start Date">
                 <input
@@ -305,7 +305,7 @@ export default function ProjectOverview({
                 />
               </MetaField>
 
-              <hr style={dividerStyle} />
+              <hr style={{ ...dividerStyle, marginLeft: '-24px', marginRight: '-24px' }} />
 
               <div className="progress-module">
                 <div
@@ -370,7 +370,7 @@ export default function ProjectOverview({
                 })()}
               </div>
 
-              <hr style={dividerStyle} />
+              <hr style={{ ...dividerStyle, marginLeft: '-24px', marginRight: '-24px' }} />
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <StatLine icon={<ListTodo size={14} />} label="Total Tasks:" value={stats.total} />
@@ -445,7 +445,7 @@ export default function ProjectOverview({
                 </button>
               </header>
 
-              <hr style={dividerStyle} />
+              <hr style={{ ...dividerStyle, marginLeft: '-16px', marginRight: '-16px' }} />
 
               <section>
                 <div
@@ -491,7 +491,7 @@ export default function ProjectOverview({
 
               {project.subprojects && project.subprojects.length > 0 && (
                 <>
-                  <hr style={dividerStyle} />
+                  <hr style={{ ...dividerStyle, marginLeft: '-16px', marginRight: '-16px' }} />
                   <section>
                     <div style={{ marginBottom: '16px' }}>
                       <SectionLabel>Subprojects</SectionLabel>
@@ -611,18 +611,25 @@ export default function ProjectOverview({
 
           {/* --- NOTES SECTION (FULL WIDTH) --- */}
           {(() => {
-            const projectNotes = notes.filter((n) => n.projectId === project.id)
+            const projectNotes = notes.filter((n) => n.projectId === project.id && !n.isTrash)
 
             return (
-              <section style={{ padding: '0 32px 32px 32px' }}>
-                <hr style={{ ...dividerStyle, marginBottom: '24px' }} />
+              <section style={{ padding: '0 16px 16px 16px' }}>
+                <hr
+                  style={{
+                    ...dividerStyle,
+                    marginLeft: '-16px',
+                    marginRight: '-16px',
+                    marginBottom: '24px'
+                  }}
+                />
                 <div style={{ marginBottom: '16px' }}>
                   <SectionLabel>Project Notes</SectionLabel>
                 </div>
                 {projectNotes.length === 0 ? (
                   <div
                     style={{
-                      padding: '32px',
+                      padding: '16px',
                       textAlign: 'center',
                       background: 'rgba(255,255,255,0.02)',
                       borderRadius: '12px',
@@ -788,21 +795,18 @@ const ProjectIcon = ({
 // --- STYLES (Keep logic clean by moving objects down) ---
 const containerStyle: React.CSSProperties = {
   flex: 1,
-  padding: '0 10px 10px 10px',
+  padding: '0',
   display: 'flex',
   flexDirection: 'column',
   minHeight: 0,
   boxSizing: 'border-box'
 }
 const cardStyle: React.CSSProperties = {
-  background: 'var(--card-bg)',
-  borderRadius: 'var(--radius-lg)',
-  border: '1px solid rgba(255,255,255,0.05)',
   flex: 1,
   display: 'flex',
   flexDirection: 'column',
   overflow: 'hidden',
-  boxShadow: 'var(--shadow)'
+  background: 'var(--card-bg)'
 }
 const bannerStyle: React.CSSProperties = {
   width: '100%',
@@ -844,7 +848,7 @@ const sidebarStyle: React.CSSProperties = {
 }
 const mainContentStyle: React.CSSProperties = {
   flex: 1,
-  padding: '32px',
+  padding: '16px',
   overflowY: 'auto',
   display: 'flex',
   flexDirection: 'column',

@@ -67,6 +67,10 @@ const api = {
   moveBoard: (oldDir: string, newDir: string, fileName: string) =>
     ipcRenderer.invoke('boards:move', oldDir, newDir, fileName),
   listBoards: (dirPath: string) => ipcRenderer.invoke('boards:list', dirPath),
+  saveIbo: (dirPath: string, fileName: string, boardContent: string) =>
+    ipcRenderer.invoke('boards:saveIbo', dirPath, fileName, boardContent),
+  readIbo: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:readIbo', dirPath, fileName),
 
   // Window controls
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
@@ -94,6 +98,7 @@ const api = {
     ipcRenderer.invoke('workspace:renameProjectFolder', oldPath, newName),
   listProjects: (workspacePath: string) =>
     ipcRenderer.invoke('workspace:listProjects', workspacePath),
+  getFolderSize: (folderPath: string) => ipcRenderer.invoke('workspace:getFolderSize', folderPath),
 
   // Custom resize (for transparent frameless window)
   windowResizeStart: (direction: string) => ipcRenderer.send('window:resizeStart', direction),

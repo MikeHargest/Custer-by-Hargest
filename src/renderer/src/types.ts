@@ -60,6 +60,7 @@ export interface AppNote {
   type?: 'markdown' | 'tldraw'
   projectId?: string
   lastModified: number
+  createdAt?: number
   path?: string // Absolute path to the .md file
   isTrash?: boolean
 }

@@ -6,7 +6,7 @@
   --accent: var(--board-accent, var(--accent, #525252));
   --accent-hover: var(--accent-hover, #606060);
   --accent-glow: var(--board-accent-glow, rgba(82, 82, 82, 0.3));
-  --text-main: var(--text-primary, #f8fafc);
+  --text-main: var(--text-primary, #EAEAEA);
   --text-muted: var(--text-secondary, #a1a1aa);
   --border: rgba(255, 255, 255, 0.08);
   --glass-bg: var(--card-bg, #1B1B1B);
@@ -159,7 +159,7 @@
 .modal-content {
   background: var(--bg-card);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 14px;
   padding: 32px;
   width: 650px;
   max-width: 90vw;

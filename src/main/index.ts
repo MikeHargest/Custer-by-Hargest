@@ -1,6 +1,7 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Notification, screen } from 'electron'
-import { join } from 'path'
+import path, { join } from 'path'
 import fs from 'fs'
+import JSZip from 'jszip'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import StoreModule from 'electron-store'
 import iconPng from '../../resources/icon.png?asset'
@@ -17,8 +18,8 @@ const miniWindows: Record<string, BrowserWindow> = {}
 function createWindow(): void {
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 600,
-    height: 700,
+    width: 1500,
+    height: 960,
     show: false,
     frame: false,
     transparent: false,
@@ -218,6 +219,29 @@ ipcMain.handle('workspace:listProjects', (_, workspacePath: string) => {
   }
 })
 
+ipcMain.handle('workspace:getFolderSize', async (_, folderPath: string) => {
+  const getDirSize = (dir: string): number => {
+    let size = 0
+    try {
+      if (!fs.existsSync(dir)) return 0
+      const files = fs.readdirSync(dir)
+      for (const file of files) {
+        const filePath = join(dir, file)
+        const stats = fs.statSync(filePath)
+        if (stats.isDirectory()) {
+          size += getDirSize(filePath)
+        } else {
+          size += stats.size
+        }
+      }
+    } catch (error) {
+      console.error('Error calculating folder size for:', dir, error)
+    }
+    return size
+  }
+  return getDirSize(folderPath)
+})
+
 ipcMain.handle('store:get', (_, key) => {
   return store.get(key)
 })
@@ -384,30 +408,50 @@ ipcMain.handle('notes:list', (_, dirPath: string) => {
 })
 
 // Boards API
-ipcMain.handle('boards:list', (_, dirPath: string) => {
+ipcMain.handle('boards:list', async (_, dirPath: string) => {
   try {
     if (!fs.existsSync(dirPath)) return []
-    const files = fs.readdirSync(dirPath).filter((f: string) => f.endsWith('.board'))
-    return files.map((f: string) => {
-      const content = fs.readFileSync(join(dirPath, f), 'utf-8')
-      const id = f.replace('.board', '')
-      let title = 'Untitled Board'
+    const files = fs
+      .readdirSync(dirPath)
+      .filter((f: string) => f.endsWith('.board') || f.endsWith('.ibo'))
 
+    const results: any[] = []
+    for (const f of files) {
+      const fullPath = join(dirPath, f)
+      let content = ''
+      let id = ''
+      const type = 'board'
+
+      if (f.endsWith('.ibo')) {
+        id = f.replace('.ibo', '')
+        const zipData = fs.readFileSync(fullPath)
+        const zip = await JSZip.loadAsync(zipData)
+        const jsonFile = zip.file('board.json')
+        if (jsonFile) {
+          content = await jsonFile.async('string')
+        }
+      } else {
+        id = f.replace('.board', '')
+        content = fs.readFileSync(fullPath, 'utf-8')
+      }
+
+      let title = 'Untitled Board'
       try {
         const parsed = JSON.parse(content)
         if (parsed && parsed.title) title = parsed.title
-      } catch (e) {
+      } catch {
         // ignore
       }
 
-      return {
+      results.push({
         id,
         title,
         content,
-        type: 'board',
-        lastModified: fs.statSync(join(dirPath, f)).mtimeMs
-      }
-    })
+        type,
+        lastModified: fs.statSync(fullPath).mtimeMs
+      })
+    }
+    return results
   } catch (error) {
     console.error('Failed to list boards:', error)
     return []
@@ -468,6 +512,195 @@ ipcMain.handle('boards:move', (_, oldDir: string, newDir: string, fileName: stri
   } catch (error) {
     console.error('Failed to move board:', error)
     return false
+  }
+})
+
+ipcMain.handle(
+  'boards:saveIbo',
+  async (_, dirPath: string, fileName: string, boardContent: string) => {
+    const logPath = join(process.cwd(), 'debug_report.txt')
+    try {
+      const filePath = join(dirPath, fileName)
+      const logMsg = `\n[${new Date().toISOString()}] saveIbo: dir=${dirPath}, file=${fileName}\n`
+      console.log(logMsg)
+      fs.appendFileSync(logPath, logMsg)
+
+      if (!fs.existsSync(dirPath)) {
+        console.log(`Creating dir: ${dirPath}`)
+        fs.mkdirSync(dirPath, { recursive: true })
+        fs.appendFileSync(logPath, `Created dir: ${dirPath}\n`)
+      }
+
+      const zip = new JSZip()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let parsed: Record<string, any> = { elements: [], viewport: { x: 0, y: 0, zoom: 1 } }
+
+      if (boardContent && boardContent.trim()) {
+        try {
+          parsed = JSON.parse(boardContent)
+        } catch (parseErr) {
+          const msg = parseErr instanceof Error ? parseErr.message : String(parseErr)
+          fs.appendFileSync(logPath, `Parse error: ${msg}\n`)
+          console.error('Parse error:', msg)
+        }
+      }
+
+      const elements = parsed.elements || []
+      fs.appendFileSync(logPath, `Elements count: ${elements.length}\n`)
+      console.log(`Elements count: ${elements.length}`)
+
+      // Media directory in ZIP
+      const mediaFolder = zip.folder('media')
+
+      // Track files added to avoid duplicates
+      const processedFiles = new Map<string, string>()
+
+      // Temp dir used by readIbo for previously extracted assets
+      const tempDir = join(app.getPath('userData'), 'ibo_temp')
+
+      for (const el of elements) {
+        if (el.type !== 'image' && el.type !== 'video') continue
+        if (!el.url) continue
+
+        const assetExt = path.extname(el.url) || '.png'
+        const safeName = `${el.id}${assetExt}`
+
+        if (el.url.startsWith('file:///')) {
+          // Case 1: Local file from disk (drag-and-drop or paste)
+          let fullPath = el.url.replace('file:///', '')
+          try {
+            // URLs generated by creating a drag/drop usually come URL-encoded or with spaces.
+            fullPath = decodeURIComponent(fullPath)
+          } catch (err) {
+            console.error('Failed to decode URI', fullPath)
+          }
+
+          if (fs.existsSync(fullPath)) {
+            if (!processedFiles.has(fullPath)) {
+              const data = fs.readFileSync(fullPath)
+              mediaFolder?.file(safeName, data)
+              processedFiles.set(fullPath, safeName)
+              fs.appendFileSync(logPath, `Embedded file: ${fullPath} -> media/${safeName}\n`)
+            }
+            el.url = `media/${processedFiles.get(fullPath)}`
+          } else {
+            fs.appendFileSync(logPath, `File not found, skipping: ${fullPath}\n`)
+          }
+        } else if (el.url.startsWith('data:')) {
+          // Case 1b: Base64 data URL (from pasting clipboard images)
+          const match = el.url.match(/^data:(.*?);base64,(.*)$/)
+          if (match) {
+            const mimeType = match[1]
+            const base64Data = match[2]
+            const buffer = Buffer.from(base64Data, 'base64')
+            const mimeExt = mimeType.split('/')[1] || 'png'
+            const realSafeName = `${el.id}.${mimeExt}`
+            mediaFolder?.file(realSafeName, buffer)
+            el.url = `media/${realSafeName}`
+            fs.appendFileSync(logPath, `Embedded Base64 data -> media/${realSafeName}\n`)
+          }
+        } else if (el.url.startsWith('media/')) {
+          // Case 2: Already a container-relative path (from previous readIbo)
+          // The actual file lives in the temp extraction directory
+          // Try to find it in any subdirectory of ibo_temp
+          const relName = el.url.replace('media/', '')
+          let foundData: Buffer | null = null
+
+          // Search all ibo_temp subdirs for this file
+          if (fs.existsSync(tempDir)) {
+            const tempSubdirs = fs.readdirSync(tempDir)
+            for (const subdir of tempSubdirs) {
+              const candidatePath = join(tempDir, subdir, relName)
+              if (fs.existsSync(candidatePath)) {
+                foundData = fs.readFileSync(candidatePath)
+                break
+              }
+            }
+          }
+
+          // Also try to read from the existing .ibo file if it exists
+          if (!foundData && fs.existsSync(filePath)) {
+            try {
+              const existingZipData = fs.readFileSync(filePath)
+              const existingZip = await JSZip.loadAsync(existingZipData)
+              const existingFile = existingZip.file(el.url)
+              if (existingFile) {
+                foundData = await existingFile.async('nodebuffer')
+              }
+            } catch {
+              // Existing file might be corrupt, ignore
+            }
+          }
+
+          if (foundData) {
+            mediaFolder?.file(safeName, foundData)
+            el.url = `media/${safeName}`
+            fs.appendFileSync(logPath, `Re-embedded from temp/zip: media/${safeName}\n`)
+          } else {
+            fs.appendFileSync(logPath, `WARNING: Could not find asset for media/${relName}\n`)
+          }
+        }
+        // Case 3: HTTP URLs — leave as-is, they don't need embedding
+      }
+
+      zip.file('board.json', JSON.stringify(parsed, null, 2))
+
+      const content = await zip.generateAsync({ type: 'nodebuffer' })
+      fs.writeFileSync(filePath, content)
+      console.log('[boards:saveIbo] Successfully saved:', filePath)
+      fs.appendFileSync(logPath, `Saved OK: ${filePath} (${content.length} bytes)\n`)
+      return true
+    } catch (error) {
+      console.error('Failed to save .ibo file:', error)
+      return false
+    }
+  }
+)
+
+ipcMain.handle('boards:readIbo', async (_, dirPath: string, fileName: string) => {
+  try {
+    const filePath = join(dirPath, fileName)
+    console.log('[boards:readIbo] Reading from:', filePath)
+    if (!fs.existsSync(filePath)) return null
+    const content = fs.readFileSync(filePath)
+    const zip = await JSZip.loadAsync(content)
+
+    // Read JSON
+    const jsonFile = zip.file('board.json')
+    if (!jsonFile) return null
+
+    const boardData = JSON.parse(await jsonFile.async('string'))
+
+    // Extraction path for temp assets
+    // Use an app-specific temp dir to persist across sessions but allow cleanup
+    const tempDir = join(app.getPath('userData'), 'ibo_temp', path.basename(filePath, '.ibo'))
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true })
+    }
+
+    const elements = boardData.elements || []
+    for (const el of elements) {
+      if (el.url && el.url.startsWith('media/')) {
+        const zipPath = el.url
+        const zipFile = zip.file(zipPath)
+        if (zipFile) {
+          const relativePath = zipPath.replace('media/', '')
+          const extractPath = join(tempDir, relativePath)
+
+          // Only extract if not already there or if we want to ensure freshness
+          const data = await zipFile.async('nodebuffer')
+          fs.writeFileSync(extractPath, data)
+
+          // Rewrite URL to the newly extracted file
+          el.url = `file:///${extractPath.replace(/\\/g, '/')}`
+        }
+      }
+    }
+
+    return JSON.stringify(boardData)
+  } catch (error) {
+    console.error('Failed to read .ibo file:', error)
+    return null
   }
 })
 
