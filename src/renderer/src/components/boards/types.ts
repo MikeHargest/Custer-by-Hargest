@@ -1,101 +1,68 @@
-export type ElementType =
-  | 'image'
-  | 'video'
-  | 'path'
-  | 'rect'
-  | 'circle'
-  | 'text'
-  | 'youtube'
-  | 'vimeo'
-  | 'vk'
-  | 'rutube'
-  | 'kinescope'
+import { UITheme } from '../../types'
+import * as PIXI from 'pixi.js'
 
-export interface BaseElement {
+export interface BoardElement {
   id: string
-  type: ElementType
+  type: 'image' | 'video' | 'link' | 'path' | 'rect' | 'text'
   x: number
   y: number
   width: number
   height: number
-  rotation: number
+  rotation?: number
+  url: string // For 'image' | 'video' | 'link'
+  title?: string // For 'link'
+  // For 'path'
+  points?: { x: number; y: number; width?: number }[]
+  size?: number
+  color?: string
+  // For 'rect'
+  strokeColor?: string
+  strokeWidth?: number
   groupId?: string
+  baseWidth?: number
+  baseHeight?: number
+  // For 'text'
+  text?: string
+  fontSize?: number
+  fontWeight?: number
+  textAlign?: 'left' | 'center' | 'right'
+  // Transient state
+  isProcessing?: boolean
 }
 
-export interface ImageElement extends BaseElement {
-  type: 'image'
-  url: string
-  lowResUrl?: string
+export interface CachedSnapTarget {
+  l: number
+  r: number
+  t: number
+  b: number
+  cx: number
+  cy: number
 }
 
-export interface VideoElement extends BaseElement {
-  type: 'video'
-  url: string
+export interface Viewport {
+  x: number
+  y: number
+  scale: number
 }
 
-export interface PathElement extends BaseElement {
-  type: 'path'
-  points: { x: number; y: number; width?: number }[]
-  color: string
-  size: number
+export interface BoardsViewProps {
+  boardData: string
+  onChange: (data: string) => void
+  showFPS?: boolean
+  theme?: UITheme
+  setTheme?: (theme: UITheme) => void
+  isSidebarOpen?: boolean
+  boardDir: string
+  boardFileName: string
 }
 
-export interface RectElement extends BaseElement {
-  type: 'rect'
-  color: string
-  strokeColor: string
-  strokeWidth: number
-}
+export type AlignmentDirection = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'
 
-export interface CircleElement extends BaseElement {
-  type: 'circle'
-  color: string
-  strokeColor: string
-  strokeWidth: number
+export interface TextureCacheEntry {
+  high: PIXI.Texture
+  mid: PIXI.Texture
+  low: PIXI.Texture
+  source: HTMLImageElement | HTMLVideoElement
+  refCount: number
+  lastUsed: number
 }
-
-export interface TextElement extends BaseElement {
-  type: 'text'
-  text: string
-  fontSize: number
-  fontFamily: string
-  color: string
-}
-
-export interface YoutubeElement extends BaseElement {
-  type: 'youtube'
-  videoId: string
-}
-
-export interface VimeoElement extends BaseElement {
-  type: 'vimeo'
-  videoId: string
-}
-
-export interface VkElement extends BaseElement {
-  type: 'vk'
-  videoId: string // expecting format "oid_vid", e.g. "-12345_67890"
-}
-
-export interface RutubeElement extends BaseElement {
-  type: 'rutube'
-  videoId: string
-}
-
-export interface KinescopeElement extends BaseElement {
-  type: 'kinescope'
-  videoId: string
-}
-
-export type CanvasElement =
-  | ImageElement
-  | VideoElement
-  | PathElement
-  | RectElement
-  | CircleElement
-  | TextElement
-  | YoutubeElement
-  | VimeoElement
-  | VkElement
-  | RutubeElement
-  | KinescopeElement

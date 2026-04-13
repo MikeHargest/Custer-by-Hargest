@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 
 // ===== HSB ↔ HEX conversion =====
 
@@ -69,6 +69,8 @@ interface ColorPickerProps {
   onClose: () => void
   anchorRect?: DOMRect | null
   inline?: boolean
+  opacity?: number
+  onOpacityChange?: (opacity: number) => void
 }
 
 export default function ColorPicker({
@@ -76,7 +78,9 @@ export default function ColorPicker({
   onChange,
   onClose,
   anchorRect,
-  inline
+  inline,
+  opacity,
+  onOpacityChange
 }: ColorPickerProps): React.ReactElement {
   const rgb = hexToRgb(color) || [255, 62, 108]
   const initialHsb = rgbToHsb(...rgb)
@@ -253,7 +257,7 @@ export default function ColorPicker({
     position: 'fixed',
     zIndex: 99999,
     background: 'var(--card-bg)',
-    borderRadius: '8px',
+    borderRadius: '10px',
     border: '1px solid rgba(255,255,255,0.1)',
     padding: '12px',
     boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
@@ -336,7 +340,12 @@ export default function ColorPicker({
   }
 
   return (
-    <div ref={popupRef} style={popupStyle} onMouseDown={(e) => e.stopPropagation()}>
+    <div
+      ref={popupRef}
+      style={popupStyle}
+      onMouseDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+    >
       {/* Hue */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
         <span style={labelStyle}>H</span>
@@ -389,7 +398,7 @@ export default function ColorPicker({
       </div>
 
       {/* Brightness */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
         <span style={labelStyle}>B</span>
         <div
           data-color-channel="b"
@@ -412,6 +421,52 @@ export default function ColorPicker({
         />
         <span style={{ ...labelStyle, width: '8px' }}>%</span>
       </div>
+
+      {/* Opacity – only shown when onOpacityChange is provided */}
+      {onOpacityChange !== undefined && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+          <span style={labelStyle}>A</span>
+          <div
+            style={{
+              ...trackStyle,
+              background: `linear-gradient(to right, transparent, ${hex})`,
+              backgroundImage: `linear-gradient(to right, rgba(0,0,0,0), ${hex})`,
+              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.08)'
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const track = e.currentTarget
+              const rect = track.getBoundingClientRect()
+              const getOpacity = (clientX: number): number =>
+                Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
+              onOpacityChange(Math.round(getOpacity(e.clientX) * 100) / 100)
+              const onMove = (mv: MouseEvent): void => {
+                mv.preventDefault()
+                onOpacityChange(Math.round(getOpacity(mv.clientX) * 100) / 100)
+              }
+              const onUp = (mu: MouseEvent): void => {
+                onOpacityChange(Math.round(getOpacity(mu.clientX) * 100) / 100)
+                document.removeEventListener('mousemove', onMove)
+                document.removeEventListener('mouseup', onUp)
+              }
+              document.addEventListener('mousemove', onMove)
+              document.addEventListener('mouseup', onUp)
+            }}
+          >
+            <div style={thumbStyle((opacity ?? 1) * 100)} />
+          </div>
+          <input
+            style={valueStyle}
+            value={Math.round((opacity ?? 1) * 100)}
+            onChange={(e) => {
+              const v = Math.max(0, Math.min(100, parseInt(e.target.value) || 0))
+              onOpacityChange(v / 100)
+            }}
+          />
+          <span style={{ ...labelStyle, width: '8px' }}>%</span>
+        </div>
+      )}
 
       {/* Hex + Preview */}
       <div

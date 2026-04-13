@@ -6,21 +6,50 @@ export interface TaskItem {
   subtasks: TaskItem[]
 }
 
+export interface PipelineItem {
+  id: string
+  text: string
+  completed: boolean
+}
+
+export interface PipelineStage {
+  id: string
+  name: string
+  items: PipelineItem[]
+  color?: string
+  colorOpacity?: number
+}
+
+export interface PipelineData {
+  id: string
+  name: string
+  stages: PipelineStage[]
+}
+
+export interface ProjectAttachment {
+  id: string
+  name: string
+  path: string
+  type: 'file' | 'link' | 'folder'
+}
+
 export interface Project {
   id: string
   name: string
   isExpanded: boolean
   tasks: TaskItem[]
+  archivedTasks?: TaskItem[]
   color?: string
   subprojects?: Project[]
   banner?: string
   description?: string
+  attachments?: ProjectAttachment[]
   icon?: string
   status?: string
   priority?: 'Low' | 'Medium' | 'High' | 'Urgent'
   startDate?: string
   endDate?: string
-  progressMode?: 'tasks' | 'manual'
+  progressMode?: 'tasks' | 'manual' | 'pipeline'
   manualProgress?: number
   depth?: number
   bannerCollapsed?: boolean
@@ -29,6 +58,9 @@ export interface Project {
   notesPath?: string
   boardsPath?: string
   boardData?: string
+  pipeline?: PipelineStage[] // Legacy field
+  pipelines?: PipelineData[] // New field
+  activePipelineId?: string
 }
 
 export interface TimelineTask {
@@ -51,17 +83,21 @@ export interface TimerData {
   soundName: string | null
   isRunning?: boolean
   isStopwatch?: boolean
+  isPinned?: boolean
+  isHeaderPinned?: boolean
 }
 
 export interface AppNote {
   id: string
   title: string
   content: string
-  type?: 'markdown' | 'tldraw'
+  type?: 'markdown' | 'board'
   projectId?: string
+  parentId?: string
   lastModified: number
   createdAt?: number
   path?: string // Absolute path to the .md file
+  fileName?: string
   isTrash?: boolean
 }
 
@@ -82,4 +118,45 @@ export interface AppEvent {
   date?: string // YYYY-MM-DD
   time?: string // HH:MM
   location?: string
+  recurrence?: {
+    frequency: 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom'
+    interval: number
+    daysOfWeek?: number[] // 0-6 for Sunday-Saturday
+    endType: 'never' | 'until' | 'count'
+    endDate?: string
+    count?: number
+  }
+  exceptions?: {
+    [dateStr: string]: {
+      deleted?: boolean
+      editedEventId?: string // Link to an exceptions AppEvent
+    }
+  } // date string to exception rules
+  originalEventId?: string // If this is an exception event
+  originalDate?: string // What date this exception event was originally for
+  reminder?: {
+    minutesBefore: number // 0, 5, 15, 30, 60, etc.
+    isNotified?: boolean
+  }
+}
+
+export interface AppNotification {
+  id: string
+  type: 'reminder' | 'timer' | 'system'
+  title: string
+  message: string
+  timestamp: number
+  isRead: boolean
+  relatedId?: string // eventId, timerId, etc.
+}
+
+export const DEFAULT_THEME: UITheme = {
+  bgColor: '#333333',
+  cardBg: '#121212',
+  accent: '#525252',
+  textPrimary: '#EAEAEA',
+  boardAccent: '#71717a',
+  boardBg: '#1b1b1b',
+  timelineTaskBg: '#2a2a2a',
+  timerBg: '#171717'
 }

@@ -1,6 +1,8 @@
 import React, { useMemo, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, TaskItem, TimelineTask } from '../types'
+import { expandRecurringEvents } from '../utils/recurrence'
+import * as LucideIcons from 'lucide-react'
 import {
   FolderOpen,
   X,
@@ -8,8 +10,11 @@ import {
   CalendarDays,
   AlignLeft,
   Plus,
-  Eye,
-  EyeOff
+  EyeOff,
+  SlidersHorizontal,
+  RotateCcw,
+  ChevronUp,
+  ChevronDown
 } from 'lucide-react'
 
 const isParentTask = (
@@ -45,16 +50,54 @@ interface TimelineViewProps {
     parentTaskId?: string,
     explicitTaskId?: string
   ) => string
+  hiddenProjectIds: string[]
+  setHiddenProjectIds: (ids: string[]) => void
 }
 
 export default function TimelineView({
   projects,
   timelineTasks,
   setTimelineTasks,
-  onAddProjectItem
+  onAddProjectItem,
+  hiddenProjectIds,
+  setHiddenProjectIds
 }: TimelineViewProps): React.ReactElement {
   const PAST_DAYS = 14
   const minCellWidth = 150
+
+  // 1. State and Refs first
+  const [viewMode, setViewMode] = useState<'timeline' | 'month'>('timeline')
+  const [viewDate, setViewDate] = useState(new Date())
+  const [addingToCell, setAddingToCell] = useState<{ projectId: string; date: string } | null>(null)
+  const [newItemName, setNewItemName] = useState('')
+  const [selectedTaskId, setSelectedTaskId] = useState<string>('')
+  const [isDraggingResize, setIsDraggingResize] = useState(false)
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
+  const [startX, setStartX] = useState(0)
+  const [startY, setStartY] = useState(0)
+  const [scrollLeft, setScrollLeft] = useState(0)
+  const [scrollTop, setScrollTop] = useState(0)
+
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const filterMenuRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  const adjustMonth = (offset: number): void => {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1))
+  }
+
+  const hiddenProjects = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds])
+
+  const toggleProjectVisibility = (id: string, e?: React.MouseEvent): void => {
+    e?.stopPropagation()
+    const newHidden = new Set(hiddenProjectIds)
+    if (newHidden.has(id)) newHidden.delete(id)
+    else newHidden.add(id)
+    setHiddenProjectIds(Array.from(newHidden))
+  }
+
+  // 2. Memoized values next
 
   const { days, months, mondayOffsetIndex } = useMemo(() => {
     const arr: Array<{
@@ -146,6 +189,92 @@ export default function TimelineView({
     return { days: arr, months: monthCounts, mondayOffsetIndex: foundMondayIndex }
   }, [])
 
+  const monthGridDays = useMemo(() => {
+    const arr: {
+      dateString: string
+      dayNumber: number
+      isCurrentMonth: boolean
+      isToday: boolean
+      isWeekend: boolean
+    }[] = []
+    const today = new Date()
+
+    const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
+    const dayOfWeek = firstDay.getDay()
+    const startOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+
+    const prevMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 0)
+    for (let i = startOffset - 1; i >= 0; i--) {
+      const d = new Date(prevMonth)
+      d.setDate(prevMonth.getDate() - i)
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6
+      arr.push({
+        dateString: d.toISOString().split('T')[0],
+        dayNumber: d.getDate(),
+        isCurrentMonth: false,
+        isToday: false,
+        isWeekend
+      })
+    }
+
+    const lastDay = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0)
+    for (let i = 1; i <= lastDay.getDate(); i++) {
+      const d = new Date(viewDate.getFullYear(), viewDate.getMonth(), i)
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6
+      arr.push({
+        dateString: d.toISOString().split('T')[0],
+        dayNumber: i,
+        isCurrentMonth: true,
+        isToday: d.toDateString() === today.toDateString(),
+        isWeekend
+      })
+    }
+
+    const totalSlots = arr.length > 35 ? 42 : 35
+    const remaining = totalSlots - arr.length
+    for (let i = 1; i <= remaining; i++) {
+      const d = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, i)
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6
+      arr.push({
+        dateString: d.toISOString().split('T')[0],
+        dayNumber: i,
+        isCurrentMonth: false,
+        isToday: false,
+        isWeekend
+      })
+    }
+
+    return arr
+  }, [viewDate])
+
+  const allEvents = useMemo(() => {
+    const list: any[] = []
+
+    // Determine the full range to expand events for (Timeline range + Month Grid range)
+    const timelineStart = days[0]?.dateString || ''
+    const timelineEnd = days[days.length - 1]?.dateString || ''
+    const monthStart = monthGridDays[0]?.dateString || ''
+    const monthEnd = monthGridDays[monthGridDays.length - 1]?.dateString || ''
+
+    const startDate = [timelineStart, monthStart].filter(Boolean).sort()[0] || ''
+    const endDate = [timelineEnd, monthEnd].filter(Boolean).sort().reverse()[0] || ''
+
+    const traverse = (projs: Project[]) => {
+      for (const p of projs) {
+        if (p.events) {
+          const expanded = expandRecurringEvents(p.events, startDate, endDate)
+          list.push(
+            ...expanded
+              .map((e) => ({ ...e, projectId: p.id, projectColor: p.color }))
+          )
+        }
+        if (p.subprojects) traverse(p.subprojects)
+      }
+    }
+    if (startDate && endDate) traverse(projects)
+    return list
+  }, [projects, days, monthGridDays])
+
   const taskIdToNameMap = useMemo(() => {
     const map = new Map<string, string>()
 
@@ -160,95 +289,24 @@ export default function TimelineView({
     return map
   }, [projects])
 
-  const monthGridDays = useMemo(() => {
-    const arr: {
-      dateString: string
-      dayNumber: number
-      isCurrentMonth: boolean
-      isToday: boolean
-    }[] = []
-    const today = new Date()
-
-    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1)
-    const startOffset = firstDay.getDay()
-
-    const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0)
-    for (let i = startOffset - 1; i >= 0; i--) {
-      const d = new Date(prevMonth)
-      d.setDate(prevMonth.getDate() - i)
-      arr.push({
-        dateString: d.toISOString().split('T')[0],
-        dayNumber: d.getDate(),
-        isCurrentMonth: false,
-        isToday: false
-      })
-    }
-
-    const lastDay = new Date(today.getFullYear(), today.getMonth() + 1, 0)
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      const d = new Date(today.getFullYear(), today.getMonth(), i)
-      arr.push({
-        dateString: d.toISOString().split('T')[0],
-        dayNumber: i,
-        isCurrentMonth: true,
-        isToday: d.toDateString() === today.toDateString()
-      })
-    }
-
-    const totalSlots = arr.length > 35 ? 42 : 35
-    const remaining = totalSlots - arr.length
-    for (let i = 1; i <= remaining; i++) {
-      const d = new Date(today.getFullYear(), today.getMonth() + 1, i)
-      arr.push({
-        dateString: d.toISOString().split('T')[0],
-        dayNumber: i,
-        isCurrentMonth: false,
-        isToday: false
-      })
-    }
-
-    return arr
-  }, [])
-
-  const [addingToCell, setAddingToCell] = useState<{ projectId: string; date: string } | null>(null)
-  const [newItemName, setNewItemName] = useState('')
-  const [selectedTaskId, setSelectedTaskId] = useState<string>('')
-  const dropdownRef = useRef<HTMLDivElement>(null)
-
-  const [hiddenProjects, setHiddenProjects] = useState<Set<string>>(new Set())
-  const [isDraggingResize, setIsDraggingResize] = useState(false)
-
-  const toggleProjectVisibility = (id: string, e: React.MouseEvent): void => {
-    e.stopPropagation()
-    const newHidden = new Set(hiddenProjects)
-    if (newHidden.has(id)) newHidden.delete(id)
-    else newHidden.add(id)
-    setHiddenProjects(newHidden)
-  }
-
-  type ViewMode = 'timeline' | 'month'
-  const [viewMode, setViewMode] = useState<ViewMode>('timeline')
-
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const [isPanning, setIsPanning] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [startY, setStartY] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
-  const [scrollTop, setScrollTop] = useState(0)
-
   const scrollToToday = (): void => {
     if (!scrollRef.current) return
-    const projectColumnWidth = 200
-    const todayIndex = days.findIndex((d) => d.isToday)
 
-    if (todayIndex !== -1) {
-      // Scroll so today column is centered in the visible area
-      const targetLeft =
-        projectColumnWidth +
-        todayIndex * minCellWidth -
-        scrollRef.current.clientWidth / 2 +
-        minCellWidth / 2
-      scrollRef.current.scrollTo({ left: Math.max(0, targetLeft), behavior: 'smooth' })
+    if (viewMode === 'timeline') {
+      const todayIndex = days.findIndex((d) => d.isToday)
+      if (todayIndex !== -1) {
+        const targetLeft = todayIndex * minCellWidth
+        scrollRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' })
+      }
+    } else {
+      // Month view vertical scroll + reset date
+      setViewDate(new Date())
+      const todayIndex = monthGridDays.findIndex((d) => d.isToday)
+      if (todayIndex !== -1) {
+        const row = Math.floor(todayIndex / 7)
+        const rowHeight = scrollRef.current.scrollHeight / (monthGridDays.length / 7)
+        scrollRef.current.scrollTo({ top: row * rowHeight, behavior: 'smooth' })
+      }
     }
   }
 
@@ -261,10 +319,17 @@ export default function TimelineView({
       ) {
         setAddingToCell(null)
       }
+      if (
+        showFilterMenu &&
+        filterMenuRef.current &&
+        !filterMenuRef.current.contains(event.target as Node)
+      ) {
+        setShowFilterMenu(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [addingToCell])
+  }, [addingToCell, showFilterMenu])
 
   React.useEffect(() => {
     if (viewMode === 'timeline' && scrollRef.current && mondayOffsetIndex > 0) {
@@ -408,6 +473,18 @@ export default function TimelineView({
           return
         }
 
+        if (parsed.type === 'move_event') {
+          const dropEvent = new CustomEvent('event-dropped-on-calendar', {
+            detail: {
+              eventId: parsed.id,
+              projectId: projectId,
+              newDate: dateString
+            }
+          })
+          window.dispatchEvent(dropEvent)
+          return
+        }
+
         if (parsed.type === 'resize_timeline_task') {
           setTimelineTasks((prev) =>
             prev.map((t) => {
@@ -489,81 +566,6 @@ export default function TimelineView({
           overflow: 'hidden'
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            marginBottom: '20px',
-            flexShrink: 0,
-            padding: '16px 16px 0 16px'
-          }}
-        >
-          <h2 style={{ color: 'var(--text-primary)', margin: 0, flex: 1 }}>Project Calendar</h2>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button
-              onClick={scrollToToday}
-              style={{
-                background: 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: 'var(--text-primary)',
-                padding: '6px 12px',
-                borderRadius: 'var(--radius-md)',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 500,
-                transition: 'all 0.2s',
-                ...(viewMode === 'month' ? { opacity: 0.5, pointerEvents: 'none' } : {})
-              }}
-              title="Scroll to Today"
-            >
-              Today
-            </button>
-            <div
-              style={{
-                display: 'flex',
-                background: 'rgba(0,0,0,0.2)',
-                padding: '2px',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid rgba(255,255,255,0.05)'
-              }}
-            >
-              <button
-                onClick={() => setViewMode('timeline')}
-                style={{
-                  background: viewMode === 'timeline' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  color: viewMode === 'timeline' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  border: 'none',
-                  padding: '6px',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  transition: 'all 0.2s'
-                }}
-                title="Timeline View"
-              >
-                <AlignLeft size={16} />
-              </button>
-              <button
-                onClick={() => setViewMode('month')}
-                style={{
-                  background: viewMode === 'month' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                  color: viewMode === 'month' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  border: 'none',
-                  padding: '6px',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  transition: 'all 0.2s'
-                }}
-                title="Month Grid View"
-              >
-                <CalendarDays size={16} />
-              </button>
-            </div>
-          </div>
-        </div>
 
         <div
           className="timeline-card-scroll-area"
@@ -576,62 +578,282 @@ export default function TimelineView({
           style={{
             overflow: 'scroll',
             flex: 1,
-            padding: viewMode === 'timeline' ? '0 12px 12px 0' : '0 12px 12px 12px',
             cursor: isPanning ? 'grabbing' : 'auto'
           }}
         >
+          {/* Shared Top Bar Controls */}
+          <div
+            style={{
+              position: 'sticky',
+              top: 0,
+              left: 0,
+              right: 0,
+              zIndex: 45,
+              background: 'var(--card-bg)',
+              height: '45px',
+              borderBottom: '1px solid rgba(255,255,255,0.05)',
+              display: 'flex',
+              alignItems: 'center',
+              width: 'max-content',
+              minWidth: '100%'
+            }}
+          >
+            <div
+              style={{
+                width: '185px',
+                minWidth: '185px',
+                height: '100%',
+                padding: '0 12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                position: 'sticky',
+                left: 0,
+                background: 'var(--card-bg)',
+                zIndex: 46,
+                boxSizing: 'border-box'
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  background: 'rgba(0,0,0,0.2)',
+                  padding: '2px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid rgba(255,255,255,0.05)'
+                }}
+              >
+                <button
+                  onClick={() => setViewMode('timeline')}
+                  style={{
+                    background: viewMode === 'timeline' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: viewMode === 'timeline' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: 'none',
+                    padding: '4px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Timeline View"
+                >
+                  <AlignLeft size={14} />
+                </button>
+                <button
+                  onClick={() => setViewMode('month')}
+                  style={{
+                    background: viewMode === 'month' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: viewMode === 'month' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: 'none',
+                    padding: '4px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Month Grid View"
+                >
+                  <CalendarDays size={14} />
+                </button>
+              </div>
+              <button
+                onClick={scrollToToday}
+                style={{
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'var(--text-primary)',
+                  padding: '3px 10px',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  transition: 'all 0.2s'
+                }}
+                title="Scroll to Today"
+              >
+                Today
+              </button>
+            </div>
+          </div>
+
           {viewMode === 'timeline' ? (
             <table
               className="timeline-container"
-              style={{ borderCollapse: 'collapse', minWidth: '100%', tableLayout: 'fixed' }}
+              style={{ borderCollapse: 'separate', borderSpacing: 0, minWidth: '100%', tableLayout: 'fixed' }}
             >
               {/* Calendar Header Row */}
               <thead>
-                {/* Months Row */}
+
+
+                {/* Row 2: Projects Label (rowSpan=2) + Months */}
                 <tr>
                   <th
+                    rowSpan={2}
                     style={{
-                      width: '224px',
-                      minWidth: '224px',
-                      padding: '12px 12px 12px 24px',
-                      borderBottom: '2px solid rgba(255,255,255,0.1)',
+                      width: '185px',
+                      minWidth: '185px',
+                      height: '90px',
+                      padding: '8px 8px 8px 12px',
+                      borderBottom: '1px solid rgba(255,255,255,0.05)',
                       color: 'var(--text-secondary)',
                       fontWeight: 600,
                       position: 'sticky',
-                      top: 0,
+                      top: '45px',
                       left: 0,
                       background: 'var(--card-bg)',
-                      zIndex: 20,
+                      zIndex: 35,
                       textAlign: 'left',
-                      boxShadow: '1px 1px 0 rgba(255,255,255,0.05)'
+                      borderRight: '1px solid rgba(255,255,255,0.05)',
+                      boxShadow: '1px 0 0 rgba(255,255,255,0.05)'
                     }}
-                    rowSpan={2}
                   >
-                    Projects
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
+                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Projects</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setShowFilterMenu(!showFilterMenu)
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '2px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          opacity: showFilterMenu ? 1 : 0.5
+                        }}
+                        title="Filter projects"
+                      >
+                        <SlidersHorizontal size={14} />
+                      </button>
+                      {showFilterMenu && (
+                        <div
+                          ref={filterMenuRef}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            left: '100%',
+                            marginLeft: '8px',
+                            background: 'var(--card-bg)',
+                            border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 'var(--radius-md)',
+                            padding: '6px 0',
+                            minWidth: '180px',
+                            zIndex: 100,
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                            maxHeight: '400px',
+                            overflowY: 'auto'
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>
+                            Visibility
+                          </div>
+                          {projects.map((p) => (
+                            <button
+                              key={p.id}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                toggleProjectVisibility(p.id)
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                width: '100%',
+                                padding: '8px 12px',
+                                paddingLeft: `${12 + (p.depth || 0) * 16}px`,
+                                background: 'transparent',
+                                border: 'none',
+                                color: hiddenProjects.has(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                textAlign: 'left',
+                                transition: 'background 0.2s',
+                                opacity: hiddenProjects.has(p.id) ? 0.6 : 1
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                            >
+                              <div
+                                style={{
+                                  width: '12px',
+                                  height: '12px',
+                                  borderRadius: '3px',
+                                  border: `2px solid ${p.color || 'var(--accent)'}`,
+                                  background: hiddenProjects.has(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
+                                  flexShrink: 0
+                                }}
+                              />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                            </button>
+                          ))}
+                          {hiddenProjects.size > 0 && (
+                            <>
+                              <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setHiddenProjectIds([])
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  width: '100%',
+                                  padding: '8px 12px',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'var(--text-primary)',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  textAlign: 'left',
+                                  fontWeight: 500
+                                }}
+                              >
+                                <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
+                                <span>Show all projects</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </th>
                   {months.map((m) => (
                     <th
                       key={m.name}
                       colSpan={m.count}
                       style={{
-                        padding: 0,
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        borderLeft: '1px solid rgba(255,255,255,0.05)',
+                        height: '45px',
+                        padding: '0 12px',
+                        borderBottom: 'none',
+                        borderLeft: 'none',
                         textAlign: 'left',
                         background: 'var(--card-bg)',
                         position: 'sticky',
-                        top: 0,
-                        zIndex: 10
+                        top: '45px',
+                        zIndex: 10,
+                        boxSizing: 'border-box',
+                        overflow: 'visible'
                       }}
                     >
                       <div
                         style={{
                           position: 'sticky',
-                          left: '212px',
-                          padding: '8px 12px',
+                          left: '201px',
                           display: 'inline-block',
+                          width: 'max-content',
+                          fontSize: '13px',
                           color: 'var(--text-primary)',
-                          fontWeight: 600
+                          fontWeight: 600,
+                          padding: '0 4px',
+                          whiteSpace: 'nowrap',
+                          zIndex: 11
                         }}
                       >
                         {m.name}
@@ -639,7 +861,8 @@ export default function TimelineView({
                     </th>
                   ))}
                 </tr>
-                {/* Days Row */}
+
+                {/* Row 3: Days */}
                 <tr>
                   {days.map((d) => (
                     <th
@@ -647,21 +870,17 @@ export default function TimelineView({
                       style={{
                         width: `${minCellWidth}px`,
                         minWidth: `${minCellWidth}px`,
-                        padding: '10px 12px',
-                        borderBottom: '2px solid rgba(255,255,255,0.1)',
-                        borderLeft: d.isDummy
-                          ? '1px dashed rgba(255,255,255,0.04)'
-                          : '1px solid rgba(255,255,255,0.05)',
+                        padding: '8px 12px',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        borderLeft: 'none',
                         textAlign: 'center',
                         color: d.isDummy
                           ? 'rgba(255,255,255,0.12)'
                           : d.isToday
                             ? 'var(--accent)'
-                            : d.isWeekend
-                              ? 'rgba(255,120,120,0.6)'
-                              : d.isPast
-                                ? 'rgba(255,255,255,0.3)'
-                                : 'var(--text-secondary)',
+                            : d.isPast
+                              ? 'rgba(255,255,255,0.3)'
+                              : 'var(--text-secondary)',
                         fontWeight: d.isToday ? 'bold' : 'normal',
                         opacity: d.isPast && !d.isToday ? 0.55 : 1,
                         background: d.isDummy
@@ -669,11 +888,12 @@ export default function TimelineView({
                           : d.isPast
                             ? 'rgba(0,0,0,0.08)'
                             : d.isWeekend
-                              ? 'rgba(255,255,255,0.03)'
+                              ? 'rgba(0,0,0,0.3)'
                               : 'var(--card-bg)',
                         position: 'sticky',
-                        top: '40px',
-                        zIndex: 10
+                        top: '90px',
+                        zIndex: 10,
+                        fontSize: '12px'
                       }}
                     >
                       {d.dayStr}
@@ -704,18 +924,19 @@ export default function TimelineView({
                     .map((project) => (
                       <tr
                         key={project.id}
-                        style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
+                        style={{ background: 'transparent' }}
                       >
                         {/* Project Title Column */}
                         <td
                           style={{
-                            width: '224px',
-                            minWidth: '224px',
-                            padding: `16px 12px 16px ${24 + (project.depth || 0) * 20}px`,
+                            width: '185px',
+                            minWidth: '185px',
+                            padding: `10px 8px 10px ${12 + (project.depth || 0) * 16}px`,
                             position: 'sticky',
                             left: 0,
                             background: 'var(--card-bg)',
                             borderRight: '1px solid rgba(255,255,255,0.05)',
+                            borderBottom: '1px solid rgba(255,255,255,0.05)',
                             zIndex: 5,
                             verticalAlign: 'top',
                             boxShadow: '1px 0 0 rgba(255,255,255,0.05)'
@@ -725,45 +946,51 @@ export default function TimelineView({
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '8px',
+                              gap: '6px',
                               color: 'var(--text-primary)'
                             }}
                           >
-                            {project.icon && project.icon.startsWith('file') ? (
-                              <img
-                                src={project.icon}
-                                alt=""
-                                style={{
-                                  width: '16px',
-                                  height: '16px',
-                                  borderRadius: 'var(--radius-md)',
-                                  objectFit: 'cover',
-                                  flexShrink: 0
-                                }}
-                              />
-                            ) : project.icon && project.icon.length < 5 ? (
-                              <span
-                                style={{
-                                  fontSize: '14px',
-                                  width: '16px',
-                                  textAlign: 'center',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  flexShrink: 0
-                                }}
-                              >
-                                {project.icon}
-                              </span>
-                            ) : (
-                              <FolderOpen
-                                size={16}
-                                style={{ color: project.color || 'var(--accent)', flexShrink: 0 }}
-                              />
-                            )}
+                            {(() => {
+                              if (project.icon?.startsWith('file')) {
+                                return (
+                                  <img
+                                    src={project.icon}
+                                    alt=""
+                                    style={{
+                                      width: '15px',
+                                      height: '15px',
+                                      borderRadius: 'var(--radius-sm)',
+                                      objectFit: 'cover',
+                                      flexShrink: 0
+                                    }}
+                                  />
+                                )
+                              }
+                              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                              const IconComponent = (LucideIcons as any)[project.icon || 'FolderOpen']
+                              if (IconComponent) {
+                                return <IconComponent size={15} style={{ color: project.color || 'var(--accent)', flexShrink: 0 }} />
+                              }
+                              return (
+                                <span
+                                  style={{
+                                    fontSize: '13px',
+                                    width: '15px',
+                                    textAlign: 'center',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}
+                                >
+                                  {project.icon}
+                                </span>
+                              )
+                            })()}
                             <span
                               style={{
                                 fontWeight: 600,
+                                fontSize: '13px',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 whiteSpace: 'nowrap',
@@ -773,28 +1000,6 @@ export default function TimelineView({
                             >
                               {project.name}
                             </span>
-                            <button
-                              onClick={(e) => toggleProjectVisibility(project.id, e)}
-                              style={{
-                                background: 'transparent',
-                                border: 'none',
-                                color: 'var(--text-secondary)',
-                                cursor: 'pointer',
-                                padding: '2px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                opacity: 0.5
-                              }}
-                              title={
-                                hiddenProjects.has(project.id) ? 'Show Project' : 'Hide Project'
-                              }
-                            >
-                              {hiddenProjects.has(project.id) ? (
-                                <EyeOff size={14} />
-                              ) : (
-                                <Eye size={14} />
-                              )}
-                            </button>
                           </div>
                         </td>
 
@@ -820,6 +1025,10 @@ export default function TimelineView({
                               d.dateString <= t.endDate
                             )
                           })
+
+                          const eventsForDay = allEvents.filter(
+                            (e) => e.projectId === project.id && e.date === d.dateString
+                          )
 
                           // Check if this cell is the start of any multi-day task
                           const hasMultiDayStart = tasksForDay.some(
@@ -852,9 +1061,8 @@ export default function TimelineView({
                                 width: `${minCellWidth}px`,
                                 minWidth: `${minCellWidth}px`,
                                 padding: '8px',
-                                borderLeft: d.isDummy
-                                  ? '1px dashed rgba(255,255,255,0.04)'
-                                  : '1px solid rgba(255,255,255,0.05)',
+                                borderLeft: 'none',
+                                borderBottom: '1px solid rgba(255,255,255,0.05)',
                                 verticalAlign: 'top',
                                 background: d.isDummy
                                   ? `repeating-linear-gradient(
@@ -869,7 +1077,7 @@ export default function TimelineView({
                                     : d.isPast
                                       ? 'rgba(0,0,0,0.06)'
                                       : d.isWeekend
-                                        ? 'rgba(255,255,255,0.02)'
+                                        ? 'rgba(0,0,0,0.3)'
                                         : 'transparent',
                                 opacity: d.isPast && !d.isToday ? 0.7 : 1,
                                 cursor: d.isDummy ? 'default' : 'pointer',
@@ -899,6 +1107,74 @@ export default function TimelineView({
                                     key={`placeholder-${st.id}`}
                                     style={{ height: '26px', flexShrink: 0, visibility: 'hidden' }}
                                   />
+                                ))}
+
+                                {eventsForDay.map((event) => (
+                                  <div
+                                    key={event.id}
+                                    draggable
+                                    onDragStart={(e) => {
+                                      e.dataTransfer.setData(
+                                        'text/plain',
+                                        JSON.stringify({
+                                          type: 'move_event',
+                                          id: event.id,
+                                          projectId: project.id
+                                        })
+                                      )
+                                    }}
+                                    style={{
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: '6px',
+                                      padding: '4px 8px',
+                                      background: 'rgba(255,255,255,0.03)',
+                                      borderRadius: 'var(--radius-sm)',
+                                      fontSize: '11px',
+                                      borderLeft: `2px solid ${project.color || 'var(--accent)'}`,
+                                      cursor: 'grab'
+                                    }}
+                                    className="timeline-task-item"
+                                    title={`Event: ${event.title}${event.time ? '\nTime: ' + event.time : ''}${event.location ? '\nLoc: ' + event.location : ''}\n(Drag to move instance)`}
+                                  >
+                                    <LucideIcons.Calendar size={12} style={{ flexShrink: 0, opacity: 0.7, color: project.color || 'var(--accent)' }} />
+                                    <span style={{
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                      color: 'var(--text-secondary)',
+                                      flex: 1
+                                    }}>
+                                      {event.title}
+                                    </span>
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        // Dispatch a custom event to delete this event instance
+                                        const delEvent = new CustomEvent('delete-event-instance', {
+                                          detail: {
+                                            eventId: event.id,
+                                            projectId: project.id
+                                          }
+                                        })
+                                        window.dispatchEvent(delEvent)
+                                      }}
+                                      style={{
+                                        background: 'transparent',
+                                        border: 'none',
+                                        color: 'rgba(255,255,255,0.2)',
+                                        cursor: 'pointer',
+                                        padding: '0 2px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        marginLeft: 'auto'
+                                      }}
+                                      title="Delete instance"
+                                      className="event-delete-btn"
+                                    >
+                                      <LucideIcons.X size={10} />
+                                    </button>
+                                  </div>
                                 ))}
                                 {tasksForDay.map((task) => {
                                   const currentTaskName =
@@ -1138,7 +1414,7 @@ export default function TimelineView({
                                 })}
 
                                 {addingToCell?.projectId === project.id &&
-                                addingToCell?.date === d.dateString ? (
+                                  addingToCell?.date === d.dateString ? (
                                   <div
                                     ref={dropdownRef}
                                     className="timeline-add-dropdown"
@@ -1237,48 +1513,6 @@ export default function TimelineView({
                       </tr>
                     ))
                 )}
-                {/* Ghost / filler rows to extend grid lines to the full visible area */}
-                {Array.from({ length: 8 }).map((_, rowIdx) => (
-                  <tr key={`ghost-row-${rowIdx}`} style={{ height: '52px' }}>
-                    {/* Sticky project column - empty */}
-                    <td
-                      style={{
-                        width: '224px',
-                        minWidth: '224px',
-                        position: 'sticky',
-                        left: 0,
-                        background: 'var(--card-bg)',
-                        borderRight: '1px solid rgba(255,255,255,0.03)',
-                        borderBottom: rowIdx < 7 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                        zIndex: 5
-                      }}
-                    />
-                    {/* Ghost day cells */}
-                    {days.map((d) => (
-                      <td
-                        key={`ghost-${rowIdx}-${d.dateString}`}
-                        style={{
-                          width: `${minCellWidth}px`,
-                          minWidth: `${minCellWidth}px`,
-                          borderLeft: d.isDummy
-                            ? '1px dashed rgba(255,255,255,0.03)'
-                            : '1px solid rgba(255,255,255,0.03)',
-                          borderBottom: rowIdx < 7 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                          background: d.isDummy
-                            ? `repeating-linear-gradient(
-                                -45deg,
-                                rgba(0,0,0,0.06),
-                                rgba(0,0,0,0.06) 2px,
-                                transparent 2px,
-                                transparent 10px
-                              )`
-                            : 'transparent',
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    ))}
-                  </tr>
-                ))}
               </tbody>
             </table>
           ) : (
@@ -1286,20 +1520,81 @@ export default function TimelineView({
               className="month-grid-container"
               style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
             >
+              {/* Month Header Label */}
+              <div
+                style={{
+                  height: '45px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 16px',
+                  gap: '8px',
+                  background: 'var(--card-bg)',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  position: 'sticky',
+                  top: '45px',
+                  zIndex: 42
+                }}
+              >
+                <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  {viewDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(/^./, (str) => str.toUpperCase())}
+                </div>
+                <div style={{ display: 'flex', gap: '2px' }}>
+                  <button
+                    onClick={() => adjustMonth(-1)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      padding: '4px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      opacity: 0.7,
+                      transition: 'opacity 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                  >
+                    <ChevronUp size={16} />
+                  </button>
+                  <button
+                    onClick={() => adjustMonth(1)}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-secondary)',
+                      padding: '4px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      opacity: 0.7,
+                      transition: 'opacity 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
+                  >
+                    <ChevronDown size={16} />
+                  </button>
+                </div>
+              </div>
+
               <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(7, 1fr)',
                   gap: '1px',
                   background: 'rgba(255,255,255,0.05)',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)'
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  position: 'sticky',
+                  top: '90px',
+                  zIndex: 41
                 }}
               >
-                {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
                   <div
                     key={day}
                     style={{
-                      background: 'var(--card-bg)',
+                      background: (day === 'Sat' || day === 'Sun') ? 'rgba(0,0,0,0.3)' : 'var(--card-bg)',
                       padding: '12px 8px',
                       fontWeight: 600,
                       fontSize: '12px',
@@ -1315,7 +1610,7 @@ export default function TimelineView({
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(7, 1fr)',
-                  gridAutoRows: 'minmax(120px, 1fr)',
+                  gridAutoRows: '1fr',
                   gap: '1px',
                   background: 'rgba(255,255,255,0.05)',
                   flex: 1
@@ -1323,6 +1618,7 @@ export default function TimelineView({
               >
                 {monthGridDays.map((d, i) => {
                   const tasksForDay = timelineTasks.filter((t) => t.date === d.dateString)
+                  const eventsForDay = allEvents.filter((e) => e.date === d.dateString)
 
                   return (
                     <div
@@ -1336,13 +1632,19 @@ export default function TimelineView({
                         }
                       }}
                       style={{
-                        background: d.isToday ? 'rgba(255,255,255,0.05)' : 'var(--card-bg)',
+                        background: d.isToday
+                          ? 'rgba(255,255,255,0.05)'
+                          : d.isWeekend
+                            ? 'rgba(0,0,0,0.3)'
+                            : 'var(--card-bg)',
                         padding: '8px',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '4px',
                         opacity: d.isCurrentMonth ? 1 : 0.4,
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        overflow: 'hidden',
+                        minHeight: 0
                       }}
                       onDragOver={handleDragOver}
                       onDrop={(e) => {
@@ -1433,6 +1735,70 @@ export default function TimelineView({
                         }}
                         className="custom-scrollbar"
                       >
+                        {eventsForDay.map((event) => (
+                          <div
+                            key={event.id}
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData(
+                                'text/plain',
+                                JSON.stringify({
+                                  type: 'move_event',
+                                  id: event.id,
+                                  projectId: event.projectId
+                                })
+                              )
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '2px 6px',
+                              background: 'rgba(255,255,255,0.03)',
+                              borderRadius: 'var(--radius-sm)',
+                              fontSize: '11px',
+                              borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`,
+                              marginBottom: '2px',
+                              cursor: 'grab'
+                            }}
+                            title={`Event: ${event.title}${event.time ? '\nTime: ' + event.time : ''}${event.location ? '\nLoc: ' + event.location : ''}\n(Drag to move instance)`}
+                          >
+                            <LucideIcons.Calendar size={10} style={{ flexShrink: 0, opacity: 0.7, color: event.projectColor || 'var(--accent)' }} />
+                            <span style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              color: 'var(--text-secondary)',
+                              flex: 1
+                            }}>
+                              {event.title}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                const delEvent = new CustomEvent('delete-event-instance', {
+                                  detail: {
+                                    eventId: event.id,
+                                    projectId: event.projectId
+                                  }
+                                })
+                                window.dispatchEvent(delEvent)
+                              }}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'rgba(255,255,255,0.2)',
+                                cursor: 'pointer',
+                                padding: '0 2px',
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                              title="Delete instance"
+                            >
+                              <LucideIcons.X size={10} />
+                            </button>
+                          </div>
+                        ))}
                         {tasksForDay.map((task) => {
                           const currentTaskName =
                             task.taskId && taskIdToNameMap.has(task.taskId)
@@ -1470,7 +1836,8 @@ export default function TimelineView({
                                 display: 'flex',
                                 alignItems: 'center',
                                 justifyContent: 'space-between',
-                                gap: '4px'
+                                gap: '4px',
+                                overflow: 'hidden'
                               }}
                               title={`Task: ${currentTaskName} (${project?.name || 'Unknown'})`}
                             >
@@ -1645,7 +2012,7 @@ export default function TimelineView({
                 .join(', ')}
             </span>
             <button
-              onClick={() => setHiddenProjects(new Set())}
+              onClick={() => setHiddenProjectIds([])}
               style={{
                 background: 'none',
                 border: 'none',

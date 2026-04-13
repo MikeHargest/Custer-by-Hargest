@@ -43,6 +43,13 @@ const api = {
       ipcRenderer.removeListener('mini-window-closed', listener)
     }
   },
+  onTimerFinished: (callback: (timerId: string, title: string) => void) => {
+    const listener = (_: any, timerId: string, title: string) => callback(timerId, title)
+    ipcRenderer.on('on-timer-finished', listener)
+    return () => {
+      ipcRenderer.removeListener('on-timer-finished', listener)
+    }
+  },
 
   // Notes File System
   getNotesDefaultDir: () => ipcRenderer.invoke('notes:getDefaultDir'),
@@ -55,6 +62,8 @@ const api = {
     ipcRenderer.invoke('notes:delete', dirPath, fileName),
   moveNote: (oldDir: string, newDir: string, fileName: string) =>
     ipcRenderer.invoke('notes:move', oldDir, newDir, fileName),
+  renameNote: (dirPath: string, oldFileName: string, newFileName: string) =>
+    ipcRenderer.invoke('notes:rename', dirPath, oldFileName, newFileName),
   listNotes: (dirPath: string) => ipcRenderer.invoke('notes:list', dirPath),
 
   // Boards File System
@@ -71,6 +80,12 @@ const api = {
     ipcRenderer.invoke('boards:saveIbo', dirPath, fileName, boardContent),
   readIbo: (dirPath: string, fileName: string) =>
     ipcRenderer.invoke('boards:readIbo', dirPath, fileName),
+  saveContainer: (dirPath: string, fileName: string, boardContent: string) =>
+    ipcRenderer.invoke('boards:save-container', dirPath, fileName, boardContent),
+  loadContainer: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:load-container', dirPath, fileName),
+  saveBoardAsset: (dirPath: string, fileName: string, assetId: string, assetData: string) =>
+    ipcRenderer.invoke('boards:saveAsset', dirPath, fileName, assetId, assetData),
 
   // Window controls
   minimizeWindow: () => ipcRenderer.send('window:minimize'),
@@ -98,7 +113,13 @@ const api = {
     ipcRenderer.invoke('workspace:renameProjectFolder', oldPath, newName),
   listProjects: (workspacePath: string) =>
     ipcRenderer.invoke('workspace:listProjects', workspacePath),
+  scanAllNotes: (workspacePath: string) =>
+    ipcRenderer.invoke('workspace:scanAllNotes', workspacePath),
   getFolderSize: (folderPath: string) => ipcRenderer.invoke('workspace:getFolderSize', folderPath),
+  selectFile: () => ipcRenderer.invoke('app:selectFile'),
+  selectFolder: () => ipcRenderer.invoke('app:selectFolder'),
+  openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
+  openPath: (path: string) => ipcRenderer.invoke('app:openPath', path),
 
   // Custom resize (for transparent frameless window)
   windowResizeStart: (direction: string) => ipcRenderer.send('window:resizeStart', direction),

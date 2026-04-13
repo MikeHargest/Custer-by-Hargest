@@ -1,20 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
-import { Play, Pause, Square, Music, X, AppWindow } from 'lucide-react'
+import { Play, Pause, Square, Music, X, AppWindow, Settings } from 'lucide-react'
 import type { TimerData, UITheme } from '../types'
 
 interface TimerCardProps {
   data: TimerData
   theme: UITheme
+  isActiveView?: boolean
+  timerVolume: number
   onUpdate: (updates: Partial<TimerData>) => void
   onDelete: () => void
 }
-export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCardProps) {
+export default function TimerCard({ data, onUpdate, onDelete, theme, isActiveView, timerVolume }: TimerCardProps) {
   const [timeLeft, setTimeLeft] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
   const [isFinished, setIsFinished] = useState(false)
   const [hasStarted, setHasStarted] = useState(false)
   const [isDragOver, setIsDragOver] = useState(false)
-  const [isPinned, setIsPinned] = useState(false)
+  const [isPinned, setIsPinned] = useState(data.isPinned || false)
+  const [isHeaderPinned, setIsHeaderPinned] = useState(data.isHeaderPinned || false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
@@ -40,16 +44,25 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
       } else {
         audioRef.current.src = fullPath
       }
+      audioRef.current.volume = timerVolume
       audioRef.current.loop = true
       audioRef.current.play().catch((err) => console.error('Audio play failed:', err))
     } else {
       // Default browser beep fallback (if no mp3 chosen)
       const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')
+      audio.volume = timerVolume
       audio.loop = true
       audio.play().catch((e) => console.error('Error playing fallback audio', e))
       audioRef.current = audio
     }
   }
+
+  // Sync volume if it changes while playing
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = timerVolume
+    }
+  }, [timerVolume])
 
   // Timer logic
   useEffect(() => {
@@ -152,7 +165,9 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
   }
 
   const handlePin = () => {
-    setIsPinned(true)
+    const newState = true
+    setIsPinned(newState)
+    onUpdate({ isPinned: newState })
     // @ts-ignore
     window.api.createMiniWindow(data.id)
 
@@ -160,44 +175,51 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
   }
 
   const handleUnpin = () => {
-    setIsPinned(false)
-    // @ts-ignore
+    const newState = false
+    setIsPinned(newState)
+    onUpdate({ isPinned: newState })
+    // @ts-ignore - window.api is injected by preload
     window.api.closeMiniWindow(data.id)
   }
 
   // --- Mini Window Synchronization ---
   useEffect(() => {
-    if (isPinned) {
-      const syncState = (): void => {
-        // @ts-ignore - window.api is injected by preload
-        window.api.syncTimerState(data.id, {
-          title: data.title,
-          taskName: data.taskName,
-          timeLeft,
-          isRunning,
-          isFinished,
-          isStopwatch: data.isStopwatch,
-          bgColor: theme.timerBg || '#0A0A0A'
-        })
-      }
+    const syncState = (overrides?: any): void => {
+      // @ts-ignore - window.api is injected by preload
+      window.api.syncTimerState(data.id, {
+        title: data.title,
+        taskName: data.taskName,
+        timeLeft,
+        isRunning,
+        isFinished,
+        isPinned,
+        isHeaderPinned,
+        isStopwatch: data.isStopwatch,
+        bgColor: theme.timerBg || '#0A0A0A',
+        ...overrides
+      })
+    }
 
+    if (isPinned || isRunning || isHeaderPinned) {
       // Immediate sync for ongoing state changes
-      const syncId = requestAnimationFrame(syncState)
+      syncState()
 
-      // Delayed sync to catch the mini-window after it finishes loading
-      const delayedSync = setTimeout(syncState, 600)
+      // Also sync after a short delay to ensure listeners are ready
+      const delayedSync = setTimeout(() => syncState(), 500)
 
-      // Periodic heartbeat so paused timers still sync
-      const heartbeat = setInterval(syncState, 1000)
+      // Heartbeat with slightly higher frequency for responsiveness
+      const heartbeat = setInterval(() => syncState(), 800)
 
       return () => {
-        cancelAnimationFrame(syncId)
         clearTimeout(delayedSync)
         clearInterval(heartbeat)
       }
+    } else {
+      // Send one final sync to clear it from header/listeners when it stops
+      syncState({ isRunning: false, isPinned: false, isHeaderPinned: false })
+      return undefined
     }
-    return undefined
-  }, [isPinned, data.title, data.taskName, timeLeft, isRunning, isFinished, data.id])
+  }, [isPinned, isHeaderPinned, data.title, data.taskName, timeLeft, isRunning, isFinished, data.id])
 
   useEffect(() => {
     if (!isPinned) return
@@ -230,6 +252,30 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
     }
   }, [isPinned, isRunning, isFinished, data.id])
   // -----------------------------------
+
+  // Auto-pinting logic based on active view state
+  const prevIsActiveView = useRef<boolean | undefined>(isActiveView)
+
+  useEffect(() => {
+    if (isActiveView === undefined) return
+
+    // Transition from active view to inactive view
+    if (prevIsActiveView.current === true && isActiveView === false) {
+      if (isRunning && !isPinned && !isHeaderPinned) {
+        setIsHeaderPinned(true)
+        onUpdate({ isHeaderPinned: true })
+      }
+    }
+    // Transition from inactive view back to active view
+    else if (prevIsActiveView.current === false && isActiveView === true) {
+      if (isHeaderPinned) {
+        setIsHeaderPinned(false)
+        onUpdate({ isHeaderPinned: false })
+      }
+    }
+
+    prevIsActiveView.current = isActiveView
+  }, [isActiveView, isRunning, isPinned, isHeaderPinned, onUpdate])
 
   // Formatting display time
   const displayHours = Math.floor(timeLeft / 3600)
@@ -272,142 +318,167 @@ export default function TimerCard({ data, onUpdate, onDelete, theme }: TimerCard
               <AppWindow size={16} />
             </button>
           )}
+
+          <button
+            className={`timer-pin ${isSettingsOpen ? 'active' : ''}`}
+            onClick={() => setIsSettingsOpen(!isSettingsOpen)}
+            title="Timer Settings"
+          >
+            <Settings size={16} />
+          </button>
+
           <button className="timer-delete" onClick={onDelete} title="Delete timer">
             <X size={16} />
           </button>
         </div>
       </div>
 
-      {isPinned ? (
-        <div className="timer-pinned-state">
-          <div className="pinned-icon-container">
-            <AppWindow size={32} />
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px',
+          flex: 1,
+          opacity: (isSettingsOpen || isPinned) ? 0 : 1,
+          pointerEvents: (isSettingsOpen || isPinned) ? 'none' : 'auto',
+          transition: 'opacity 0.2s ease'
+        }}
+      >
+        <div
+          className={`timer-task-container ${isDragOver ? 'drag-over' : ''} ${data.taskName ? 'has-task' : ''}`}
+        >
+          {data.taskName ? (
+            <>
+              <span className="timer-task-text" title={data.taskName}>
+                {data.taskName}
+              </span>
+              <button className="timer-task-clear" onClick={clearTask} title="Clear task">
+                <X size={14} />
+              </button>
+            </>
+          ) : (
+            <span>Drag task here</span>
+          )}
+        </div>
+
+        {!hasStarted && !isFinished && !data.isStopwatch ? (
+          <div className="timer-display">
+            <div className="time-input-group">
+              <input
+                type="number"
+                className="time-input"
+                min="0"
+                max="99"
+                value={data.hours}
+                onChange={(e) => onUpdate({ hours: Math.max(0, parseInt(e.target.value) || 0) })}
+              />
+              <span className="time-label">Hr</span>
+            </div>
+            <span className="time-separator">:</span>
+            <div className="time-input-group">
+              <input
+                type="number"
+                className="time-input"
+                min="0"
+                max="59"
+                value={data.minutes}
+                onChange={(e) =>
+                  onUpdate({ minutes: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })
+                }
+              />
+              <span className="time-label">Min</span>
+            </div>
+            <span className="time-separator">:</span>
+            <div className="time-input-group">
+              <input
+                type="number"
+                className="time-input"
+                min="0"
+                max="59"
+                value={data.seconds}
+                onChange={(e) =>
+                  onUpdate({ seconds: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })
+                }
+              />
+              <span className="time-label">Sec</span>
+            </div>
           </div>
-          <p>Opened in mini-window.</p>
+        ) : (
+          <div className="timer-display" style={{ fontSize: '48px', fontWeight: 'bold' }}>
+            {displayHours > 0 ? `${pad(displayHours)}:` : ''}
+            {pad(displayMinutes)}:{pad(displaySeconds)}
+          </div>
+        )}
+
+        {/* Thin progress bar below timer display */}
+        {!data.isStopwatch && getTotalSeconds() > 0 && (
+          <div className="timer-progress-track">
+            <div className="timer-progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+
+        <div className="bottom-controls" style={{ justifyContent: 'center' }}>
+          <div
+            className="timer-controls"
+            style={{ margin: '0 auto', width: '100%', justifyContent: 'center' }}
+          >
+            {isFinished ? (
+              <button className="control-btn finished-stop-btn" onClick={handleReset}>
+                <Square size={16} fill="currentColor" /> Stop
+              </button>
+            ) : (
+              <>
+                {!isRunning ? (
+                  <button
+                    className="control-btn btn-play"
+                    onClick={handleStart}
+                    disabled={getTotalSeconds() === 0 && !data.isStopwatch}
+                    style={{ opacity: getTotalSeconds() === 0 && !data.isStopwatch ? 0.3 : 1 }}
+                    title="Start"
+                  >
+                    <Play />
+                  </button>
+                ) : (
+                  <button className="control-btn btn-pause" onClick={handlePause}>
+                    <Pause />
+                  </button>
+                )}
+                <button className="control-btn btn-reset" onClick={handleReset} title="Reset">
+                  <Square size={14} />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {isSettingsOpen && (
+        <div className="timer-pinned-state" style={{ position: 'absolute', top: '70px', left: '20px', right: '20px', bottom: '20px', padding: 0, gap: '16px', alignItems: 'flex-start', zIndex: 5, display: 'flex', flexDirection: 'column' }}>
+          <h4 style={{ margin: 0, fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Settings</h4>
+
+          {!data.isStopwatch && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Alarm Sound</span>
+              <button className="sound-selector" onClick={handleSoundSelect} style={{ width: '100%', justifyContent: 'flex-start' }}>
+                <Music size={14} />
+                <span className="sound-name">{data.soundName ? data.soundName : 'Default Beep'}</span>
+              </button>
+            </div>
+          )}
+
+          <button className="unpin-btn" onClick={() => setIsSettingsOpen(false)} style={{ marginTop: 'auto', alignSelf: 'center', width: '100%' }}>
+            Done
+          </button>
+        </div>
+      )}
+
+      {isPinned && !isSettingsOpen && (
+        <div className="timer-pinned-state" style={{ position: 'absolute', top: '70px', left: '20px', right: '20px', bottom: '20px', padding: 0, zIndex: 5, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '0 0 16px' }}>Opened in mini-window.</p>
           <button className="unpin-btn" onClick={handleUnpin}>
             Return here
           </button>
         </div>
-      ) : (
-        <>
-          <div
-            className={`timer-task-container ${isDragOver ? 'drag-over' : ''} ${data.taskName ? 'has-task' : ''}`}
-          >
-            {data.taskName ? (
-              <>
-                <span className="timer-task-text" title={data.taskName}>
-                  {data.taskName}
-                </span>
-                <button className="timer-task-clear" onClick={clearTask} title="Clear task">
-                  <X size={14} />
-                </button>
-              </>
-            ) : (
-              <span>Drag task here</span>
-            )}
-          </div>
-
-          {!hasStarted && !isFinished && !data.isStopwatch ? (
-            <div className="timer-display">
-              <div className="time-input-group">
-                <input
-                  type="number"
-                  className="time-input"
-                  min="0"
-                  max="99"
-                  value={data.hours}
-                  onChange={(e) => onUpdate({ hours: Math.max(0, parseInt(e.target.value) || 0) })}
-                />
-                <span className="time-label">Hr</span>
-              </div>
-              <span className="time-separator">:</span>
-              <div className="time-input-group">
-                <input
-                  type="number"
-                  className="time-input"
-                  min="0"
-                  max="59"
-                  value={data.minutes}
-                  onChange={(e) =>
-                    onUpdate({ minutes: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })
-                  }
-                />
-                <span className="time-label">Min</span>
-              </div>
-              <span className="time-separator">:</span>
-              <div className="time-input-group">
-                <input
-                  type="number"
-                  className="time-input"
-                  min="0"
-                  max="59"
-                  value={data.seconds}
-                  onChange={(e) =>
-                    onUpdate({ seconds: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })
-                  }
-                />
-                <span className="time-label">Sec</span>
-              </div>
-            </div>
-          ) : (
-            <div className="timer-display" style={{ fontSize: '48px', fontWeight: 'bold' }}>
-              {displayHours > 0 ? `${pad(displayHours)}:` : ''}
-              {pad(displayMinutes)}:{pad(displaySeconds)}
-            </div>
-          )}
-
-          {/* Thin progress bar below timer display */}
-          {!data.isStopwatch && getTotalSeconds() > 0 && (
-            <div className="timer-progress-track">
-              <div className="timer-progress-fill" style={{ width: `${progress}%` }} />
-            </div>
-          )}
-
-          <div className="bottom-controls">
-            {!data.isStopwatch && (
-              <button className="sound-selector" onClick={handleSoundSelect}>
-                <Music size={14} />
-                <span className="sound-name">{data.soundName ? data.soundName : 'Sound'}</span>
-              </button>
-            )}
-
-            <div
-              className="timer-controls"
-              style={data.isStopwatch ? { marginLeft: 'auto' } : undefined}
-            >
-              {isFinished ? (
-                <button
-                  className="control-btn btn-reset"
-                  onClick={handleReset}
-                  style={{ width: '100%' }}
-                >
-                  <Square size={16} style={{ marginRight: '8px' }} /> Stop
-                </button>
-              ) : (
-                <>
-                  {!isRunning ? (
-                    <button
-                      className="control-btn btn-play"
-                      onClick={handleStart}
-                      disabled={getTotalSeconds() === 0 && !data.isStopwatch}
-                      style={{ opacity: getTotalSeconds() === 0 && !data.isStopwatch ? 0.3 : 1 }}
-                      title="Start"
-                    >
-                      <Play />
-                    </button>
-                  ) : (
-                    <button className="control-btn btn-pause" onClick={handlePause}>
-                      <Pause />
-                    </button>
-                  )}
-                  <button className="control-btn btn-reset" onClick={handleReset} title="Reset">
-                    <Square size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </>
       )}
     </div>
   )

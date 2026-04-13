@@ -25,7 +25,41 @@ export default defineConfig(
     },
     rules: {
       ...eslintPluginReactHooks.configs.recommended.rules,
-      ...eslintPluginReactRefresh.configs.vite.rules
+      ...eslintPluginReactRefresh.configs.vite.rules,
+      'react/prop-types': 'off',
+      'react/no-unknown-property': [
+        'error',
+        {
+          ignore: [
+            'draw',
+            'eventMode',
+            'anchor',
+            'resolution',
+            'roundPixels',
+            'texture',
+            'hitArea',
+            'visible',
+            'rotation',
+            'onPointerDown',
+            'onPointerUp',
+            'onPointerOver',
+            'onPointerOut',
+            'onPointerMove',
+            'cursor',
+            'style',
+            'alpha',
+            'anchor',
+            'interactive',
+            'buttonMode',
+            'onClick',
+            'onRightClick',
+            'onScroll'
+          ]
+        }
+      ],
+      '@typescript-eslint/no-explicit-any': 'warn',
+      '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'react-hooks/set-state-in-effect': 'warn'
     }
   },
   eslintConfigPrettier

@@ -17,6 +17,15 @@ export default function WorkspaceProfile({
 }: WorkspaceProfileProps) {
   const [folderSize, setFolderSize] = useState<string>('Calculating...')
 
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes'
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
+  }
+
   useEffect(() => {
     if (isOpen && workspacePath) {
       const fetchSize = async () => {
@@ -35,19 +44,11 @@ export default function WorkspaceProfile({
 
   if (!isOpen) return null
 
-  const formatBytes = (bytes: number, decimals = 2) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const dm = decimals < 0 ? 0 : decimals
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
-  }
-
   const workspaceName = workspacePath ? workspacePath.split(/[\\/]/).pop() : 'No Workspace'
 
   return (
     <div
+      onClick={onClose}
       style={{
         position: 'fixed',
         top: 0,
@@ -59,10 +60,12 @@ export default function WorkspaceProfile({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 9999,
-        backdropFilter: 'blur(4px)'
+        backdropFilter: 'blur(4px)',
+        cursor: 'pointer'
       }}
     >
       <motion.div
+        onClick={(e) => e.stopPropagation()}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         style={{
@@ -73,7 +76,8 @@ export default function WorkspaceProfile({
           border: '1px solid rgba(255,255,255,0.1)',
           overflow: 'hidden',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          cursor: 'default'
         }}
       >
         {/* Header */}
@@ -114,7 +118,7 @@ export default function WorkspaceProfile({
             style={{
               padding: '20px',
               background: 'rgba(0,0,0,0.2)',
-              borderRadius: '12px',
+              borderRadius: '10px',
               border: '1px solid rgba(255,255,255,0.05)',
               display: 'flex',
               flexDirection: 'column',

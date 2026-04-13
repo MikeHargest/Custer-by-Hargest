@@ -15,7 +15,7 @@ export default function MiniTimer({ timerId }: { timerId: string }): React.React
   const [state, setState] = useState<MiniTimerState | null>(null)
 
   useEffect(() => {
-    // @ts-ignore
+    // @ts-ignore - sync state from main
     const cleanup = window.api.onSyncTimerState((id: string, newState: MiniTimerState) => {
       if (id === timerId) {
         setState(newState)
@@ -31,17 +31,17 @@ export default function MiniTimer({ timerId }: { timerId: string }): React.React
   const { title, taskName, timeLeft, isRunning, isFinished, bgColor } = state
 
   const handleStartPause = (): void => {
-    // @ts-ignore
+    // @ts-ignore - toggle action
     window.api.actionTimer(timerId, 'TOGGLE')
   }
 
   const handleReset = (): void => {
-    // @ts-ignore
+    // @ts-ignore - reset action
     window.api.actionTimer(timerId, 'RESET')
   }
 
   const handleReturn = (): void => {
-    // @ts-ignore
+    // @ts-ignore - close window
     window.api.closeMiniWindow(timerId)
   }
 

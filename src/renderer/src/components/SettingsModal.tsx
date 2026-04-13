@@ -1,8 +1,7 @@
 import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout } from 'lucide-react'
-import { UITheme } from '../types'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer } from 'lucide-react'
+import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
-import { DEFAULT_THEME } from '../App'
 import ColorPicker from './ColorPicker'
 
 interface SettingsModalProps {
@@ -17,6 +16,8 @@ interface SettingsModalProps {
   setUseGPU: (use: boolean) => void
   showTaskCounts: boolean
   setShowTaskCounts: (show: boolean) => void
+  timerVolume: number
+  setTimerVolume: (volume: number) => void
 }
 
 export default function SettingsModal({
@@ -30,11 +31,13 @@ export default function SettingsModal({
   useGPU,
   setUseGPU,
   showTaskCounts,
-  setShowTaskCounts
+  setShowTaskCounts,
+  timerVolume,
+  setTimerVolume
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers'>(
     'general'
   )
 
@@ -58,6 +61,7 @@ export default function SettingsModal({
 
   return (
     <div
+      onClick={onClose}
       style={{
         position: 'fixed',
         top: 0,
@@ -69,10 +73,12 @@ export default function SettingsModal({
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 9999,
-        backdropFilter: 'blur(4px)'
+        backdropFilter: 'blur(4px)',
+        cursor: 'pointer'
       }}
     >
       <div
+        onClick={(e) => e.stopPropagation()}
         style={{
           background: 'var(--card-bg)',
           width: '750px',
@@ -82,7 +88,8 @@ export default function SettingsModal({
           border: '1px solid rgba(255,255,255,0.1)',
           overflow: 'hidden',
           display: 'flex',
-          flexDirection: 'column'
+          flexDirection: 'column',
+          cursor: 'default'
         }}
       >
         {/* Header */}
@@ -147,6 +154,7 @@ export default function SettingsModal({
             {[
               { id: 'general', label: 'General', icon: <Settings size={16} /> },
               { id: 'projects', label: 'Projects', icon: <Layout size={16} /> },
+              { id: 'timers', label: 'Timers', icon: <Timer size={16} /> },
               { id: 'canvas', label: 'Canvas', icon: <Compass size={16} /> },
               { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> }
             ].map((tab) => (
@@ -155,7 +163,7 @@ export default function SettingsModal({
                 onClick={() => setActiveTab(tab.id as any)}
                 style={{
                   padding: '10px 12px',
-                  borderRadius: '8px',
+                  borderRadius: '10px',
                   fontSize: '13px',
                   textAlign: 'left',
                   background: activeTab === tab.id ? 'rgba(255,255,255,0.08)' : 'transparent',
@@ -277,6 +285,64 @@ export default function SettingsModal({
                           onOpenPicker={(rect) => handleOpenPicker(key, rect)}
                         />
                       ))}
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'timers' && (
+                <motion.div
+                  key="timers"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
+                    Timer Settings
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0 0 24px 0',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Adjust volume and other timer behavior.
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        padding: '16px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '10px'
+                      }}
+                    >
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                      >
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Global Volume</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                          {Math.round(timerVolume * 100)}%
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={timerVolume}
+                        onChange={(e) => setTimerVolume(parseFloat(e.target.value))}
+                        style={{
+                          width: '100%',
+                          accentColor: 'var(--accent)',
+                          cursor: 'pointer'
+                        }}
+                      />
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -585,7 +651,7 @@ export default function SettingsModal({
                           justifyContent: 'space-between',
                           padding: '10px 14px',
                           background: 'rgba(255,255,255,0.02)',
-                          borderRadius: '8px',
+                          borderRadius: '10px',
                           border: '1px solid rgba(255,255,255,0.03)'
                         }}
                       >

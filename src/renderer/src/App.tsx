@@ -6,11 +6,15 @@ import {
   Pin,
   PanelLeft,
   FolderOpen,
-  User
+  User,
+  X as CloseIcon,
+  Minus as MinimizeIcon,
+  Maximize2 as MaximizeIcon,
+  Search
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import TimerCard from './components/TimerCard'
-import TaskSidebar from './components/TaskSidebar'
+import TaskSidebar from './components/sidebar/TaskSidebar'
 import MiniTimer from './components/MiniTimer'
 import TimelineView from './components/TimelineView'
 import NotesView from './components/NotesView'
@@ -19,17 +23,96 @@ import SettingsModal from './components/SettingsModal'
 import WorkspaceProfile from './components/WorkspaceProfile'
 import WindowResizeHandles from './components/WindowResizeHandles'
 import ProjectOverview from './components/ProjectOverview'
+import PipelineView from './components/PipelineView'
+import NotificationCenter from './components/NotificationCenter'
+import GlobalSearchModal from './components/GlobalSearchModal'
+import { Bell } from 'lucide-react'
 
-import { TimerData, TimelineTask, AppNote, UITheme, Project, TaskItem } from './types'
-export const DEFAULT_THEME: UITheme = {
-  bgColor: '#292929',
-  cardBg: '#121212',
-  accent: '#525252',
-  textPrimary: '#EAEAEA',
-  boardAccent: '#71717a',
-  boardBg: '#1b1b1b',
-  timelineTaskBg: '#0f0f0f',
-  timerBg: '#121212'
+import {
+  TimerData,
+  TimelineTask,
+  AppNote,
+  UITheme,
+  Project,
+  TaskItem,
+  AppEvent,
+  AppNotification,
+  DEFAULT_THEME
+} from './types'
+
+function HeaderTimer({ currentView }: { currentView: string }) {
+  const [activeTimers, setActiveTimers] = useState<Record<string, any>>({})
+
+  useEffect(() => {
+    // @ts-ignore
+    const cleanup = window.api.onSyncTimerState((id: string, state: any) => {
+      setActiveTimers((prev) => {
+        if (!state.isRunning && !state.isFinished && !state.isPinned) {
+          const newMap = { ...prev }
+          delete newMap[id]
+          return newMap
+        }
+        return { ...prev, [id]: { ...state, id } }
+      })
+    })
+    return cleanup
+  }, [])
+
+  // 1. Find the first timer that is MANUALLY pinned to header
+  // If we are in 'clock' view, we don't show it as requested
+  if (currentView === 'clock') return null
+
+  const pinnedTimer = Object.values(activeTimers)
+    .filter((t) => t.isHeaderPinned)
+    .sort((a, b) => b.timeLeft - a.timeLeft)[0]
+
+  if (!pinnedTimer) return null
+
+  const displayHours = Math.floor(pinnedTimer.timeLeft / 3600)
+  const displayMinutes = Math.floor((pinnedTimer.timeLeft % 3600) / 60)
+  const displaySeconds = pinnedTimer.timeLeft % 60
+  const pad = (num: number) => num.toString().padStart(2, '0')
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '0',
+        background: 'transparent',
+        fontSize: '13px',
+        fontWeight: 500,
+        color: 'var(--text-secondary)',
+        marginRight: '12px',
+        cursor: 'default',
+        userSelect: 'none',
+        zIndex: 1000,
+        transition: 'all 0.3s'
+      }}
+    >
+      <TimerIcon size={14} style={{ opacity: 0.7 }} />
+      <span style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '0.2px' }}>
+        {displayHours > 0 ? `${pad(displayHours)}:` : ''}
+        {pad(displayMinutes)}:{pad(displaySeconds)}
+      </span>
+      {pinnedTimer.taskName && (
+        <span
+          style={{
+            opacity: 0.5,
+            maxWidth: '100px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            fontSize: '11px',
+            marginLeft: '4px'
+          }}
+        >
+          • {pinnedTimer.taskName}
+        </span>
+      )}
+    </div>
+  )
 }
 
 function App() {
@@ -42,16 +125,22 @@ function App() {
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
-  const [currentView, setCurrentView] = useState<'overview' | 'clock' | 'timeline' | 'notes'>(
-    'overview'
-  )
+  const [currentView, setCurrentView] = useState<
+    'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline'
+  >('overview')
   const [showSettings, setShowSettings] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [showFPS, setShowFPS] = useState(false)
-  const [showTaskCounts, setShowTaskCounts] = useState(true)
+  const [showTaskCounts, setShowTaskCounts] = useState(false)
   const [useGPU, setUseGPU] = useState(true)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true)
+  const [timerVolume, setTimerVolume] = useState<number>(0.5)
+  const [previousWorkspacePath, setPreviousWorkspacePath] = useState<string | null>(null)
+  const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
+  const [notifications, setNotifications] = useState<AppNotification[]>([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [showSearchModal, setShowSearchModal] = useState(false)
 
   // Undo implementation
   const [, setHistory] = useState<{ projects: Project[]; timelineTasks: TimelineTask[] }[]>([])
@@ -114,7 +203,29 @@ function App() {
     return allProjects.find((p) => p.id === selectedProjectId)
   }, [allProjects, selectedProjectId])
 
-  const addProject = async (name: string, parentId?: string): Promise<string | undefined> => {
+  const getUniqueProjectName = (baseName: string, currentProjects: Project[]): string => {
+    const allNames = new Set<string>()
+    const traverse = (projs: Project[]): void => {
+      projs.forEach((p) => {
+        allNames.add(p.name.toLowerCase())
+        if (p.subprojects) traverse(p.subprojects)
+      })
+    }
+    traverse(currentProjects)
+
+    let name = baseName
+    let counter = 1
+    while (allNames.has(name.toLowerCase())) {
+      name = `${baseName} ${counter}`
+      counter++
+    }
+    return name
+  }
+
+  const addProject = async (
+    name: string,
+    parentId?: string
+  ): Promise<{ id: string; name: string } | undefined> => {
     pushToHistory()
     const newId = uuidv4()
 
@@ -131,14 +242,17 @@ function App() {
 
     if (!basePath) return
 
+    const uniqueName = getUniqueProjectName(name, projects)
+
     // Initialize project folder via IPC
-    const projectPath = await (window as any).api.initProjectFolder(basePath, name)
+    const projectPath = await (window as any).api.initProjectFolder(basePath, uniqueName)
+    const finalName = projectPath ? projectPath.split(/[/\\]/).pop() || uniqueName : uniqueName
     const notesPath = projectPath ? projectPath + '/notes' : ''
     const boardsPath = projectPath ? projectPath + '/boards' : ''
 
     const newProject: Project = {
       id: newId,
-      name,
+      name: finalName,
       isExpanded: true,
       tasks: [],
       path: projectPath || '',
@@ -171,7 +285,7 @@ function App() {
     })
 
     setSelectedProjectId(newId)
-    return newId
+    return { id: newId, name: finalName }
   }
 
   const onAddProjectItem = (
@@ -317,11 +431,19 @@ function App() {
           }
           if (workspaceData.timelineTasks) setTimelineTasks(workspaceData.timelineTasks)
           if (workspaceData.theme) setTheme(workspaceData.theme)
-          if (workspaceData.notes) setNotes(workspaceData.notes)
+          
+          // SCANNED NOTES - Consolidated Logic
+          // @ts-ignore
+          const scannedNotes = await api.scanAllNotes(savedWorkspace)
+          setNotes(scannedNotes)
+
           if (workspaceData.showFPS !== undefined) setShowFPS(workspaceData.showFPS)
           if (workspaceData.showTaskCounts !== undefined)
             setShowTaskCounts(workspaceData.showTaskCounts)
           if (workspaceData.useGPU !== undefined) setUseGPU(workspaceData.useGPU)
+          if (workspaceData.timerVolume !== undefined) setTimerVolume(workspaceData.timerVolume)
+          if (workspaceData.hiddenTimelineProjectIds !== undefined)
+            setHiddenTimelineProjectIds(workspaceData.hiddenTimelineProjectIds)
 
           // Auto-restore last session
           const lastView = await api.getStoreValue('last-view')
@@ -425,22 +547,239 @@ function App() {
         e.preventDefault()
         handleUndo()
       }
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault()
+        setShowSearchModal((prev) => !prev)
+      }
     }
 
-    const onFocus = (): void => {
-      void loadData()
+    // NOTE: Focus-reload removed intentionally. It called loadData() which replaces
+    // ALL in-memory notes with disk state, silently wiping any unsaved edits.
+    // Auto-save (500ms debounce) already persists changes, so reload is unnecessary.
+
+    const handleEventDropped = (e: Event): void => {
+      const customEvent = e as CustomEvent<{
+        eventId: string
+        projectId: string
+        newDate: string
+      }>
+      const { eventId, projectId, newDate } = customEvent.detail
+
+      setProjects((prev) => {
+        const updateRecursive = (projs: Project[]): Project[] => {
+          return projs.map((p) => {
+            if (p.id === projectId && p.events) {
+              const isVirtual = eventId.includes('_inst_')
+              if (isVirtual) {
+                const baseId = eventId.split('_inst_')[0]
+                const originalDate = eventId.split('_inst_')[1]
+                const baseEvent = p.events.find((e) => e.id === baseId)
+                if (baseEvent) {
+                  const newExceptionId = uuidv4()
+                  const newEvent: AppEvent = {
+                    ...baseEvent,
+                    id: newExceptionId,
+                    date: newDate,
+                    originalEventId: baseId,
+                    originalDate: originalDate,
+                    recurrence: undefined,
+                    exceptions: undefined
+                  }
+                  return {
+                    ...p,
+                    events: [
+                      ...p.events.map((ev) =>
+                        ev.id === baseId
+                          ? {
+                              ...ev,
+                              exceptions: {
+                                ...(ev.exceptions || {}),
+                                [originalDate]: { deleted: true, editedEventId: newExceptionId }
+                              }
+                            }
+                          : ev
+                      ),
+                      newEvent
+                    ]
+                  }
+                }
+              } else {
+                return {
+                  ...p,
+                  events: p.events.map((ev) => (ev.id === eventId ? { ...ev, date: newDate } : ev))
+                }
+              }
+            }
+            if (p.subprojects) {
+              return { ...p, subprojects: updateRecursive(p.subprojects) }
+            }
+            return p
+          })
+        }
+        return updateRecursive(prev)
+      })
+    }
+
+    const handleDeleteEventInstance = (e: Event): void => {
+      const customEvent = e as CustomEvent<{
+        eventId: string
+        projectId: string
+      }>
+      const { eventId, projectId } = customEvent.detail
+
+      let choice: 'instance' | 'series' | null = null
+      const isVirtual = eventId.includes('_inst_')
+      
+      if (isVirtual) {
+        if (window.confirm('Delete the entire series? (Click Cancel to delete only this instance)')) {
+          choice = 'series'
+        } else {
+          choice = 'instance'
+        }
+      } else {
+        if (!window.confirm('Delete this event?')) return
+        choice = 'series' // Non-virtual is always "the event itself"
+      }
+
+      setProjects((prev) => {
+        const updateRecursive = (projs: Project[]): Project[] => {
+          return projs.map((p) => {
+            if (p.id === projectId && p.events) {
+              const realEventId = isVirtual ? eventId.split('_inst_')[0] : eventId
+              
+              if (choice === 'series') {
+                return {
+                  ...p,
+                  events: p.events.filter(ev => ev.id !== realEventId)
+                }
+              } else {
+                // Instance only
+                const originalDate = eventId.split('_inst_')[1]
+                return {
+                  ...p,
+                  events: p.events.map((ev) =>
+                    ev.id === realEventId
+                      ? {
+                          ...ev,
+                          exceptions: {
+                            ...(ev.exceptions || {}),
+                            [originalDate]: { deleted: true }
+                          }
+                        }
+                      : ev
+                  )
+                }
+              }
+            }
+            if (p.subprojects) {
+              return { ...p, subprojects: updateRecursive(p.subprojects) }
+            }
+            return p
+          })
+        }
+        return updateRecursive(prev)
+      })
     }
 
     window.addEventListener('mousedown', handleGlobalMouseDown)
     window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('focus', onFocus)
+    window.addEventListener('event-dropped-on-calendar', handleEventDropped)
+    window.addEventListener('delete-event-instance', handleDeleteEventInstance)
 
     return () => {
       window.removeEventListener('mousedown', handleGlobalMouseDown)
       window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('event-dropped-on-calendar', handleEventDropped)
+      window.removeEventListener('delete-event-instance', handleDeleteEventInstance)
     }
-  }, [handleUndo, loadData])
+  }, [handleUndo])
+
+  // Notification Polling logic
+  useEffect(() => {
+    const checkReminders = () => {
+      const now = Date.now()
+      const newNotifications: AppNotification[] = []
+
+      setProjects(prevProjs => {
+        let updated = false
+        const updateRecursive = (projs: Project[]): Project[] => {
+          return projs.map(p => {
+            let projectUpdated = false
+            const newEvents = p.events?.map(ev => {
+              if (ev.date && ev.time && ev.reminder && !ev.reminder.isNotified) {
+                const eventDate = new Date(`${ev.date}T${ev.time}:00`)
+                const eventTs = eventDate.getTime()
+                const reminderTs = eventTs - (ev.reminder.minutesBefore * 60000)
+
+                if (now >= reminderTs && now < eventTs + 60000) {
+                  // Trigger!
+                  newNotifications.push({
+                    id: uuidv4(),
+                    type: 'reminder',
+                    title: `Reminder: ${ev.title}`,
+                    message: `Starts in ${ev.reminder.minutesBefore} minutes`,
+                    timestamp: now,
+                    isRead: false,
+                    relatedId: ev.id
+                  })
+                  projectUpdated = true
+                  updated = true
+                  return { ...ev, reminder: { ...ev.reminder, isNotified: true } }
+                }
+              }
+              return ev
+            })
+
+            let subprojects = p.subprojects
+            if (p.subprojects) {
+              const updatedSubs = updateRecursive(p.subprojects)
+              if (updatedSubs !== p.subprojects) {
+                subprojects = updatedSubs
+                projectUpdated = true
+                updated = true
+              }
+            }
+
+            if (projectUpdated) {
+              return { ...p, events: newEvents, subprojects }
+            }
+            return p
+          })
+        }
+
+        const nextProjs = updateRecursive(prevProjs)
+        if (updated) {
+          return nextProjs
+        }
+        return prevProjs
+      })
+
+      if (newNotifications.length > 0) {
+        setNotifications(prev => [...newNotifications, ...prev].slice(0, 50))
+      }
+    }
+
+    const interval = setInterval(checkReminders, 30000) // Every 30s
+    return () => clearInterval(interval)
+  }, [projects])
+
+  // Capture Timer completion
+  useEffect(() => {
+    // @ts-ignore
+    const cleanup = window.api.onTimerFinished((timerId: string, title: string) => {
+      setNotifications(prev => [{
+        id: uuidv4(),
+        type: 'timer' as const,
+        title: 'Timer Finished',
+        message: title || 'A timer has completed.',
+        timestamp: Date.now(),
+        isRead: false,
+        relatedId: timerId
+      }, ...prev].slice(0, 50))
+    })
+    return cleanup
+  }, [])
 
   useEffect(() => {
     const root = document.documentElement
@@ -458,10 +797,11 @@ function App() {
     } else {
       root.style.removeProperty('--timeline-task-bg')
     }
+
     if (theme.timerBg) {
       root.style.setProperty('--timer-bg', theme.timerBg)
     } else {
-      root.style.setProperty('--timer-bg', DEFAULT_THEME.timerBg || '#121212')
+      root.style.setProperty('--timer-bg', DEFAULT_THEME.timerBg || '#171717')
     }
   }, [theme])
 
@@ -471,21 +811,17 @@ function App() {
 
     const saveData = async () => {
       const workspaceFile = workspacePath + '/workspace_data.json'
-      // Strip 'content' from notes to avoid bloated global save (content is saved individually)
-      const lightweightNotes = notes.map((n) => {
-        const { content: _, ...metaOnly } = n
-        return metaOnly
-      })
-
+      
       const workspaceData = {
         timers,
         projects,
         timelineTasks,
         theme,
-        notes: lightweightNotes,
         showFPS,
         showTaskCounts,
         useGPU,
+        timerVolume,
+        hiddenTimelineProjectIds,
         isCleanedV1: true // Mark as clean
       }
       // @ts-ignore - preload api
@@ -505,6 +841,8 @@ function App() {
     showFPS,
     showTaskCounts,
     useGPU,
+    timerVolume,
+    hiddenTimelineProjectIds,
     isLoadingWorkspace
   ])
 
@@ -636,6 +974,7 @@ function App() {
       setNotes([])
 
       setWorkspacePath(path)
+      setPreviousWorkspacePath(null)
       // Reload everything from the new workspace file
       loadData()
     },
@@ -666,322 +1005,469 @@ function App() {
     return <div style={{ background: 'var(--bg-color)', width: '100%', height: '100vh' }} />
   }
 
-  if (!workspacePath) {
-    return <WelcomeScreen onWorkspaceSelected={handleWorkspaceSelected} />
+  if (!workspacePath && !previousWorkspacePath) {
+    return (
+      <WelcomeScreen
+        onWorkspaceSelected={handleWorkspaceSelected}
+      />
+    )
   }
 
   return (
     <div className="app-container">
       <WindowResizeHandles />
-      <TaskSidebar
-        isOpen={isSidebarOpen}
-        projects={projects}
-        setProjects={handleSetProjects}
-        timelineTasks={timelineTasks}
-        selectedProjectId={selectedProjectId}
-        setSelectedProjectId={setSelectedProjectId}
-        onAddProject={addProject}
-        onDeleteProject={deleteProject}
-        onTaskAdded={(projectId, name, parentId, explicitId) => {
-          onAddProjectItem(projectId, name, parentId, explicitId)
-        }}
-        onTaskDeleted={(taskName, taskId) => {
-          pushToHistory()
-          setTimelineTasks((prev) => prev.filter((t) => t.taskId !== taskId))
-          setTimers((prev) => prev.filter((t) => t.taskName !== taskName))
-        }}
-        onAssignTaskToTimer={(timerId, taskText) => {
-          updateTimer(timerId, { taskName: taskText })
-        }}
-        showTaskCounts={showTaskCounts}
-      />
-      <div className="main-content">
-        <header className="header">
+      <header className="header">
+        <div
+          className="header-left"
+          style={
+            {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              WebkitAppRegion: 'no-drag'
+            } as any
+          }
+        >
           <div
-            className="header-left"
-            style={
-              {
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                WebkitAppRegion: 'no-drag'
-              } as any
-            }
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '2px'
-              }}
-            >
-              <button
-                className="sidebar-toggle-btn"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: isSidebarOpen ? 0.6 : 0.4,
-                  transition: 'opacity 0.2s',
-                  width: '32px',
-                  height: '32px'
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-                }
-              >
-                <PanelLeft size={18} />
-              </button>
-            </div>
-
-            {/* View Toggle - Segmented Control Style */}
-            <div
-              className="view-toggle"
-              style={{
-                display: 'flex',
-                background: 'transparent',
-                padding: '2px',
-                position: 'relative',
-                borderRadius: 'var(--radius-md)'
-              }}
-            >
-              {[
-                { id: 'overview', label: 'Overview' },
-                { id: 'notes', label: 'Notes' },
-                { id: 'timeline', label: 'Timeline' },
-                { id: 'clock', label: 'Clock' }
-              ].map((view) => (
-                <button
-                  key={view.id}
-                  className={`view-tab ${currentView === view.id ? 'active' : ''}`}
-                  onClick={() => setCurrentView(view.id as any)}
-                >
-                  {view.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div
-            className="header-right"
-            style={
-              {
-                display: 'flex',
-                alignItems: 'center',
-                gap: '16px',
-                WebkitAppRegion: 'no-drag'
-              } as any
-            }
-          >
-            {/* Consolidated Action Menu */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '2px'
-              }}
-            >
-              <button
-                className="pin-btn"
-                onClick={() => setShowProfile(true)}
-                title="Profile & Workspace"
-                style={{ background: 'transparent', border: 'none' }}
-              >
-                <User size={18} />
-              </button>
-              <button
-                className="pin-btn"
-                onClick={() => setShowSettings(true)}
-                title="Settings"
-                style={{ background: 'transparent', border: 'none' }}
-              >
-                <SettingsIcon size={18} />
-              </button>
-              <button
-                className="pin-btn"
-                onClick={() => setWorkspacePath(null)}
-                title="Change Workspace"
-                style={{ background: 'transparent', border: 'none' }}
-              >
-                <FolderOpen size={18} />
-              </button>
-              <button
-                className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
-                onClick={toggleAlwaysOnTop}
-                title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
-                style={{
-                  background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  border: 'none',
-                  color: isAlwaysOnTop ? 'var(--accent)' : 'inherit'
-                }}
-              >
-                <Pin size={18} />
-              </button>
-            </div>
-
-            {/* Window controls */}
-            <div
-              style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'center'
-              }}
-            >
-              <button
-                onClick={() => (window as any).api.minimizeWindow()}
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: '#febc2e',
-                  cursor: 'pointer',
-                  border: 'none',
-                  padding: 0
-                }}
-                title="Minimize"
-              />
-              <button
-                onClick={() => (window as any).api.maximizeWindow()}
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: '#28c840',
-                  cursor: 'pointer',
-                  border: 'none',
-                  padding: 0
-                }}
-                title="Maximize"
-              />
-              <button
-                onClick={() => (window as any).api.closeWindow()}
-                style={{
-                  width: '12px',
-                  height: '12px',
-                  borderRadius: '50%',
-                  background: '#ff5f57',
-                  cursor: 'pointer',
-                  border: 'none',
-                  padding: 0
-                }}
-                title="Close"
-              />
-            </div>
-          </div>
-        </header>
-
-        <WorkspaceProfile
-          isOpen={showProfile}
-          onClose={() => setShowProfile(false)}
-          workspacePath={workspacePath}
-          projectCount={allProjects.length}
-        />
-
-        <div className="views-wrapper">
-          {/* All views always rendered — hidden ones use display:none so timers keep running */}
-          <div style={{ display: currentView === 'overview' ? 'contents' : 'none' }}>
-            {selectedProject ? (
-              <ProjectOverview
-                project={selectedProject}
-                onUpdate={updateProject}
-                notes={notes}
-                onNoteClick={(noteId) => {
-                  setCurrentView('notes')
-                  setActiveNoteId(noteId)
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: 0.5
-                }}
-              >
-                <p>Select a project to see overview</p>
-              </div>
-            )}
-          </div>
-          <div style={{ display: currentView === 'timeline' ? 'contents' : 'none' }}>
-            <TimelineView
-              projects={allProjects}
-              timelineTasks={timelineTasks}
-              setTimelineTasks={(action: React.SetStateAction<TimelineTask[]>) => {
-                pushToHistory()
-                setTimelineTasks(action)
-              }}
-              onAddProjectItem={handleCreateTimelineTask}
-            />
-          </div>
-          <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>
-            <NotesView
-              notes={notes}
-              setNotes={setNotes}
-              projects={allProjects}
-              workspacePath={workspacePath || ''}
-              selectedProjectId={selectedProjectId}
-              activeNoteId={activeNoteId}
-              setActiveNoteId={setActiveNoteId}
-              theme={theme}
-              setTheme={handleSetTheme}
-              showFPS={showFPS}
-            />
-          </div>
-          <div
-            className="clock-view-container"
             style={{
-              display: currentView === 'clock' ? 'flex' : 'none',
-              flexDirection: 'column',
-              flex: 1,
-              padding: '10px 10px 0 10px',
-              overflowY: 'auto'
+              display: 'flex',
+              alignItems: 'center',
+              padding: '2px'
             }}
           >
-            <div
-              className="clock-actions"
-              style={{ padding: '0 0 16px 0', display: 'flex', gap: '16px', flexShrink: 0 }}
+            <button
+              className="sidebar-toggle-btn"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isSidebarOpen ? 0.6 : 0.4,
+                transition: 'opacity 0.2s',
+                width: '30px',
+                height: '30px'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+              }
             >
-              <button className="add-btn" onClick={addTimer}>
-                <PlusCircle size={18} />
-                Add a timer
-              </button>
-              <button className="add-btn" onClick={addStopwatch}>
-                <TimerIcon size={18} /> Stopwatch
-              </button>
-            </div>
+              <PanelLeft size={18} />
+            </button>
+          </div>
 
-            <main className="timers-list" style={{ padding: '0 0 16px 0' }}>
-              {timers.length === 0 ? (
-                <div className="empty-state" style={{ padding: '60px 0' }}>
-                  <TimerIcon size={64} />
-                  <p>
-                    No active timers.
-                    <br />
-                    Click the button above to add your first timer.
-                  </p>
-                </div>
-              ) : (
-                timers.map((timer) => (
-                  <TimerCard
-                    key={timer.id}
-                    data={timer}
-                    theme={theme}
-                    onUpdate={(updates) => updateTimer(timer.id, updates)}
-                    onDelete={() => deleteTimer(timer.id)}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            <button
+              className="pin-btn"
+              onClick={() => {
+                setPreviousWorkspacePath(workspacePath)
+                setWorkspacePath(null)
+              }}
+              title="Change Workspace"
+              style={{ background: 'transparent', border: 'none' }}
+            >
+              <FolderOpen size={18} />
+            </button>
+            <button
+              className="pin-btn"
+              onClick={() => setShowSettings(true)}
+              title="Settings"
+              style={{ background: 'transparent', border: 'none' }}
+            >
+              <SettingsIcon size={18} />
+            </button>
+            <button
+              className="pin-btn"
+              onClick={() => setShowProfile(true)}
+              title="Profile & Workspace"
+              style={{ background: 'transparent', border: 'none' }}
+            >
+              <User size={18} />
+            </button>
+            <button
+              className="pin-btn"
+              onClick={() => setShowSearchModal(true)}
+              title="Global Search (Ctrl+K)"
+              style={{ background: 'transparent', border: 'none' }}
+            >
+              <Search size={18} />
+            </button>
+
+            {/* Notification Bell */}
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <button
+                className={`header-btn ${showNotifications ? 'active' : ''}`}
+                onClick={() => setShowNotifications(!showNotifications)}
+                style={{
+                  background: showNotifications ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: 'none',
+                  color: notifications.some((n) => !n.isRead) ? 'var(--accent)' : 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  position: 'relative'
+                }}
+              >
+                <Bell size={18} />
+                {notifications.some((n) => !n.isRead) && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '6px',
+                      right: '6px',
+                      width: '6px',
+                      height: '6px',
+                      background: 'var(--accent)',
+                      borderRadius: '50%',
+                      border: '2px solid var(--bg-color)'
+                    }}
                   />
-                ))
+                )}
+              </button>
+
+              {showNotifications && (
+                <NotificationCenter
+                  notifications={notifications}
+                  onMarkAsRead={(id) => {
+                    setNotifications((prev) =>
+                      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
+                    )
+                  }}
+                  onMarkAllAsRead={() => {
+                    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
+                  }}
+                  onClearAll={() => {
+                    setNotifications([])
+                    setShowNotifications(false)
+                  }}
+                  onClose={() => setShowNotifications(false)}
+                />
               )}
-            </main>
+            </div>
+          </div>
+
+          {/* View Toggle - Segmented Control Style */}
+          <div
+            className="view-toggle"
+            style={{
+              display: 'flex',
+              background: 'transparent',
+              padding: '2px',
+              position: 'relative',
+              borderRadius: 'var(--radius-md)'
+            }}
+          >
+            {[
+              { id: 'overview', label: 'Overview' },
+              { id: 'pipeline', label: 'Pipeline' },
+              { id: 'notes', label: 'Notes' },
+              { id: 'timeline', label: 'Calendar' },
+              { id: 'clock', label: 'Clock' }
+            ].map((view) => (
+              <button
+                key={view.id}
+                className={`view-tab ${currentView === view.id ? 'active' : ''}`}
+                onClick={() => setCurrentView(view.id as any)}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className="header-right"
+          style={
+            {
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              WebkitAppRegion: 'no-drag'
+            } as any
+          }
+        >
+          {/* Active Timer Indicator */}
+          <HeaderTimer currentView={currentView} />
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              padding: '2px'
+            }}
+          >
+            <button
+              className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
+              onClick={toggleAlwaysOnTop}
+              title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
+              style={{
+                background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
+                border: 'none',
+                color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)'
+              }}
+            >
+              <Pin size={18} />
+            </button>
+          </div>
+
+          {/* Window controls */}
+          <div
+            className="window-controls-group"
+            style={{
+              display: 'flex',
+              gap: '8px',
+              alignItems: 'center',
+              marginLeft: '8px'
+            }}
+          >
+            <button
+              className="window-control-btn minimize"
+              onClick={() => (window as any).api.minimizeWindow()}
+              title="Minimize"
+            >
+              <MinimizeIcon size={8} strokeWidth={4} />
+            </button>
+            <button
+              className="window-control-btn maximize"
+              onClick={() => (window as any).api.maximizeWindow()}
+              title="Maximize"
+            >
+              <MaximizeIcon size={8} strokeWidth={4} />
+            </button>
+            <button
+              className="window-control-btn close"
+              onClick={() => (window as any).api.closeWindow()}
+              title="Close"
+            >
+              <CloseIcon size={8} strokeWidth={4} />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div className="app-body">
+        <TaskSidebar
+          isOpen={isSidebarOpen}
+          projects={projects}
+          setProjects={handleSetProjects}
+          timelineTasks={timelineTasks}
+          selectedProjectId={selectedProjectId}
+          setSelectedProjectId={setSelectedProjectId}
+          onAddProject={addProject}
+          onDeleteProject={deleteProject}
+          onTaskAdded={(projectId, name, parentId, explicitId) => {
+            onAddProjectItem(projectId, name, parentId, explicitId)
+          }}
+          onTaskDeleted={(taskName, taskId) => {
+            pushToHistory()
+            setTimelineTasks((prev) => prev.filter((t) => t.taskId !== taskId))
+            setTimers((prev) => prev.filter((t) => t.taskName !== taskName))
+          }}
+          onAssignTaskToTimer={(timerId, taskText) => {
+            updateTimer(timerId, { taskName: taskText })
+          }}
+          showTaskCounts={showTaskCounts}
+        />
+        <div className="main-content">
+          <WorkspaceProfile
+            isOpen={showProfile}
+            onClose={() => setShowProfile(false)}
+            workspacePath={workspacePath}
+            projectCount={allProjects.length}
+          />
+
+          <div className="views-wrapper">
+            {/* All views always rendered — hidden ones use display:none so timers keep running */}
+            <div style={{ display: currentView === 'overview' ? 'contents' : 'none' }}>
+              {selectedProject ? (
+                <ProjectOverview
+                  project={selectedProject}
+                  allProjects={allProjects}
+                  onUpdate={updateProject}
+                  notes={notes}
+                  onNoteClick={(noteId) => {
+                    setCurrentView('notes')
+                    setActiveNoteId(noteId)
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.5
+                  }}
+                >
+                  <p>Select a project to see overview</p>
+                </div>
+              )}
+            </div>
+            <div style={{ display: currentView === 'pipeline' ? 'contents' : 'none' }}>
+              {selectedProject ? (
+                <PipelineView project={selectedProject} onUpdate={updateProject} />
+              ) : (
+                <div
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: 0.5
+                  }}
+                >
+                  <p>Select a project to see its pipeline</p>
+                </div>
+              )}
+            </div>
+            <div style={{ display: currentView === 'timeline' ? 'contents' : 'none' }}>
+              <TimelineView
+                projects={allProjects}
+                timelineTasks={timelineTasks}
+                setTimelineTasks={(action: React.SetStateAction<TimelineTask[]>) => {
+                  pushToHistory()
+                  setTimelineTasks(action)
+                }}
+                onAddProjectItem={handleCreateTimelineTask}
+                hiddenProjectIds={hiddenTimelineProjectIds}
+                setHiddenProjectIds={setHiddenTimelineProjectIds}
+              />
+            </div>
+            <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>
+              <NotesView
+                notes={notes}
+                setNotes={setNotes}
+                projects={allProjects}
+                workspacePath={workspacePath || ''}
+                selectedProjectId={selectedProjectId}
+                activeNoteId={activeNoteId}
+                setActiveNoteId={setActiveNoteId}
+                theme={theme}
+                setTheme={handleSetTheme}
+                showFPS={showFPS}
+                setCurrentView={setCurrentView}
+              />
+                        </div>
+            <div
+              className="clock-view-container"
+              style={{
+                display: currentView === 'clock' ? 'grid' : 'none',
+                gridTemplateRows: 'auto 1fr',
+                height: '100%',
+                maxHeight: '100%',
+                minHeight: 0,
+                overflow: 'hidden'
+              }}
+            >
+              <div
+                className="clock-actions"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  height: '45px',
+                  boxSizing: 'border-box',
+                  borderBottom: '1px solid rgba(255,255,255,0.05)',
+                  flexShrink: 0,
+                  padding: '0 10px',
+                  gap: '8px'
+                }}
+              >
+                <button
+                  onClick={addTimer}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'var(--text-primary)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <PlusCircle size={14} />
+                  Timer
+                </button>
+                <button
+                  onClick={addStopwatch}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'var(--text-primary)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <TimerIcon size={14} /> 
+                  Stopwatch
+                </button>
+              </div>
+              <div 
+                className="timers-list" 
+                style={{ 
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', // auto-fill чтобы один таймер не растягивался
+                  gridAutoRows: 'min-content',
+                  justifyContent: 'start',
+                  gap: '10px',
+                  padding: '10px',
+                  paddingBottom: '80px',
+                  overflowY: 'auto',
+                  minHeight: 0
+                }}
+              >
+                {timers.length === 0 ? (
+                  <div className="empty-state" style={{ padding: '60px 0' }}>
+                    <TimerIcon size={64} />
+                    <p>
+                      No active timers.
+                      <br />
+                      Click the button above to add your first timer.
+                    </p>
+                  </div>
+                ) : (
+                  timers.map((timer) => (
+                    <TimerCard
+                      key={timer.id}
+                      data={timer}
+                      theme={theme}
+                      isActiveView={currentView === 'clock'}
+                      timerVolume={timerVolume}
+                      onUpdate={(updates) => updateTimer(timer.id, updates)}
+                      onDelete={() => deleteTimer(timer.id)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -997,6 +1483,8 @@ function App() {
         setShowTaskCounts={setShowTaskCounts}
         useGPU={useGPU}
         setUseGPU={setUseGPU}
+        timerVolume={timerVolume}
+        setTimerVolume={setTimerVolume}
         onSaveThemeAsDefault={async () => {
           // @ts-ignore
           await window.api.setStoreValue('ui-theme', theme)
@@ -1004,6 +1492,35 @@ function App() {
           window.api.showNotification('Тема сохранена', 'Текущие цвета установлены по умолчанию.')
         }}
       />
+
+      {!workspacePath && previousWorkspacePath && (
+        <WelcomeScreen
+          onWorkspaceSelected={handleWorkspaceSelected}
+          onCancel={() => setWorkspacePath(previousWorkspacePath)}
+          isOverlay
+        />
+      )}
+
+      {showSearchModal && (
+        <GlobalSearchModal
+          projects={allProjects}
+          notes={notes}
+          onClose={() => setShowSearchModal(false)}
+          onSelectProject={(id) => {
+            setSelectedProjectId(id)
+            setCurrentView('overview')
+          }}
+          onSelectNote={(id) => {
+            setActiveNoteId(id)
+            setCurrentView('notes')
+          }}
+          onSelectTask={(_taskId, projectId) => {
+            setSelectedProjectId(projectId)
+            setCurrentView('overview')
+            // Option: expand project or highlight task
+          }}
+        />
+      )}
     </div>
   )
 }

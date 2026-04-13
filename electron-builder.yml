@@ -1,6 +1,7 @@
-appId: com.electron.app
-productName: 'Project Manager'
+appId: com.antigravity.cluster
+productName: 'Cluster'
 directories:
+  output: dist
   buildResources: build
 files:
   - '!**/.vscode/*'
@@ -12,10 +13,8 @@ files:
 asarUnpack:
   - resources/**
 win:
-  executableName: 'project-manager'
+  executableName: 'cluster'
   icon: build/icon.ico
-  signAndEditExecutable: false
-  verifyUpdateCodeSignature: false
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}

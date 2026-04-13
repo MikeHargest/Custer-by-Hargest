@@ -17,10 +17,21 @@ import {
   ListTodo,
   Minus,
   PenTool,
-  PanelRight
+  PanelRight,
+  ArrowLeft,
+  ChevronRight,
+  ChevronDown
 } from 'lucide-react'
-import ReactQuill from 'react-quill-new'
-import 'react-quill-new/dist/quill.snow.css'
+import { useEditor, EditorContent } from '@tiptap/react'
+import StarterKit from '@tiptap/starter-kit'
+import UnderlineExt from '@tiptap/extension-underline'
+import { TextStyle } from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
+import Placeholder from '@tiptap/extension-placeholder'
+import Highlight from '@tiptap/extension-highlight'
+import { Markdown } from 'tiptap-markdown'
 import { Virtuoso } from 'react-virtuoso'
 
 import { AppNote, Project } from '../types'
@@ -38,6 +49,7 @@ interface NotesViewProps {
   theme: any // UITheme
   setTheme: (theme: any) => void
   showFPS?: boolean
+  setCurrentView: (view: any) => void
 }
 
 const findProjectRecursive = (projs: Project[], id: string | null): Project | undefined => {
@@ -78,74 +90,215 @@ export default function NotesView({
   setActiveNoteId,
   theme,
   setTheme,
-  showFPS
+  showFPS,
+  setCurrentView
 }: NotesViewProps): React.ReactElement {
   const activeProjectId = selectedProjectId || 'default'
   const [showTrash, setShowTrash] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
   const [textColorPickerRect, setTextColorPickerRect] = useState<DOMRect | null>(null)
-  const quillRef = useRef<ReactQuill>(null)
   const saveTimers = useRef<{ [id: string]: ReturnType<typeof setTimeout> }>({})
-  const quillContentRef = useRef<string>('')
   const [localTitle, setLocalTitle] = useState('')
-  const titleSyncTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastActiveIdRef = useRef<string | null>(activeNoteId)
+  const activeNoteIdRef = useRef<string | null>(activeNoteId)
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const titleEffectRef = useRef<string>(localTitle)
+  const [collapsedNotes, setCollapsedNotes] = useState<Set<string>>(new Set())
+  const notesRef = useRef(notes)
+  
+  useEffect(() => {
+    notesRef.current = notes
+  }, [notes])
+  
+  useEffect(() => {
+    titleEffectRef.current = localTitle
+  }, [localTitle])
+  
+  useEffect(() => {
+    activeNoteIdRef.current = activeNoteId
+  }, [activeNoteId])
 
-  const applyFormatting = (type: string, value?: string): void => {
-    const quill = quillRef.current?.getEditor()
-    if (!quill) {
-      console.error('Quill editor not found')
-      return
+
+  const handleUpdateNote = useCallback(
+    (id: string, updates: Partial<AppNote>): void => {
+      // Apply updates to React state immediately to ensure "total saving" and avoid data loss on switch
+      setNotes((prev) =>
+        prev.map((n) => {
+          if (n.id === id) {
+            return { ...n, ...updates, lastModified: Date.now() }
+          }
+          return n
+        })
+      )
+
+      // Save content logic (Renaming is now handled separately by handleTitleBlur)
+      if (updates.content !== undefined) {
+        if (saveTimers.current[id]) clearTimeout(saveTimers.current[id])
+        saveTimers.current[id] = setTimeout(
+          async (): Promise<void> => {
+            // Read from ref to always get the LATEST notes state, not a stale closure
+            const currentNoteVersion = notesRef.current.find((n) => n.id === id)
+            if (!currentNoteVersion) return
+
+            const type = currentNoteVersion.type || 'markdown'
+            const isBoard = type === 'board'
+            let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
+
+            const noteProjectId = currentNoteVersion.projectId || 'default'
+            if (noteProjectId !== 'trash') {
+              const project = findProjectRecursive(projects, noteProjectId)
+              if (project) {
+                if (isBoard) {
+                  // @ts-ignore
+                  if (project.boardsPath) targetDir = project.boardsPath
+                  else if (project.path) targetDir = `${project.path}/boards`
+                } else {
+                  if (project.notesPath) targetDir = project.notesPath
+                  else if (project.path) targetDir = `${project.path}/notes`
+                }
+              }
+            }
+
+            if (!targetDir) return
+
+            const ext = isBoard ? 'board' : 'md'
+            // @ts-ignore
+            const fileName = currentNoteVersion.fileName || getFileName(currentNoteVersion.title, id, ext)
+
+            if (isBoard) {
+              // @ts-ignore
+              await window.api.saveContainer(targetDir, fileName, currentNoteVersion)
+            } else {
+              // @ts-ignore
+              window.api.saveNote(targetDir, fileName, currentNoteVersion)
+            }
+          },
+          1000
+        )
+      }
+    },
+    [workspacePath, projects, setNotes]
+  )
+
+  const activeNote = notes.find((n) => n.id === activeNoteId)
+  const handleUpdateNoteRef = useRef(handleUpdateNote)
+  
+  useEffect(() => {
+    handleUpdateNoteRef.current = handleUpdateNote
+  }, [handleUpdateNote])
+
+  // Tiptap editor instance
+  const editor = useEditor({
+    extensions: [
+      StarterKit.configure({
+        heading: { levels: [1, 2, 3] }
+      }),
+      UnderlineExt,
+      TextStyle,
+      Color,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      Placeholder.configure({ placeholder: 'Start typing your notes here...' }),
+      Highlight.configure({ multicolor: true }),
+      Markdown
+    ],
+    content: activeNote?.content || '',
+    editorProps: {
+      attributes: {
+        class: 'tiptap-editor'
+      }
+    }
+  })
+
+  // Use a stable update listener that always uses the current activeNoteId from Ref
+  useEffect(() => {
+    if (!editor) return
+
+    const onUpdate = ({ editor: e }: { editor: any }) => {
+      // ONLY save if the editor is focused (meaning user initiated change)
+      // This prevents background sync/initialization from wiping content
+      if (e.isFocused) {
+        const currentId = activeNoteIdRef.current
+        if (currentId) {
+          const markdownString = (e.storage as any).markdown.getMarkdown()
+          handleUpdateNoteRef.current(currentId, { content: markdownString })
+        }
+      }
     }
 
-    // Force focus
-    quill.focus()
+    editor.on('update', onUpdate)
+    return () => {
+      editor.off('update', onUpdate)
+    }
+  }, [editor])
+
+  // Sync editor content when active note changes or content loads from disk
+  useEffect(() => {
+    if (editor && activeNote && activeNote.type !== 'board') {
+      const noteContent = activeNote.content || ''
+      
+      // Try to parse as JSON first (modern format fallback for older notes)
+      try {
+        const json = JSON.parse(noteContent)
+        // If it's a valid Tiptap JSON, set it
+        if (json && typeof json === 'object') {
+          // Compare with current state is hard for JSON, but emitUpdate: false prevents loops
+          editor.commands.setContent(json, { emitUpdate: false })
+          return
+        }
+      } catch (e) {
+        // Assume markdown
+      }
+
+      // Check purely text content change (for markdown)
+      const currentMarkdown = (editor.storage as any).markdown.getMarkdown()
+      if (currentMarkdown !== noteContent) {
+        editor.commands.setContent(noteContent, { emitUpdate: false })
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, activeNoteId, activeNote?.content])
+
+  const applyFormatting = (type: string, value?: string): void => {
+    if (!editor) return
+    const chain = editor.chain().focus()
 
     switch (type) {
-      case 'bold': {
-        const current = quill.getFormat().bold
-        quill.format('bold', !current)
+      case 'bold':
+        chain.toggleBold().run()
         break
-      }
-      case 'italic': {
-        const current = quill.getFormat().italic
-        quill.format('italic', !current)
+      case 'italic':
+        chain.toggleItalic().run()
         break
-      }
-      case 'underline': {
-        const current = quill.getFormat().underline
-        quill.format('underline', !current)
+      case 'underline':
+        chain.toggleUnderline().run()
         break
-      }
-      case 'strikethrough': {
-        const current = quill.getFormat().strike
-        quill.format('strike', !current)
+      case 'strikethrough':
+        chain.toggleStrike().run()
         break
-      }
       case 'color':
-        quill.format('color', value)
+        if (value) chain.setColor(value).run()
         break
       case 'clear':
-        quill.removeFormat(quill.getSelection()?.index || 0, quill.getSelection()?.length || 0)
+        chain.unsetAllMarks().run()
         break
       case 'h1':
-        quill.format('header', 1)
+        chain.toggleHeading({ level: 1 }).run()
         break
       case 'h2':
-        quill.format('header', 2)
+        chain.toggleHeading({ level: 2 }).run()
         break
       case 'h3':
-        quill.format('header', 3)
+        chain.toggleHeading({ level: 3 }).run()
         break
       case 'list':
-        quill.format('list', 'bullet')
+        chain.toggleBulletList().run()
         break
       case 'task':
-        quill.format('list', 'unchecked')
+        chain.toggleTaskList().run()
         break
       case 'separator':
-        quill.insertText(quill.getSelection()?.index || 0, '\n', 'api')
-        quill.insertEmbed(quill.getSelection()?.index || 0, 'divider', true)
+        chain.setHorizontalRule().run()
         break
       default:
         return
@@ -166,7 +319,7 @@ export default function NotesView({
   const projectScopeIds =
     activeProjectId === 'default' ? ['default'] : getAllDescendantIds(activeProjectId, projects)
 
-  const filteredNotes = notes.filter((n) => {
+  const filteredNotes = React.useMemo(() => notes.filter((n) => {
     const isTrash = n.isTrash || n.projectId === 'trash'
     const pId = n.projectId === 'trash' ? 'default' : n.projectId || 'default'
 
@@ -175,7 +328,7 @@ export default function NotesView({
     } else {
       return !isTrash && projectScopeIds.includes(pId)
     }
-  })
+  }), [notes, showTrash, projectScopeIds])
 
   const getNoteTargetDir = useCallback(
     (nProjId: string | undefined, nIsTrash: boolean | undefined): string => {
@@ -229,112 +382,74 @@ export default function NotesView({
     [projects, workspacePath]
   )
 
-  const activeNote = notes.find((n) => n.id === activeNoteId)
-  const lastLoadedRef = useRef<string | null>(null)
-
-  // Sync local title when active note changes
-  useEffect(() => {
-    if (activeNote) {
-      setLocalTitle(activeNote.title)
-    }
-  }, [activeNoteId]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load content from file-system when note changes
-  useEffect(() => {
-    const loadContent = async (): Promise<void> => {
-      if (activeNote && activeNoteId && lastLoadedRef.current !== activeNoteId) {
-        lastLoadedRef.current = activeNoteId
-        const isBoard = activeNote.type === 'tldraw'
-        const targetDir = isBoard
-          ? getBoardTargetDir(activeNote.projectId, activeNote.isTrash)
-          : getNoteTargetDir(activeNote.projectId, activeNote.isTrash)
-
-        const api = (window as any).api
-        let diskContent: string | null = null
-
-        if (isBoard) {
-          // Try .ibo first with title-based name
-          const iboName = getFileName(activeNote.title, activeNoteId, 'ibo')
-          diskContent = await api.readIbo(targetDir, iboName)
-          if (diskContent === null) {
-            // Fallback to legacy UUID-based name
-            diskContent = await api.readIbo(targetDir, `${activeNoteId}.ibo`)
-          }
-          if (diskContent === null) {
-            // Fallback to old .board format
-            diskContent = await api.readBoard(targetDir, `${activeNoteId}.board`)
-          }
-        } else {
-          const mdName = getFileName(activeNote.title, activeNoteId, 'md')
-          diskContent = await api.readNote(targetDir, mdName)
-          if (diskContent === null) {
-            // Fallback to legacy UUID-based name
-            diskContent = await api.readNote(targetDir, `${activeNoteId}.md`)
-          }
-        }
-
-        // Only update state if disk has content, otherwise use what's in state
-        if (diskContent !== null && diskContent !== activeNote.content) {
-          setNotes((prev) =>
-            prev.map((n) => (n.id === activeNoteId ? { ...n, content: diskContent } : n))
-          )
-        } else if (diskContent === null && activeNote.content) {
-          if (isBoard) {
-            const iboName = getFileName(activeNote.title, activeNoteId, 'ibo')
-            // @ts-ignore - saveIbo has custom API signature
-            window.api.saveIbo(targetDir, iboName, activeNote.content)
-          } else {
-            const mdName = getFileName(activeNote.title, activeNoteId, 'md')
-            // @ts-ignore - saveNote persists markdown content
-            window.api.saveNote(targetDir, mdName, activeNote.content)
-          }
-        }
-      }
-    }
-    loadContent()
-  }, [
-    activeNoteId,
-    workspacePath,
-    activeNote,
-    setNotes,
-    projects,
-    getNoteTargetDir,
-    getBoardTargetDir
-  ])
 
   // Flush pending saves when switching notes
+  // IMPORTANT: This effect MUST be declared BEFORE the title-sync effect so it reads
+  // titleEffectRef.current (the OLD note's pending title) before the sync effect overwrites it.
   useEffect(() => {
-    const flushSave = (id: string): void => {
-      const noteToSave = notes.find((n) => n.id === id)
+    const flushSave = async (id: string, pendingTitle?: string): Promise<void> => {
+      const notesCopy = [...notes]
+      const noteToSave = notesCopy.find((n) => n.id === id)
       if (!noteToSave) return
 
-      const isBoard = noteToSave.type === 'tldraw'
+      const isBoard = noteToSave.type === 'board'
       const targetDir = isBoard
         ? getBoardTargetDir(noteToSave.projectId, noteToSave.isTrash)
         : getNoteTargetDir(noteToSave.projectId, noteToSave.isTrash)
 
       if (targetDir) {
-        const fileName = getFileName(noteToSave.title, id, isBoard ? 'ibo' : 'md')
-        if (isBoard) {
-          // @ts-ignore - api defined in preload
-          window.api.saveIbo(targetDir, fileName, noteToSave.content)
-        } else {
-          // @ts-ignore - api defined in preload
-          window.api.saveNote(targetDir, fileName, noteToSave.content)
+        const ext = isBoard ? 'board' : 'md'
+        const currentTitle = pendingTitle || noteToSave.title
+        const newFileName = getFileName(currentTitle, id, ext)
+        const oldFileName = noteToSave.fileName || getFileName(noteToSave.title, id, ext)
+
+        // Handle rename if title was changed before flush
+        if (oldFileName !== newFileName) {
+          // @ts-ignore
+          await window.api.renameNote(targetDir, oldFileName, newFileName)
         }
+
+        const finalNote = { ...noteToSave, title: currentTitle, fileName: newFileName }
+
+        if (isBoard) {
+          // @ts-ignore
+          await window.api.saveContainer(targetDir, newFileName, finalNote)
+        } else {
+          // @ts-ignore
+          await window.api.saveNote(targetDir, newFileName, finalNote)
+        }
+        
+        // Update the notes list in App.tsx so the change persists in the sidebar/state
+        setNotes(prev => prev.map(n => n.id === id ? finalNote : n))
       }
     }
 
     if (lastActiveIdRef.current && lastActiveIdRef.current !== activeNoteId) {
       const prevId = lastActiveIdRef.current
+      // titleEffectRef.current still holds the OLD note's pending title at this point
+      // because this effect fires before the title-sync effect below
+      flushSave(prevId, titleEffectRef.current)
+      
       if (saveTimers.current[prevId]) {
         clearTimeout(saveTimers.current[prevId])
         delete saveTimers.current[prevId]
-        flushSave(prevId)
       }
     }
     lastActiveIdRef.current = activeNoteId
   }, [activeNoteId, notes, getBoardTargetDir, getNoteTargetDir])
+
+  // Redundant filesystem loading removed. State is populated by App.tsx.
+
+  // Sync local title when active note changes
+  // IMPORTANT: This effect MUST be declared AFTER the flush effect above so that
+  // titleEffectRef.current is not yet overwritten when the flush reads it.
+  useEffect(() => {
+    const currentNote = notes.find(n => n.id === activeNoteId)
+    if (currentNote) {
+      setLocalTitle(currentNote.title)
+      titleEffectRef.current = currentNote.title
+    }
+  }, [activeNoteId]) // eslint-disable-line react-hooks-exhaustive-deps
 
   useEffect(() => {
     if (!activeNoteId && filteredNotes.length > 0) {
@@ -354,17 +469,17 @@ export default function NotesView({
     }
   }, [activeProjectId, showTrash, activeNoteId, filteredNotes, setActiveNoteId])
 
-  const handleCreateNote = (type: 'markdown' | 'tldraw' = 'markdown'): void => {
+  const handleCreateNote = (type: 'markdown' | 'board' = 'markdown'): void => {
     let initialContent = ''
-    if (type === 'tldraw') {
-      // Small valid json structure for empty tldraw if needed, otherwise empty string is fine.
-      // We will handle it in the Tldraw component
+    if (type === 'board') {
+      // Small valid json structure for empty board if needed, otherwise empty string is fine.
+      // We will handle it in the BoardsView component
       initialContent = ''
     }
     const noteProjId = activeProjectId
     const newNote: AppNote = {
       id: uuidv4(),
-      title: type === 'tldraw' ? 'Untitled Board' : 'Untitled Note',
+      title: type === 'board' ? 'Untitled Board' : 'Untitled Note',
       content: initialContent,
       type,
       projectId: noteProjId,
@@ -373,26 +488,97 @@ export default function NotesView({
       createdAt: Date.now()
     }
 
-    const isBoard = type === 'tldraw'
+    const isBoard = type === 'board'
     const targetDir = isBoard
       ? getBoardTargetDir(noteProjId, false)
       : getNoteTargetDir(noteProjId, false)
 
-    setNotes([newNote, ...notes])
+    const initialFileName = getFileName(newNote.title, newNote.id, isBoard ? 'board' : 'md')
+    // @ts-ignore
+    newNote.fileName = initialFileName
+
+    setNotes((prev) => [newNote, ...prev])
     setActiveNoteId(newNote.id)
 
-    // Save empty physical file
+    // Save physical file immediately
     if (targetDir) {
-      const fileName = getFileName(newNote.title, newNote.id, isBoard ? 'ibo' : 'md')
-      if (isBoard) {
-        // @ts-ignore: saveIbo is a custom container API that bundles board JSON and media
-        window.api.saveIbo(targetDir, fileName, initialContent)
-      } else {
-        // @ts-ignore: saveNote handles standard markdown note persisting
-        window.api.saveNote(targetDir, fileName, initialContent)
-      }
+      // @ts-ignore
+      window.api.saveNote(targetDir, initialFileName, newNote)
     }
   }
+
+  // Create a child note inside a parent note
+  const handleCreateChildNote = (parentId: string, e: React.MouseEvent): void => {
+    e.stopPropagation()
+    const parentNote = notes.find((n) => n.id === parentId)
+    if (!parentNote || parentNote.type === 'board') return
+
+    const noteProjId = parentNote.projectId || activeProjectId
+    const newNote: AppNote = {
+      id: uuidv4(),
+      title: 'Untitled Note',
+      content: '',
+      type: 'markdown',
+      projectId: noteProjId,
+      parentId: parentId,
+      isTrash: false,
+      lastModified: Date.now(),
+      createdAt: Date.now()
+    }
+
+    const targetDir = getNoteTargetDir(noteProjId, false)
+    const initialFileName = getFileName(newNote.title, newNote.id, 'md')
+    // @ts-ignore
+    newNote.fileName = initialFileName
+
+    setNotes((prev) => [newNote, ...prev])
+    setActiveNoteId(newNote.id)
+
+    // Expand parent
+    setCollapsedNotes((prev) => {
+      const next = new Set(prev)
+      next.delete(parentId)
+      return next
+    })
+
+    if (targetDir) {
+      // @ts-ignore
+      window.api.saveNote(targetDir, initialFileName, newNote)
+    }
+  }
+
+  // Toggle collapse/expand
+  const handleToggleCollapse = (noteId: string, e: React.MouseEvent): void => {
+    e.stopPropagation()
+    setCollapsedNotes((prev) => {
+      const next = new Set(prev)
+      if (next.has(noteId)) {
+        next.delete(noteId)
+      } else {
+        next.add(noteId)
+      }
+      return next
+    })
+  }
+
+  // Compute breadcrumbs for the active note
+  const breadcrumbs = React.useMemo(() => {
+    if (!activeNote || !activeNote.parentId) return []
+    const crumbs: { id: string; title: string }[] = []
+    let currentParentId: string | undefined = activeNote.parentId
+    const visited = new Set<string>()
+    while (currentParentId && !visited.has(currentParentId)) {
+      visited.add(currentParentId)
+      const parent = notes.find((n) => n.id === currentParentId)
+      if (parent) {
+        crumbs.unshift({ id: parent.id, title: parent.title || 'Untitled' })
+        currentParentId = parent.parentId
+      } else {
+        break
+      }
+    }
+    return crumbs
+  }, [activeNote, notes])
 
   const extendedProjects = React.useMemo(() => [...projects], [projects])
   // trashProject is not needed here as it is handled by the projects state if it exists
@@ -401,7 +587,7 @@ export default function NotesView({
     e.stopPropagation()
     const noteToDelete = notes.find((n) => n.id === id)
     if (!noteToDelete) return
-    const isBoard = noteToDelete.type === 'tldraw'
+    const isBoard = noteToDelete.type === 'board'
 
     if (showTrash) {
       // Permanent Delete
@@ -412,19 +598,16 @@ export default function NotesView({
         ? getBoardTargetDir(noteToDelete.projectId, true)
         : getNoteTargetDir(noteToDelete.projectId, true)
       if (targetDir) {
-        const titleName = getFileName(noteToDelete.title, id, isBoard ? 'ibo' : 'md')
+        const fileName = noteToDelete.fileName || getFileName(noteToDelete.title, id, isBoard ? 'board' : 'md')
         if (isBoard) {
-          // @ts-ignore: Delete title-based .ibo file
-          window.api.deleteBoard(targetDir, titleName)
-          // @ts-ignore: Attempt deletion of legacy UUID-based .ibo
+          // @ts-ignore: Delete stable .board file
+          window.api.deleteBoard(targetDir, fileName)
+          // Also cleanup legacy .ibo if it exists (using id only)
+          // @ts-ignore
           window.api.deleteBoard(targetDir, `${id}.ibo`)
-          // @ts-ignore: Fallback for older .board files
-          window.api.deleteBoard(targetDir, `${id}.board`)
         } else {
-          // @ts-ignore: Delete title-based .md file
-          window.api.deleteNote(targetDir, titleName)
-          // @ts-ignore: Delete legacy UUID-based .md
-          window.api.deleteNote(targetDir, `${id}.md`)
+          // @ts-ignore: Delete stable .json file
+          window.api.deleteNote(targetDir, fileName)
         }
       }
     } else {
@@ -432,28 +615,50 @@ export default function NotesView({
       const pId =
         noteToDelete.projectId === 'trash' ? 'default' : noteToDelete.projectId || 'default'
 
-      const updatedNotes = notes.map((n) =>
-        n.id === id ? { ...n, projectId: pId, isTrash: true, lastModified: Date.now() } : n
-      )
+      // Orphan direct children: set their parentId to undefined (move to root)
+      const childNotes = notes.filter((n) => n.parentId === id)
+
+      const updatedNotes = notes.map((n) => {
+        if (n.id === id) {
+          return { ...n, projectId: pId, isTrash: true, lastModified: Date.now() }
+        }
+        // Orphan children to root
+        if (n.parentId === id) {
+          return { ...n, parentId: undefined, lastModified: Date.now() }
+        }
+        return n
+      })
       setNotes(updatedNotes)
+
+      // Re-save orphaned children to disk with cleared parentId
+      for (const child of childNotes) {
+        const childIsBoard = child.type === 'board'
+        const childDir = childIsBoard
+          ? getBoardTargetDir(child.projectId, child.isTrash)
+          : getNoteTargetDir(child.projectId, child.isTrash)
+        if (childDir) {
+          const childExt = childIsBoard ? 'board' : 'md'
+          const childFileName = child.fileName || getFileName(child.title, child.id, childExt)
+          const updatedChild = { ...child, parentId: undefined, lastModified: Date.now() }
+          // @ts-ignore
+          window.api.saveNote(childDir, childFileName, updatedChild)
+        }
+      }
 
       const oldDir = isBoard ? getBoardTargetDir(pId, false) : getNoteTargetDir(pId, false)
       const newDir = isBoard ? getBoardTargetDir(pId, true) : getNoteTargetDir(pId, true)
 
       if (oldDir && newDir) {
-        const titleName = getFileName(noteToDelete.title, id, isBoard ? 'ibo' : 'md')
+        const fileName = noteToDelete.fileName || getFileName(noteToDelete.title, id, isBoard ? 'board' : 'md')
         if (isBoard) {
-          // @ts-ignore: Move title-based .ibo to trash
-          window.api.moveBoard(oldDir, newDir, titleName)
-          // @ts-ignore: Move any existing UUID-based .ibo file to trash
+          // @ts-ignore
+          window.api.moveBoard(oldDir, newDir, fileName)
+          // Also cleanup legacy .ibo if it exists
+          // @ts-ignore
           window.api.moveBoard(oldDir, newDir, `${id}.ibo`)
-          // @ts-ignore: Support legacy format move
-          window.api.moveBoard(oldDir, newDir, `${id}.board`)
         } else {
-          // @ts-ignore: Move title-based .md to trash
-          window.api.moveNote(oldDir, newDir, titleName)
-          // @ts-ignore: Move legacy UUID-based .md to trash
-          window.api.moveNote(oldDir, newDir, `${id}.md`)
+          // @ts-ignore: Move stable .md to trash
+          window.api.moveNote(oldDir, newDir, fileName)
         }
       }
     }
@@ -471,122 +676,68 @@ export default function NotesView({
     )
     setNotes(updatedNotes)
 
-    const isBoard = noteToRestore.type === 'tldraw'
+    const isBoard = noteToRestore.type === 'board'
     const oldDir = isBoard ? getBoardTargetDir(pId, true) : getNoteTargetDir(pId, true)
     const newDir = isBoard ? getBoardTargetDir(pId, false) : getNoteTargetDir(pId, false)
 
     if (oldDir && newDir) {
-      const noteTitle = noteToRestore?.title || 'Untitled'
+      const fileName = noteToRestore.fileName || getFileName(noteToRestore.title, id, isBoard ? 'board' : 'md')
       if (isBoard) {
-        const iboName = getFileName(noteTitle, id, 'ibo')
-        // @ts-ignore: Restore either format from trash
-        window.api.moveBoard(oldDir, newDir, iboName)
-        // @ts-ignore: Fallback for legacy UUID name
+        // @ts-ignore
+        window.api.moveBoard(oldDir, newDir, fileName)
+        // Also cleanup legacy .ibo if it exists
+        // @ts-ignore
         window.api.moveBoard(oldDir, newDir, `${id}.ibo`)
-        // @ts-ignore: Fallback for legacy board restoration
-        window.api.moveBoard(oldDir, newDir, `${id}.board`)
       } else {
-        const mdName = getFileName(noteTitle, id, 'md')
-        // @ts-ignore: Restore markdown note
-        window.api.moveNote(oldDir, newDir, mdName)
-        // @ts-ignore: Fallback for legacy UUID name
-        window.api.moveNote(oldDir, newDir, `${id}.md`)
+        // @ts-ignore: Restore stable json note
+        window.api.moveNote(oldDir, newDir, fileName)
       }
     }
   }
-  const handleUpdateNote = useCallback(
-    (id: string, updates: Partial<AppNote>): void => {
-      // Apply updates to React state immediately to ensure "total saving" and avoid data loss on switch
-      setNotes((prev) =>
-        prev.map((n) => {
-          if (n.id === id) {
-            return { ...n, ...updates, lastModified: Date.now() }
-          }
-          return n
-        })
-      )
 
-      // Build updatedNote for file-save logic
-      const targetNote = notes.find((n) => n.id === id)
-      if (!targetNote) return
-      const updatedNote = { ...targetNote, ...updates, lastModified: Date.now() }
+  const handleTitleBlur = async (): Promise<void> => {
+    setIsEditingTitle(false)
+    if (!activeNoteId || !activeNote) return
 
-      // Get targetDir dynamically
-      const type = updatedNote.type || 'markdown'
-      const isBoard = type === 'tldraw'
-      let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
+    const isBoard = activeNote.type === 'board'
+    const targetDir = isBoard
+      ? getBoardTargetDir(activeNote.projectId, activeNote.isTrash)
+      : getNoteTargetDir(activeNote.projectId, activeNote.isTrash)
 
-      const noteProjectId = updatedNote.projectId || 'default'
-      if (noteProjectId !== 'trash') {
-        const project = findProjectRecursive(projects, noteProjectId)
-        if (project) {
-          if (isBoard) {
-            // @ts-ignore - boardsPath exists on Project but TS doesn't see it
-            if (project.boardsPath) targetDir = project.boardsPath
-            else if (project.path) targetDir = `${project.path}/boards`
-          } else {
-            if (project.notesPath) targetDir = project.notesPath
-            else if (project.path) targetDir = `${project.path}/notes`
-          }
-        }
+    if (targetDir) {
+      const ext = isBoard ? 'board' : 'md'
+      const newFileName = getFileName(localTitle, activeNoteId, ext)
+      // @ts-ignore
+      const oldFileName = activeNote.fileName || getFileName(activeNote.title, activeNoteId, ext)
+
+      if (oldFileName && oldFileName !== newFileName) {
+        // Atomic Rename: old physically becomes new
+        // @ts-ignore
+        await window.api.renameNote(targetDir, oldFileName, newFileName)
       }
-
-      if (!targetDir) return
-
-      // If title changed, immediately rename (delete old, save new)
-      if (updates.title !== undefined && targetNote.title !== updates.title) {
-        const oldFileName = getFileName(targetNote.title, id, isBoard ? 'ibo' : 'md')
-        if (isBoard) {
-          // @ts-ignore - api defined in preload
-          window.api.deleteBoard(targetDir, oldFileName)
-        } else {
-          // @ts-ignore - api defined in preload
-          window.api.deleteNote(targetDir, oldFileName)
-        }
+      
+      // commit current local title and filename to the global state once
+      setNotes(prev => prev.map(n => n.id === activeNoteId ? { ...n, fileName: newFileName, title: localTitle } : n))
+      
+      // Force immediate save of metadata with new title
+      // @ts-ignore
+      const noteToSave = { ...activeNote, title: localTitle, fileName: newFileName }
+      if (isBoard) {
+        // @ts-ignore
+        await window.api.saveContainer(targetDir, newFileName, noteToSave)
+      } else {
+        // @ts-ignore
+        await window.api.saveNote(targetDir, newFileName, noteToSave)
       }
-
-      // Save content
-      if (updates.content !== undefined || updates.title !== undefined) {
-        const contentToSave = updatedNote.content
-
-        if (saveTimers.current[id]) clearTimeout(saveTimers.current[id])
-        saveTimers.current[id] = setTimeout(
-          (): void => {
-            const noteTitle = updatedNote?.title || 'Untitled'
-            const fileName = getFileName(noteTitle, id, isBoard ? 'ibo' : 'md')
-            if (isBoard) {
-              // @ts-ignore - api defined in preload
-              window.api.saveIbo(targetDir, fileName, contentToSave)
-              // Cleanup legacy boards
-              // @ts-ignore - api defined in preload
-              window.api.deleteBoard(targetDir, `${id}.board`)
-              // @ts-ignore - api defined in preload
-              window.api.deleteBoard(targetDir, `${id}.ibo`)
-            } else {
-              // @ts-ignore - api defined in preload
-              window.api.saveNote(targetDir, fileName, contentToSave)
-              // @ts-ignore - api defined in preload
-              window.api.deleteNote(targetDir, `${id}.md`)
-            }
-          },
-          updates.content !== undefined ? 1000 : 0
-        )
-      }
-    },
-    [notes, workspacePath, projects, setNotes]
-  )
+    }
+  }
 
   const handleTitleChange = useCallback(
     (newTitle: string) => {
       setLocalTitle(newTitle)
-      if (titleSyncTimer.current) clearTimeout(titleSyncTimer.current)
-      titleSyncTimer.current = setTimeout(() => {
-        if (activeNoteId) {
-          handleUpdateNote(activeNoteId, { title: newTitle })
-        }
-      }, 300)
+      // NO MORE setNotes here to prevent global re-renders while typing
     },
-    [activeNoteId, handleUpdateNote]
+    []
   )
 
   const handleBoardChange = useCallback(
@@ -598,18 +749,11 @@ export default function NotesView({
     [activeNote, handleUpdateNote]
   )
 
-  const formatDate = (ts: number): string => {
-    return new Date(ts).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
+
 
   type FlattenedItem =
     | { type: 'project'; project: Project; level: number }
-    | { type: 'note'; note: AppNote; project?: Project; level: number }
+    | { type: 'note'; note: AppNote; project?: Project; level: number; hasChildren: boolean }
 
   const flattenedNotesList = React.useMemo(() => {
     if (filteredNotes.length === 0) return []
@@ -621,17 +765,35 @@ export default function NotesView({
           type: 'note' as const,
           note,
           project: extendedProjects.find((p) => p.id === note.projectId),
-          level: 0
+          level: 0,
+          hasChildren: false
         }))
     }
 
     const result: FlattenedItem[] = []
 
+    // Build note tree based on parentId
+    const renderNoteTree = (parentId: string | undefined, level: number, project?: Project): void => {
+      const children = filteredNotes
+        .filter((n) => (parentId ? n.parentId === parentId : !n.parentId))
+        .sort((a, b) => (b.createdAt || b.lastModified) - (a.createdAt || a.lastModified))
+
+      for (const note of children) {
+        const noteChildren = filteredNotes.filter((n) => n.parentId === note.id)
+        const hasChildren = noteChildren.length > 0
+        result.push({ type: 'note', note, project, level, hasChildren })
+
+        // Only render children if this note is not collapsed
+        if (hasChildren && !collapsedNotes.has(note.id)) {
+          renderNoteTree(note.id, level + 1, project)
+        }
+      }
+    }
+
     const traverse = (projectId: string | null, level: number, isRoot: boolean): void => {
       const project = extendedProjects.find((p) => p.id === projectId)
       const projectNotes = filteredNotes
         .filter((n) => (projectId === 'default' ? !n.projectId : n.projectId === projectId))
-        .sort((a, b) => (b.createdAt || b.lastModified) - (a.createdAt || a.lastModified))
 
       const subprojects = project?.subprojects || []
 
@@ -652,8 +814,19 @@ export default function NotesView({
         result.push({ type: 'project', project, level })
       }
 
-      for (const note of projectNotes) {
-        result.push({ type: 'note', note, project, level })
+      // Render root-level notes of this project as a tree
+      const rootNotes = projectNotes
+        .filter((n) => !n.parentId)
+        .sort((a, b) => (b.createdAt || b.lastModified) - (a.createdAt || a.lastModified))
+
+      for (const note of rootNotes) {
+        const noteChildren = filteredNotes.filter((n) => n.parentId === note.id)
+        const hasChildren = noteChildren.length > 0
+        result.push({ type: 'note', note, project, level, hasChildren })
+
+        if (hasChildren && !collapsedNotes.has(note.id)) {
+          renderNoteTree(note.id, level + 1, project)
+        }
       }
 
       for (const sub of subprojects) {
@@ -663,7 +836,7 @@ export default function NotesView({
 
     traverse(activeProjectId, 0, true)
     return result
-  }, [filteredNotes, activeProjectId, extendedProjects])
+  }, [filteredNotes, activeProjectId, extendedProjects, collapsedNotes])
 
   return (
     <>
@@ -687,27 +860,23 @@ export default function NotesView({
           }}
         >
           <style>{`
-        .ql-container {
-          font-family: inherit;
-          font-size: 16px;
-          border: none !important;
+        .tiptap-editor {
           flex: 1;
-          display: flex;
-          flex-direction: column;
-        }
-        .ql-editor {
-          flex: 1;
-          padding: 0 0 32px !important; /* Top padding removed - divider margin handles spacing */
+          padding: 0 0 32px !important;
           line-height: 1.6;
           color: var(--text-primary);
           max-width: 700px;
           margin: 0 auto;
           width: 100%;
+          outline: none;
         }
-        .ql-editor.ql-blank::before {
-          color: rgba(255,255,255,0.2) !important;
-          left: 0 !important; /* Perfect alignment with text start */
-          font-style: normal !important;
+        .tiptap-editor p.is-editor-empty:first-child::before {
+          color: rgba(255,255,255,0.2);
+          content: attr(data-placeholder);
+          float: left;
+          height: 0;
+          pointer-events: none;
+          font-style: normal;
         }
         .centered-container {
           max-width: 700px;
@@ -732,20 +901,39 @@ export default function NotesView({
         .document-guide-right {
           right: -20px;
         }
-        .ql-snow .ql-stroke {
-          stroke: var(--text-secondary) !important;
-        }
-        .ql-snow .ql-fill {
-          fill: var(--text-secondary) !important;
-        }
-        .ql-editor p {
+        .tiptap-editor p {
           margin-bottom: 0.5em;
         }
-        .ql-editor h1, .ql-editor h2, .ql-editor h3 {
+        .tiptap-editor h1, .tiptap-editor h2, .tiptap-editor h3 {
           color: var(--text-primary);
           margin-top: 1em;
           margin-bottom: 0.5em;
           font-weight: 600;
+        }
+        .tiptap-editor ul, .tiptap-editor ol {
+          padding-left: 1.5em;
+        }
+        .tiptap-editor ul[data-type="taskList"] {
+          list-style: none;
+          padding-left: 0;
+        }
+        .tiptap-editor ul[data-type="taskList"] li {
+          display: flex;
+          align-items: flex-start;
+          gap: 8px;
+        }
+        .tiptap-editor ul[data-type="taskList"] li label {
+          flex-shrink: 0;
+          margin-top: 3px;
+        }
+        .tiptap-editor ul[data-type="taskList"] li input[type="checkbox"] {
+          accent-color: var(--accent-primary, #7c5cbf);
+          cursor: pointer;
+        }
+        .tiptap-editor hr {
+          border: none;
+          border-top: 1px solid rgba(255,255,255,0.1);
+          margin: 1em 0;
         }
       `}</style>
           {/* Sidebar list */}
@@ -808,7 +996,7 @@ export default function NotesView({
                       <FileText size={16} />
                     </button>
                     <button
-                      onClick={() => handleCreateNote('tldraw')}
+                      onClick={() => handleCreateNote('board')}
                       className="icon-btn"
                       title="New Board"
                       style={{
@@ -885,40 +1073,69 @@ export default function NotesView({
                           </div>
                         )
                       } else {
-                        const { note, project, level } = item
+                        const { note, project, level, hasChildren } = item
                         const isActive = activeNoteId === note.id
                         const projectColor = project?.color || 'var(--accent)'
                         const renderLevel = activeProjectId === 'trash' ? 0 : level
+                        const isCollapsed = collapsedNotes.has(note.id)
+                        const isTextNote = note.type !== 'board'
 
                         return (
                           <div
                             onClick={() => setActiveNoteId(note.id)}
                             style={{
-                              padding: `12px 16px 12px ${16 + renderLevel * 12}px`,
+                              padding: `8px 12px 8px ${12 + renderLevel * 16}px`,
                               borderBottom: '1px solid rgba(255,255,255,0.03)',
                               background: isActive ? 'rgba(255,255,255,0.06)' : 'transparent',
                               cursor: 'pointer',
                               display: 'flex',
-                              alignItems: 'flex-start',
-                              gap: '12px',
-                              transition: 'all 0.2s',
+                              alignItems: 'center',
+                              gap: '6px',
+                              transition: 'all 0.15s',
                               position: 'relative',
                               borderRight: isActive
                                 ? `3px solid ${projectColor}`
                                 : '3px solid transparent'
                             }}
                           >
-                            {note.type === 'tldraw' ? (
+                            {/* Toggle arrow for notes with children */}
+                            {hasChildren ? (
+                              <button
+                                onClick={(e) => handleToggleCollapse(note.id, e)}
+                                style={{
+                                  background: 'transparent',
+                                  border: 'none',
+                                  color: 'var(--text-secondary)',
+                                  cursor: 'pointer',
+                                  padding: '0px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  width: '16px',
+                                  height: '16px',
+                                  flexShrink: 0,
+                                  opacity: 0.5,
+                                  transition: 'transform 0.15s, opacity 0.15s'
+                                }}
+                                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
+                              >
+                                {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                              </button>
+                            ) : (
+                              <div style={{ width: '16px', flexShrink: 0 }} />
+                            )}
+                            {note.type === 'board' ? (
                               <PenTool
-                                size={16}
+                                size={14}
                                 color={isActive ? projectColor : 'var(--text-secondary)'}
-                                style={{ marginTop: '2px', opacity: isActive ? 1 : 0.4 }}
+                                style={{ opacity: isActive ? 1 : 0.4, flexShrink: 0 }}
                               />
                             ) : (
                               <FileText
-                                size={16}
+                                size={14}
                                 color={isActive ? projectColor : 'var(--text-secondary)'}
-                                style={{ marginTop: '2px', opacity: isActive ? 1 : 0.4 }}
+                                style={{ opacity: isActive ? 1 : 0.4, flexShrink: 0 }}
                               />
                             )}
                             <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -929,47 +1146,62 @@ export default function NotesView({
                                   color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
                                   whiteSpace: 'nowrap',
                                   overflow: 'hidden',
-                                  textOverflow: 'ellipsis',
-                                  marginBottom: '4px'
+                                  textOverflow: 'ellipsis'
                                 }}
                               >
                                 {note.title || 'Untitled Note'}
                               </div>
-                              <div
-                                style={{
-                                  fontSize: '10px',
-                                  color: 'var(--text-secondary)',
-                                  opacity: 0.6,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '4px'
-                                }}
-                              >
-                                {formatDate(note.lastModified)}
-                              </div>
                             </div>
-                            {isActive && activeProjectId !== 'trash' && (
-                              <button
-                                onClick={(e) => handleDeleteNote(note.id, e)}
-                                title="Move to Trash"
-                                style={{
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: 'var(--text-secondary)',
-                                  cursor: 'pointer',
-                                  padding: '4px',
-                                  opacity: 0.5,
-                                  borderRadius: 'var(--radius-sm)',
-                                  transition: 'opacity 0.2s'
-                                }}
-                                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                                onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
-                              >
-                                <Trash2 size={14} />
-                              </button>
+                            {/* Action buttons */}
+                            {isActive && !showTrash && (
+                              <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
+                                {/* Create child note (only for text notes) */}
+                                {isTextNote && (
+                                  <button
+                                    onClick={(e) => handleCreateChildNote(note.id, e)}
+                                    title="Create sub-note"
+                                    style={{
+                                      background: 'transparent',
+                                      border: 'none',
+                                      color: 'var(--text-secondary)',
+                                      cursor: 'pointer',
+                                      padding: '2px',
+                                      opacity: 0.5,
+                                      borderRadius: 'var(--radius-sm)',
+                                      transition: 'opacity 0.2s',
+                                      display: 'flex',
+                                      alignItems: 'center'
+                                    }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
+                                  >
+                                    <Plus size={14} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={(e) => handleDeleteNote(note.id, e)}
+                                  title="Move to Trash"
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    padding: '2px',
+                                    opacity: 0.5,
+                                    borderRadius: 'var(--radius-sm)',
+                                    transition: 'opacity 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.5')}
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
                             )}
-                            {isActive && activeProjectId === 'trash' && (
-                              <div style={{ display: 'flex', gap: '4px' }}>
+                            {isActive && showTrash && (
+                              <div style={{ display: 'flex', gap: '2px', flexShrink: 0 }}>
                                 <button
                                   onClick={(e) => handleRestoreNote(note.id, e)}
                                   title="Restore Note"
@@ -978,10 +1210,12 @@ export default function NotesView({
                                     border: 'none',
                                     color: 'var(--text-primary)',
                                     cursor: 'pointer',
-                                    padding: '4px',
+                                    padding: '2px',
                                     opacity: 0.7,
                                     borderRadius: 'var(--radius-sm)',
-                                    transition: 'opacity 0.2s'
+                                    transition: 'opacity 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center'
                                   }}
                                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                                   onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
@@ -996,10 +1230,12 @@ export default function NotesView({
                                     border: 'none',
                                     color: '#ef4444',
                                     cursor: 'pointer',
-                                    padding: '4px',
+                                    padding: '2px',
                                     opacity: 0.7,
                                     borderRadius: 'var(--radius-sm)',
-                                    transition: 'opacity 0.2s'
+                                    transition: 'opacity 0.2s',
+                                    display: 'flex',
+                                    alignItems: 'center'
                                   }}
                                   onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
                                   onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
@@ -1030,7 +1266,7 @@ export default function NotesView({
           >
             {activeNote ? (
               <>
-                {activeNote.type === 'tldraw' ? (
+                {activeNote.type === 'board' ? (
                   <>
                     <div
                       style={{
@@ -1041,23 +1277,56 @@ export default function NotesView({
                         justifyContent: 'space-between',
                         background: 'transparent',
                         minHeight: '44px',
-                        boxSizing: 'border-box'
+                        boxSizing: 'border-box',
+                        gap: '8px'
                       }}
                     >
+                      <button
+                        onClick={() => setCurrentView('overview')}
+                        title="Back to Project"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 'var(--radius-sm)',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.color = 'var(--text-primary)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent'
+                          e.currentTarget.style.color = 'var(--text-secondary)'
+                        }}
+                      >
+                        <ArrowLeft size={18} />
+                      </button>
                       <input
                         type="text"
                         value={localTitle}
                         onChange={(e) => handleTitleChange(e.target.value)}
+                        onBlur={handleTitleBlur}
+                        onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as any).blur() }}
+                        onFocus={() => setIsEditingTitle(true)}
+                        readOnly={!isEditingTitle}
                         placeholder="Board Title"
                         style={{
                           flex: 1,
                           fontSize: '14px',
                           fontWeight: 400,
-                          background: 'transparent',
+                          background: isEditingTitle ? 'rgba(255,255,255,0.03)' : 'transparent',
                           border: 'none',
                           color: 'var(--text-primary)',
                           outline: 'none',
-                          padding: 0
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          cursor: isEditingTitle ? 'text' : 'pointer'
                         }}
                       />
                       <button
@@ -1102,6 +1371,8 @@ export default function NotesView({
                         setTheme={setTheme}
                         showFPS={showFPS}
                         isSidebarOpen={showSidebar}
+                        boardDir={getBoardTargetDir(activeNote.projectId, activeNote.isTrash)}
+                        boardFileName={getFileName(activeNote.title, activeNote.id, 'ibo')}
                       />
                     </div>
                   </>
@@ -1115,9 +1386,36 @@ export default function NotesView({
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        background: 'transparent'
+                        background: 'transparent',
+                        gap: '12px'
                       }}
                     >
+                      <button
+                        onClick={() => setCurrentView('overview')}
+                        title="Back to Project"
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 'var(--radius-sm)',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.color = 'var(--text-primary)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'transparent'
+                          e.currentTarget.style.color = 'var(--text-secondary)'
+                        }}
+                      >
+                        <ArrowLeft size={18} />
+                      </button>
                       <div
                         className="centered-container"
                         style={{ gap: '8px', flexWrap: 'wrap', flex: 1 }}
@@ -1252,20 +1550,101 @@ export default function NotesView({
                         className="centered-container"
                         style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
                       >
+                        {/* Breadcrumbs & Date */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            width: '100%',
+                            padding: '8px 0 4px',
+                            minHeight: '24px'
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              flexWrap: 'wrap'
+                            }}
+                          >
+                            {breadcrumbs.map((crumb) => (
+                              <React.Fragment key={crumb.id}>
+                                <button
+                                  onClick={() => setActiveNoteId(crumb.id)}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: 'var(--text-secondary)',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    padding: '2px 4px',
+                                    borderRadius: '4px',
+                                    transition: 'all 0.15s',
+                                    opacity: 0.7,
+                                    maxWidth: '150px',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                                    e.currentTarget.style.opacity = '1'
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.background = 'transparent'
+                                    e.currentTarget.style.opacity = '0.7'
+                                  }}
+                                >
+                                  {crumb.title}
+                                </button>
+                                <span style={{ color: 'var(--text-secondary)', opacity: 0.4, fontSize: '12px' }}>/</span>
+                              </React.Fragment>
+                            ))}
+                            <span style={{ color: 'var(--text-secondary)', opacity: 0.9, fontSize: '12px', padding: '2px 4px' }}>
+                              {localTitle || 'Untitled'}
+                            </span>
+                          </div>
+
+                          {activeNote.createdAt && (
+                            <div
+                              style={{
+                                color: 'var(--text-secondary)',
+                                opacity: 0.5,
+                                fontSize: '12px',
+                                padding: '2px 4px'
+                              }}
+                            >
+                              {new Date(activeNote.createdAt).toLocaleDateString(undefined, {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </div>
+                          )}
+                        </div>
                         <input
                           type="text"
                           value={localTitle}
                           onChange={(e) => handleTitleChange(e.target.value)}
+                          onBlur={handleTitleBlur}
+                          onKeyDown={(e) => { if (e.key === 'Enter') (e.currentTarget as any).blur() }}
+                          onFocus={() => setIsEditingTitle(true)}
+                          readOnly={!isEditingTitle}
                           placeholder="Note Title"
                           style={{
                             width: '100%',
                             fontSize: '32px',
                             fontWeight: 600,
-                            background: 'transparent',
+                            background: isEditingTitle ? 'rgba(255,255,255,0.03)' : 'transparent',
                             border: 'none',
                             color: 'var(--text-primary)',
                             outline: 'none',
-                            padding: '24px 0 16px',
+                            padding: '4px 8px',
+                            borderRadius: '8px',
+                            cursor: isEditingTitle ? 'text' : 'pointer',
+                            transition: 'background 0.2s',
                             lineHeight: 1.3
                           }}
                         />
@@ -1274,25 +1653,80 @@ export default function NotesView({
                             width: '100%',
                             height: '2px',
                             background: 'rgba(255,255,255,0.08)',
-                            marginBottom: '16px'
+                            marginBottom: '0px'
                           }}
                         />
-                        <ReactQuill
-                          key={activeNoteId}
-                          ref={(el) => {
-                            ;(quillRef as React.MutableRefObject<ReactQuill | null>).current = el
-                            if (el) {
-                              quillContentRef.current = activeNote.content || ''
-                            }
-                          }}
-                          theme="snow"
-                          defaultValue={activeNote.content}
-                          onChange={(content) => {
-                            quillContentRef.current = content
-                            handleUpdateNote(activeNote.id, { content })
-                          }}
-                          placeholder="Start typing your notes here..."
-                          modules={{ toolbar: false }}
+                        {/* Children links */}
+                        {(() => {
+                          const childNotes = notes.filter(
+                            (n) => n.parentId === activeNote.id && !n.isTrash && n.projectId !== 'trash'
+                          ).sort((a, b) => (a.createdAt || a.lastModified) - (b.createdAt || b.lastModified))
+                          if (childNotes.length === 0) return <div style={{ marginBottom: '16px' }} />
+                          return (
+                            <>
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'flex-start',
+                                  width: '100%',
+                                  gap: '4px',
+                                  padding: '10px 0'
+                                }}
+                              >
+                                {childNotes.map((child) => (
+                                  <button
+                                    key={child.id}
+                                    onClick={() => setActiveNoteId(child.id)}
+                                    style={{
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '5px',
+                                      background: 'rgba(255,255,255,0.04)',
+                                      border: '1px solid rgba(255,255,255,0.06)',
+                                      borderRadius: '6px',
+                                      color: 'var(--text-secondary)',
+                                      cursor: 'pointer',
+                                      fontSize: '12px',
+                                      padding: '4px 10px',
+                                      transition: 'all 0.15s',
+                                      textDecoration: 'none',
+                                      maxWidth: '200px',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap'
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.background = 'rgba(255,255,255,0.08)'
+                                      e.currentTarget.style.color = 'var(--text-primary)'
+                                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.background = 'rgba(255,255,255,0.04)'
+                                      e.currentTarget.style.color = 'var(--text-secondary)'
+                                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.06)'
+                                    }}
+                                  >
+                                    <FileText size={12} style={{ flexShrink: 0, opacity: 0.6 }} />
+                                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {child.title || 'Untitled'}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                              <div
+                                style={{
+                                  width: '100%',
+                                  height: '2px',
+                                  background: 'rgba(255,255,255,0.08)',
+                                  marginBottom: '16px'
+                                }}
+                              />
+                            </>
+                          )
+                        })()}
+                        <EditorContent
+                          editor={editor}
                           style={{
                             flex: 1,
                             display: 'flex',
