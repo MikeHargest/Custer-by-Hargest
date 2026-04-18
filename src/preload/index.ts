@@ -65,6 +65,12 @@ const api = {
   renameNote: (dirPath: string, oldFileName: string, newFileName: string) =>
     ipcRenderer.invoke('notes:rename', dirPath, oldFileName, newFileName),
   listNotes: (dirPath: string) => ipcRenderer.invoke('notes:list', dirPath),
+  createNoteBackup: (targetDir: string, noteData: any, originalFileName: string) =>
+    ipcRenderer.invoke('notes:createBackup', targetDir, noteData, originalFileName),
+  listNoteBackups: (targetDir: string, originalFileName: string) =>
+    ipcRenderer.invoke('notes:listBackups', targetDir, originalFileName),
+  readNoteBackup: (backupFilePath: string) =>
+    ipcRenderer.invoke('notes:readBackup', backupFilePath),
 
   // Boards File System
   readBoard: (dirPath: string, fileName: string) =>
@@ -76,6 +82,20 @@ const api = {
   moveBoard: (oldDir: string, newDir: string, fileName: string) =>
     ipcRenderer.invoke('boards:move', oldDir, newDir, fileName),
   listBoards: (dirPath: string) => ipcRenderer.invoke('boards:list', dirPath),
+
+  // New cache-based board API
+  openBoard: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:open-board', dirPath, fileName),
+  writeBoardJson: (boardId: string, json: string) =>
+    ipcRenderer.invoke('boards:write-board-json', boardId, json),
+  addBoardAsset: (boardId: string, assetId: string, assetData: string) =>
+    ipcRenderer.invoke('boards:add-asset', boardId, assetId, assetData),
+  packBoard: (boardId: string, dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:pack-board', boardId, dirPath, fileName),
+  closeBoard: (boardId: string) =>
+    ipcRenderer.invoke('boards:close-board', boardId),
+
+  // Legacy stubs (kept for backward compat during transition)
   saveIbo: (dirPath: string, fileName: string, boardContent: string) =>
     ipcRenderer.invoke('boards:saveIbo', dirPath, fileName, boardContent),
   readIbo: (dirPath: string, fileName: string) =>

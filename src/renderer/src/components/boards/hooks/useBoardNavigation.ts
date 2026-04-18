@@ -42,6 +42,8 @@ export const useBoardNavigation = (
   // --- Wheel zoom ---
   const handleWheel = useCallback(
     (e: WheelEvent): void => {
+      const target = e.target as HTMLElement
+      if (target.closest('[data-context-menu="true"]')) return
       e.preventDefault()
       const rect = containerRef.current?.getBoundingClientRect()
       if (!rect) return

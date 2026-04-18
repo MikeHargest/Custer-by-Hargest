@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import { BoardElement } from '../types'
 
 interface LayersPanelProps {
@@ -18,10 +18,24 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
   setExpandedGroups,
   showLayers
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [lastClickedId, setLastClickedId] = useState<string | null>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent): void => {
+      e.stopPropagation()
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [])
+
   if (!showLayers) return null
 
   return (
     <div
+      ref={containerRef}
       data-context-menu="true"
       onWheel={(e) => e.stopPropagation()}
       style={{
@@ -37,7 +51,8 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
         flexDirection: 'column',
         zIndex: 1100,
         boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        userSelect: 'none'
       }}
     >
       <div
@@ -81,6 +96,53 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
             const result: React.ReactNode[] = []
             const processedGroups = new Set<string>()
             const reversed = [...elements].reverse()
+            
+            // Build a flat visual array of IDs for shift selection
+            const flatVisualIds: string[] = []
+            reversed.forEach((el) => {
+              if (el.groupId) {
+                if (!processedGroups.has(el.groupId)) {
+                  processedGroups.add(el.groupId)
+                  if (expandedGroups.includes(el.groupId)) {
+                    elements.filter((m) => m.groupId === el.groupId).reverse().forEach(m => flatVisualIds.push(m.id))
+                  }
+                }
+              } else {
+                flatVisualIds.push(el.id)
+              }
+            })
+            
+            // Helper for handling clicks with modifiers
+            const handleItemClick = (id: string, e: React.MouseEvent) => {
+              e.stopPropagation()
+              if (e.shiftKey && lastClickedId && flatVisualIds.includes(lastClickedId) && flatVisualIds.includes(id)) {
+                const idx1 = flatVisualIds.indexOf(lastClickedId)
+                const idx2 = flatVisualIds.indexOf(id)
+                const start = Math.min(idx1, idx2)
+                const end = Math.max(idx1, idx2)
+                const range = flatVisualIds.slice(start, end + 1)
+                
+                // Add range to existing selection, or replace if not holding Ctrl
+                if (e.ctrlKey || e.metaKey) {
+                  setSelectedIds([...new Set([...selectedIds, ...range])])
+                } else {
+                  setSelectedIds(range)
+                }
+              } else if (e.ctrlKey || e.metaKey) {
+                if (selectedIds.includes(id)) {
+                  setSelectedIds(selectedIds.filter(sid => sid !== id))
+                  setLastClickedId(id)
+                } else {
+                  setSelectedIds([...selectedIds, id])
+                  setLastClickedId(id)
+                }
+              } else {
+                setSelectedIds([id])
+                setLastClickedId(id)
+              }
+            }
+
+            processedGroups.clear()
 
             reversed.forEach((el) => {
               if (el.groupId) {
@@ -96,7 +158,12 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                         onClick={(e) => {
                           e.stopPropagation()
                           const ids = groupMembers.map((m) => m.id)
-                          setSelectedIds(ids)
+                          if (e.ctrlKey || e.metaKey) {
+                            setSelectedIds([...new Set([...selectedIds, ...ids])])
+                          } else {
+                            setSelectedIds(ids)
+                          }
+                          // Note: Group header clicks don't set lastClickedId as they select multiple
                         }}
                         style={{
                           padding: '8px 12px',
@@ -176,10 +243,7 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                           {groupMembers.reverse().map((m) => (
                             <div
                               key={m.id}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedIds([m.id])
-                              }}
+                              onClick={(e) => handleItemClick(m.id, e)}
                               style={{
                                 padding: '6px 10px',
                                 borderRadius: '6px',
@@ -233,10 +297,7 @@ const LayersPanel: React.FC<LayersPanelProps> = ({
                 result.push(
                   <div
                     key={el.id}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setSelectedIds([el.id])
-                    }}
+                    onClick={(e) => handleItemClick(el.id, e)}
                     style={{
                       padding: '8px 12px',
                       borderRadius: '10px',

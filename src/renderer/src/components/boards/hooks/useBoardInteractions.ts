@@ -31,40 +31,91 @@ export const useBoardInteractions = ({
     setElements((prev) => {
       const target = prev.find((el) => el.id === id)
       if (!target) return prev
-      if (selectedIds.length <= 1) return prev.map((el) => el.id === id ? { ...el, width, height, x: x ?? el.x, y: y ?? el.y } : el)
-      const ratioW = width / target.width, ratioH = height / target.height
+
+      if (selectedIds.length <= 1) {
+        return prev.map((el) => {
+          if (el.id !== id) return el
+          const nextEl = { ...el, width, height, x: x ?? el.x, y: y ?? el.y }
+          if (el.type === 'text' && handle) {
+            if (handle.includes('top') || handle.includes('bottom')) {
+              const scaleW = width / (target.width || 1)
+              const scaleH = height / (target.height || 1)
+              const scale = Math.abs(scaleW - 1) > Math.abs(scaleH - 1) ? scaleW : scaleH
+              nextEl.fontSize = Math.max(8, Math.round((el.fontSize || 24) * scale))
+              nextEl.width = (target.width || 0) * scale
+              nextEl.height = (target.height || 0) * scale
+            }
+          }
+          return nextEl
+        })
+      }
+
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
       prev.filter(el => selectedIds.includes(el.id)).forEach(el => {
-        minX = Math.min(minX, el.x - el.width / 2); minY = Math.min(minY, el.y - el.height / 2)
-        maxX = Math.max(maxX, el.x + el.width / 2); maxY = Math.max(maxY, el.y + el.height / 2)
+        const ew = el.width || 0, eh = el.height || 0
+        minX = Math.min(minX, el.x - ew / 2); minY = Math.min(minY, el.y - eh / 2)
+        maxX = Math.max(maxX, el.x + ew / 2); maxY = Math.max(maxY, el.y + eh / 2)
       })
-      let anchorX = handle?.includes('left') ? maxX : minX, anchorY = handle?.includes('top') ? maxY : minY
+      
+      const groupW = maxX - minX
+      const groupH = maxY - minY
+      const ratioW = groupW > 0 ? width / groupW : 1
+      const ratioH = groupH > 0 ? height / groupH : 1
+      
+      const newGroupCx = x !== undefined ? x : (minX + maxX) / 2
+      const newGroupCy = y !== undefined ? y : (minY + maxY) / 2
+      const oldGroupCx = (minX + maxX) / 2
+      const oldGroupCy = (minY + maxY) / 2
+
       return prev.map((el) => {
         if (!selectedIds.includes(el.id)) return el
-        const l = el.x - el.width / 2, t = el.y - el.height / 2, r = el.x + el.width / 2, b = el.y + el.height / 2
-        const nL = anchorX + (l - anchorX) * ratioW, nR = anchorX + (r - anchorX) * ratioW
-        const nT = anchorY + (t - anchorY) * ratioH, nB = anchorY + (b - anchorY) * ratioH
-        return { ...el, x: (nL + nR) / 2, y: (nT + nB) / 2, width: Math.abs(nR - nL), height: Math.abs(nB - nT) }
+        const ew = el.width || 0, eh = el.height || 0
+        
+        const relX = el.x - oldGroupCx
+        const relY = el.y - oldGroupCy
+        
+        const newRelX = relX * ratioW
+        const newRelY = relY * ratioH
+        
+        const nextEl = { 
+          ...el, 
+          x: newGroupCx + newRelX, 
+          y: newGroupCy + newRelY, 
+          width: ew * ratioW, 
+          height: eh * ratioH 
+        }
+        if (el.type === 'text') {
+           const textScaleX = nextEl.width / (ew || 1)
+           nextEl.fontSize = Math.max(8, Math.round((el.fontSize || 24) * textScaleX))
+        }
+        return nextEl
       })
     })
   }, [selectedIds, setElements])
 
-  const handleElementRotate = useCallback((id: string, rotation: number) => {
+  const handleElementRotate = useCallback((id: string, rotation: number, cxOverride?: number, cyOverride?: number) => {
     setElements((prev) => {
       const target = prev.find((el) => el.id === id)
       if (!target) return prev
       const delta = rotation - (target.rotation || 0)
       if (selectedIds.length <= 1) return prev.map((el) => el.id === id ? { ...el, rotation } : el)
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      prev.filter(el => selectedIds.includes(el.id)).forEach(el => {
-        minX = Math.min(minX, el.x - el.width / 2); minY = Math.min(minY, el.y - el.height / 2)
-        maxX = Math.max(maxX, el.x + el.width / 2); maxY = Math.max(maxY, el.y + el.height / 2)
-      })
-      const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+      
+      let cx = cxOverride, cy = cyOverride
+      if (cx === undefined || cy === undefined) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+        prev.filter(el => selectedIds.includes(el.id)).forEach(el => {
+          const ew = el.width || 0, eh = el.height || 0
+          minX = Math.min(minX, el.x - ew / 2); minY = Math.min(minY, el.y - eh / 2)
+          maxX = Math.max(maxX, el.x + ew / 2); maxY = Math.max(maxY, el.y + eh / 2)
+        })
+        cx = (minX + maxX) / 2
+        cy = (minY + maxY) / 2
+      }
+
       return prev.map((el) => {
         if (!selectedIds.includes(el.id)) return el
-        const dx = el.x - cx, dy = el.y - cy, cos = Math.cos(delta), sin = Math.sin(delta)
-        return { ...el, x: cx + (dx * cos - dy * sin), y: cy + (dx * sin + dy * cos), rotation: (el.rotation || 0) + delta }
+        const dx = el.x - cx!, dy = el.y - cy!, cos = Math.cos(delta), sin = Math.sin(delta)
+        return { ...el, x: cx! + (dx * cos - dy * sin), y: cy! + (dx * sin + dy * cos), rotation: (el.rotation || 0) + delta }
       })
     })
   }, [selectedIds, setElements])

@@ -40,6 +40,8 @@ function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1500,
     height: 960,
+    minWidth: 900,
+    minHeight: 600,
     show: false,
     frame: false,
     transparent: false,
@@ -174,14 +176,14 @@ ipcMain.handle('workspace:readJson', (_, filePath: string) => {
   }
 })
 
-ipcMain.handle('workspace:writeJson', (_, filePath: string, data: any) => {
+ipcMain.handle('workspace:writeJson', async (_, filePath: string, data: any) => {
   try {
     const content = JSON.stringify(data, null, 2)
     const folder = join(filePath, '..')
     if (!fs.existsSync(folder)) {
       fs.mkdirSync(folder, { recursive: true })
     }
-    fs.writeFileSync(filePath, content, 'utf-8')
+    await writeWithRetry(filePath, content)
     return true
   } catch (error) {
     console.error('Failed to write workspace JSON:', error)
@@ -253,6 +255,38 @@ ipcMain.handle('workspace:listProjects', (_, workspacePath: string) => {
   }
 })
 
+// Helper to safely write files despite temporary antivirus/sync locks
+const writeWithRetry = async (filePath: string, content: string, retries = 3, delayMs = 500): Promise<void> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      fs.writeFileSync(filePath, content, 'utf-8')
+      return
+    } catch (err: any) {
+      if ((err.code === 'EBUSY' || err.code === 'EPERM') && i < retries - 1) {
+        await new Promise(r => setTimeout(r, delayMs))
+      } else {
+        throw err
+      }
+    }
+  }
+}
+
+// Helper to safely rename files
+const renameWithRetry = async (oldPath: string, newPath: string, retries = 3, delayMs = 500): Promise<void> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      fs.renameSync(oldPath, newPath)
+      return
+    } catch (err: any) {
+      if ((err.code === 'EBUSY' || err.code === 'EPERM') && i < retries - 1) {
+        await new Promise(r => setTimeout(r, delayMs))
+      } else {
+        throw err
+      }
+    }
+  }
+}
+
 ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
   try {
     if (!fs.existsSync(workspacePath)) return []
@@ -274,6 +308,17 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
         // Skip subdirectories (like 'trash') — they are scanned separately
         try {
           if (fs.statSync(fullPath).isDirectory()) continue
+          
+          // CRITICAL: Cleanup orphaned .tmp_rename files (from a crash during rename)
+          if (f.endsWith('.tmp_rename')) {
+            const recoveredPath = fullPath.replace('.tmp_rename', '')
+            if (!fs.existsSync(recoveredPath)) {
+              fs.renameSync(fullPath, recoveredPath)
+            } else {
+              fs.unlinkSync(fullPath)
+            }
+            continue // it will be picked up on the next scan or as its actual extension if it's earlier in the loop
+          }
         } catch { continue }
         
         const isBoard = f.endsWith('.board') || f.endsWith('.ibo')
@@ -286,16 +331,37 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
           if (isNote) {
             const raw = fs.readFileSync(fullPath, 'utf-8')
             if (f.endsWith('.md')) {
-              const parsedMatter = matter(raw)
-              if (parsedMatter.data && parsedMatter.data.id) {
-                results.push({
-                  ...parsedMatter.data,
-                  content: parsedMatter.content,
-                  fileName: f,
-                  isTrash,
-                  lastModified: fs.statSync(fullPath).mtimeMs
-                })
+              let parsedMatter: any = { data: {}, content: raw }
+              try {
+                parsedMatter = matter(raw)
+              } catch (e) {
+                console.warn('YAML Frontmatter parsing skipped for malformed file:', f)
               }
+              
+              let id = parsedMatter.data?.id
+              let title = parsedMatter.data?.title
+              const noteType = parsedMatter.data?.type || 'markdown'
+              const noteProjectId = parsedMatter.data?.projectId || projectId || 'default'
+              
+              if (!id) {
+                id = f.replace('.md', '')
+                if (!title) {
+                  const firstLine = parsedMatter.content.split('\n')[0]?.replace(/^#+\s*/, '').trim()
+                  title = firstLine || id
+                }
+              }
+
+              results.push({
+                ...parsedMatter.data,
+                id,
+                title,
+                type: noteType,
+                projectId: noteProjectId,
+                content: parsedMatter.content,
+                fileName: f,
+                isTrash,
+                lastModified: fs.statSync(fullPath).mtimeMs
+              })
             } else {
               const parsed = JSON.parse(raw)
               if (parsed && typeof parsed === 'object' && parsed.id) {
@@ -333,7 +399,18 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
             })
 
             if (boardDataRaw) {
-              const parsed = JSON.parse(boardDataRaw)
+              let parsed: any = null
+              try {
+                if (boardDataRaw.trim() === '') {
+                  parsed = { id: f.replace('.board', '').replace('.ibo', ''), title: 'Recovered Board' }
+                } else {
+                  parsed = JSON.parse(boardDataRaw)
+                }
+              } catch (e) {
+                console.warn('Failed to parse board data for', f, e)
+                parsed = { id: f.replace('.board', '').replace('.ibo', ''), title: 'Recovered Board' }
+              }
+
               // If it's our direct AppNote format inside the zip
               if (parsed && parsed.id) {
                 results.push({
@@ -347,7 +424,7 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
                 const boardId = f.endsWith('.board') ? f.replace('.board', '') : f.replace('.ibo', '')
                 results.push({
                   id: boardId,
-                  title: parsed.title || 'Untitled Board',
+                  title: (parsed && parsed.title) ? parsed.title : 'Untitled Board',
                   type: 'board',
                   projectId: projectId,
                   fileName: f,
@@ -355,6 +432,18 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
                   lastModified: fs.statSync(fullPath).mtimeMs
                 })
               }
+            } else {
+               // If completely empty zip or missing board.json
+               const boardId = f.endsWith('.board') ? f.replace('.board', '') : f.replace('.ibo', '')
+               results.push({
+                  id: boardId,
+                  title: 'Recovered Empty Board',
+                  type: 'board',
+                  projectId: projectId,
+                  fileName: f,
+                  isTrash,
+                  lastModified: fs.statSync(fullPath).mtimeMs
+                })
             }
           }
         } catch (e) {
@@ -371,12 +460,49 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
     const rootBoardsTrash = await scanDir(join(workspacePath, 'boards', 'trash'), 'default', 'board', true)
     allNotes.push(...rootNotes, ...rootBoards, ...rootNotesTrash, ...rootBoardsTrash)
 
-    // 2. Scan projects (and their trash subdirectories)
-    for (const p of projects) {
-      const pNotes = await scanDir(join(workspacePath, p, 'notes'), p, 'markdown')
-      const pBoards = await scanDir(join(workspacePath, p, 'boards'), p, 'board')
-      const pNotesTrash = await scanDir(join(workspacePath, p, 'notes', 'trash'), p, 'markdown', true)
-      const pBoardsTrash = await scanDir(join(workspacePath, p, 'boards', 'trash'), p, 'board', true)
+    // 2. Scan projects (and their trash subdirectories) recursively via workspace_data.json
+    const projectTargets: { id: string, notesPath: string, boardsPath: string }[] = []
+    try {
+      const wDataPath = join(workspacePath, 'workspace_data.json')
+      if (fs.existsSync(wDataPath)) {
+        const wData = JSON.parse(fs.readFileSync(wDataPath, 'utf-8'))
+        if (wData.projects) {
+          const extractPaths = (projs: any[]) => {
+            for (const p of projs) {
+              const pPath = p.path || join(workspacePath, p.name)
+              projectTargets.push({
+                id: p.id,
+                notesPath: p.notesPath || join(pPath, 'notes'),
+                boardsPath: p.boardsPath || join(pPath, 'boards')
+              })
+              if (p.subprojects && Array.isArray(p.subprojects)) {
+                extractPaths(p.subprojects)
+              }
+            }
+          }
+          extractPaths(wData.projects)
+        }
+      }
+    } catch (e) {
+      console.error('Failed to parse workspace_data.json for nested projects', e)
+    }
+
+    // Fallback if no workspace_data.json: fallback to first-level directories
+    if (projectTargets.length === 0) {
+      for (const p of projects) {
+        projectTargets.push({
+          id: p,
+          notesPath: join(workspacePath, p, 'notes'),
+          boardsPath: join(workspacePath, p, 'boards')
+        })
+      }
+    }
+
+    for (const target of projectTargets) {
+      const pNotes = await scanDir(target.notesPath, target.id, 'markdown')
+      const pBoards = await scanDir(target.boardsPath, target.id, 'board')
+      const pNotesTrash = await scanDir(join(target.notesPath, 'trash'), target.id, 'markdown', true)
+      const pBoardsTrash = await scanDir(join(target.boardsPath, 'trash'), target.id, 'board', true)
       allNotes.push(...pNotes, ...pBoards, ...pNotesTrash, ...pBoardsTrash)
     }
 
@@ -537,7 +663,7 @@ ipcMain.handle('notes:read', (_, dirPath: string, fileName: string) => {
   return null
 })
 
-ipcMain.handle('notes:save', (_, dirPath: string, fileName: string, noteData: any) => {
+ipcMain.handle('notes:save', async (_, dirPath: string, fileName: string, noteData: any) => {
   try {
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true })
@@ -552,7 +678,7 @@ ipcMain.handle('notes:save', (_, dirPath: string, fileName: string, noteData: an
       fileContent = typeof noteData === 'string' ? noteData : JSON.stringify(noteData, null, 2)
     }
 
-    fs.writeFileSync(filePath, fileContent, 'utf-8')
+    await writeWithRetry(filePath, fileContent)
     return true
   } catch (error) {
     console.error('Failed to save note:', error)
@@ -560,10 +686,96 @@ ipcMain.handle('notes:save', (_, dirPath: string, fileName: string, noteData: an
   }
 })
 
-ipcMain.handle('notes:delete', (_, dirPath: string, fileName: string) => {
+// Backup IPC Handlers
+ipcMain.handle('notes:createBackup', async (_, targetDir: string, noteData: any, originalFileName: string) => {
+  try {
+    const folderName = originalFileName.replace(/\.(md|board|ibo)$/, '')
+    const backupBaseDir = join(targetDir, '.backups', folderName)
+    
+    if (!fs.existsSync(backupBaseDir)) {
+      fs.mkdirSync(backupBaseDir, { recursive: true })
+    }
+    
+    // YYYY-MM-DD_HH-mm-ss
+    const now = new Date()
+    const pad = (n) => n.toString().padStart(2, '0')
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
+    
+    const ext = noteData.type === 'board' ? 'board' : 'md'
+    const fileName = `${timestamp}.${ext}`
+    const backupFilePath = join(backupBaseDir, fileName)
+
+    if (ext === 'md' && typeof noteData === 'object') {
+       const { content, ...metadata } = noteData
+       const fileContent = matter.stringify(content || '', metadata)
+       fs.writeFileSync(backupFilePath, fileContent, 'utf-8')
+    } else if (ext === 'board') {
+       // For boards, literally copy the whole ZIP archive if it exists
+       let sourceDir = noteData.projectId !== 'default' && noteData.projectId !== 'trash' ? targetDir : join(targetDir, 'boards')
+       // Fallback logic, as targetDir coming here might be '.../boards' or just project root
+       if (!sourceDir.endsWith('boards')) sourceDir = targetDir
+       
+       const sourceFileName = originalFileName.endsWith('.board') || originalFileName.endsWith('.ibo') ? originalFileName : `${originalFileName}.board`
+       const sourcePath = join(sourceDir, sourceFileName)
+       
+       if (fs.existsSync(sourcePath)) {
+         fs.copyFileSync(sourcePath, backupFilePath)
+       } else {
+         return false // Source board doesn't exist yet, can't backup
+       }
+    } else {
+       const fileContent = typeof noteData === 'string' ? noteData : JSON.stringify(noteData, null, 2)
+       fs.writeFileSync(backupFilePath, fileContent, 'utf-8')
+    }
+
+    return true
+  } catch(e) {
+    console.error('Failed to create backup:', e)
+    return false
+  }
+})
+
+ipcMain.handle('notes:listBackups', async (_, targetDir: string, originalFileName: string) => {
+  try {
+    const folderName = originalFileName.replace(/\.(md|board|ibo)$/, '')
+    const backupBaseDir = join(targetDir, '.backups', folderName)
+    if (!fs.existsSync(backupBaseDir)) return []
+    
+    const files = fs.readdirSync(backupBaseDir).filter(f => f.endsWith('.md') || f.endsWith('.board'))
+    const backups = files.map(f => {
+      const stats = fs.statSync(join(backupBaseDir, f))
+      return {
+        fileName: f,
+        path: join(backupBaseDir, f),
+        timestamp: stats.mtimeMs // Use actual modification time for sorting
+      }
+    })
+    
+    // Sort descending (newest first)
+    return backups.sort((a, b) => b.timestamp - a.timestamp)
+  } catch(e) {
+    console.error('Failed to list backups:', e)
+    return []
+  }
+})
+
+ipcMain.handle('notes:readBackup', async (_, backupFilePath: string) => {
+  try {
+    if (fs.existsSync(backupFilePath)) {
+      return fs.readFileSync(backupFilePath, 'utf-8')
+    }
+    return null
+  } catch(e) {
+    console.error('Failed to read backup:', e)
+    return null
+  }
+})
+
+ipcMain.handle('notes:delete', async (_, dirPath: string, fileName: string) => {
   try {
     const filePath = join(dirPath, fileName)
     if (fs.existsSync(filePath)) {
+      // Deletions usually don't strictly need retry for integrity, but they can be locked too.
       fs.unlinkSync(filePath)
     }
     return true
@@ -573,7 +785,7 @@ ipcMain.handle('notes:delete', (_, dirPath: string, fileName: string) => {
   }
 })
 
-ipcMain.handle('notes:rename', (_, dirPath: string, oldFileName: string, newFileName: string) => {
+ipcMain.handle('notes:rename', async (_, dirPath: string, oldFileName: string, newFileName: string) => {
   try {
     const oldPath = join(dirPath, oldFileName)
     const newPath = join(dirPath, newFileName)
@@ -584,15 +796,15 @@ ipcMain.handle('notes:rename', (_, dirPath: string, oldFileName: string, newFile
         if (oldPath.toLowerCase() === newPath.toLowerCase()) {
           // Case change on case-insensitive FS: use temp file to avoid conflicts
           const tempPath = oldPath + '.tmp_rename'
-          fs.renameSync(oldPath, tempPath)
-          fs.renameSync(tempPath, newPath)
+          await renameWithRetry(oldPath, tempPath)
+          await renameWithRetry(tempPath, newPath)
           return true
         } else {
           console.warn('[notes:rename] Target file already exists, skipping to avoid data loss:', newPath)
           return false
         }
       }
-      fs.renameSync(oldPath, newPath)
+      await renameWithRetry(oldPath, newPath)
     }
     return true
   } catch (error) {
@@ -637,9 +849,9 @@ ipcMain.handle('projects:selectFile', async (_, type: 'save' | 'open') => {
   }
 })
 
-ipcMain.handle('projects:export', (_, filePath: string, data: string) => {
+ipcMain.handle('projects:export', async (_, filePath: string, data: string) => {
   try {
-    fs.writeFileSync(filePath, data, 'utf-8')
+    await writeWithRetry(filePath, data)
     return true
   } catch (error) {
     console.error('Failed to export projects:', error)
@@ -850,423 +1062,280 @@ ipcMain.handle('boards:move', (_, oldDir: string, newDir: string, fileName: stri
   }
 })
 
-ipcMain.handle(
-  'boards:save-container',
-  async (_, dirPath: string, fileName: string, boardContent: any) => {
-    try {
-      const containerPath = join(dirPath, fileName)
-      const tmpPath = containerPath + '.tmp'
+// ===== BOARD CACHE HELPERS =====
+const getBoardCacheDir = (boardId: string): string => {
+  return join(app.getPath('userData'), 'board-cache', boardId)
+}
 
-      let parsed: any = { elements: [], viewport: { x: 0, y: 0, scale: 1 } }
-      if (typeof boardContent === 'string') {
-        if (boardContent && boardContent.trim()) {
-          try { parsed = JSON.parse(boardContent) } catch (e) { console.error('JSON err:', e) }
-        }
-      } else {
-        parsed = boardContent
-      }
+// ===== BOARD IPC HANDLERS =====
 
-      const elements = parsed.elements || []
-
-      // Backup old archive to prevent reading from a locked file while overwriting
-      let sourceArchive = containerPath
-      const oldExists = await fs.promises.access(containerPath).then(() => true).catch(() => false)
-      if (oldExists) {
-        sourceArchive = containerPath + '.old'
-        // If an old .old exists from a crash, remove it
-        await fs.promises.access(sourceArchive).then(() => fs.promises.unlink(sourceArchive)).catch(() => {})
-        await fs.promises.rename(containerPath, sourceArchive)
-      }
-
-      const zipfile = new yazl.ZipFile()
-      const writeStream = fs.createWriteStream(tmpPath)
-      zipfile.outputStream.pipe(writeStream)
-
-      // Keep track of which assets are provided natively vs migrating
-      const providedAssets = new Set<string>()
-
-      for (const el of elements) {
-        if ((el.type !== 'image' && el.type !== 'video') || !el.url) continue
-
-        if (el.url.startsWith('data:')) {
-          const commaIndex = el.url.indexOf(',')
-          if (commaIndex !== -1) {
-            const mimePart = el.url.substring(0, commaIndex)
-            const base64Data = el.url.substring(commaIndex + 1)
-            const buffer = Buffer.from(base64Data, 'base64')
-            const mimeMatch = mimePart.match(/data:(.*?);/)
-            const ext = mimeMatch ? mimeMatch[1].split('/')[1] : 'png'
-            const assetName = `${el.id}.${ext}`
-            const relativePath = `assets/${assetName}`
-
-            zipfile.addBuffer(buffer, relativePath, { compress: false })
-            providedAssets.add(relativePath)
-            el.url = relativePath
-          }
-        } else if (el.url.startsWith('file:///')) {
-          let sourcePath = el.url.replace('file:///', '')
-          try { sourcePath = decodeURIComponent(sourcePath) } catch (e) {}
-
-          const fileExists = await fs.promises.access(sourcePath).then(() => true).catch(() => false)
-          if (fileExists) {
-            const ext = path.extname(sourcePath) || '.png'
-            const assetName = `${el.id}${ext}`
-            const relativePath = `assets/${assetName}`
-
-            zipfile.addFile(sourcePath, relativePath, { compress: false })
-            providedAssets.add(relativePath)
-            el.url = relativePath
-          }
-        } else if (el.url.startsWith('board-asset://')) {
-          const url = new URL(el.url)
-          el.url = `assets/${url.pathname.replace(/^\/+/, '')}`
-        }
-      }
-
-      // Wrap everything in the consolidated format if boardContent was the full note object
-      let internalData = parsed
-      if (boardContent && typeof boardContent === 'object' && boardContent.id) {
-         // It's the full AppNote. The board canvas data is in boardContent.content
-         const canvasData = typeof boardContent.content === 'string' ? JSON.parse(boardContent.content) : boardContent.content
-         internalData = {
-           ...boardContent,
-           ...canvasData // Merge elements and viewport into the root of board.json
-         }
-      }
-
-      zipfile.addBuffer(Buffer.from(JSON.stringify(internalData, null, 2), 'utf-8'), 'board.json')
-
-      // Migrate existing untouched assets from old archive
-      if (oldExists) {
-        const referencedAssets = new Set(elements.map((e: any) => e.url).filter((u: string) => u?.startsWith('assets/')))
-        
-        await new Promise<void>((resolve, reject) => {
-          yauzl.open(sourceArchive, { lazyEntries: true }, (err, oldZip) => {
-            if (err || !oldZip) { resolve(); return }
-            
-            oldZip.readEntry()
-            oldZip.on('entry', (entry) => {
-              if (
-                entry.fileName.startsWith('assets/') && 
-                referencedAssets.has(entry.fileName) && 
-                !providedAssets.has(entry.fileName)
-              ) {
-                oldZip.openReadStream(entry, (err, readStream) => {
-                  if (err) { oldZip.readEntry(); return }
-                  zipfile.addReadStream(readStream, entry.fileName, { compress: false })
-                  readStream.on('end', () => oldZip.readEntry())
-                })
-              } else {
-                oldZip.readEntry()
-              }
-            })
-            oldZip.on('end', () => { oldZip.close(); resolve() })
-            oldZip.on('error', (e) => reject(e))
-          })
-        }).catch(err => console.error('Error migrating old zip:', err))
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        zipfile.end()
-        writeStream.on('close', resolve)
-        writeStream.on('error', reject)
-      })
-
-      // Replace and cleanup
-      await fs.promises.rename(tmpPath, containerPath)
-      if (oldExists) {
-        // give it a tiny delay to ensure file lock is released by Windows
-        setTimeout(() => { fs.promises.unlink(sourceArchive).catch(() => {}) }, 50)
-      }
-
-      // Restore absolute board-asset URLs for UI
-      for (const el of elements) {
-        if (el.url && el.url.startsWith('assets/')) {
-          const assetId = el.url.replace('assets/', '')
-          el.url = `board-asset://${assetId}?container=${encodeURIComponent(containerPath)}`
-        }
-      }
-
-      return JSON.stringify(parsed)
-    } catch (error) {
-      console.error('Failed to save container:', error)
-      return null
-    }
-  }
-)
-
-ipcMain.handle('boards:load-container', async (_, dirPath: string, fileName: string) => {
+/**
+ * boards:open-board
+ * Unpacks a .board ZIP into the working cache and returns board.json as a string.
+ * Asset URLs are converted from relative (assets/foo.png) → absolute file:/// in cache.
+ */
+ipcMain.handle('boards:open-board', async (_, dirPath: string, fileName: string) => {
+  const EMPTY_BOARD = JSON.stringify({ elements: [], viewport: { x: 0, y: 0, scale: 1 } })
   try {
     const containerPath = join(dirPath, fileName)
     const exists = await fs.promises.access(containerPath).then(() => true).catch(() => false)
-    if (!exists) return null
+    if (!exists) return EMPTY_BOARD // Brand-new board, no file yet
 
-    const boardDataRaw = await new Promise<string>((resolve, reject) => {
+    // Check ZIP magic bytes (PK\x03\x04) — if not a ZIP, return empty board
+    const sig = Buffer.alloc(4)
+    const fd = fs.openSync(containerPath, 'r')
+    fs.readSync(fd, sig, 0, 4, 0)
+    fs.closeSync(fd)
+    if (sig[0] !== 0x50 || sig[1] !== 0x4b || sig[2] !== 0x03 || sig[3] !== 0x04) {
+      console.warn('boards:open-board: file is not a ZIP, returning empty board:', containerPath)
+      return EMPTY_BOARD
+    }
+
+    // Derive boardId from filename (strip extension)
+    const boardId = fileName.replace(/\.board$/, '').replace(/\.ibo$/, '')
+    const cacheDir = getBoardCacheDir(boardId)
+    const assetsDir = join(cacheDir, 'assets')
+
+    // Always unpack fresh to keep cache in sync
+    if (fs.existsSync(cacheDir)) {
+      fs.rmSync(cacheDir, { recursive: true, force: true })
+    }
+    fs.mkdirSync(assetsDir, { recursive: true })
+
+    let boardJsonStr = ''
+
+    await new Promise<void>((resolve, reject) => {
       yauzl.open(containerPath, { lazyEntries: true }, (err, zipfile) => {
         if (err || !zipfile) { reject(err); return }
-        
-        let found = false
+
         zipfile.readEntry()
+        const pending: Promise<void>[] = []
+
         zipfile.on('entry', (entry) => {
           if (entry.fileName === 'board.json') {
-            found = true
-            zipfile.openReadStream(entry, (err, stream) => {
-              if (err || !stream) { reject(err); return }
-              const chunks: Buffer[] = []
-              stream.on('data', c => chunks.push(c))
-              stream.on('end', () => {
-                zipfile.close()
-                resolve(Buffer.concat(chunks).toString('utf-8'))
+            pending.push(new Promise<void>((res, rej) => {
+              zipfile.openReadStream(entry, (err, stream) => {
+                if (err || !stream) { rej(err); return }
+                const chunks: Buffer[] = []
+                stream.on('data', c => chunks.push(c))
+                stream.on('end', () => { boardJsonStr = Buffer.concat(chunks).toString('utf-8'); res() })
+                stream.on('error', rej)
               })
-              stream.on('error', reject)
-            })
+            }))
+            zipfile.readEntry()
+          } else if (entry.fileName.startsWith('assets/') && !entry.fileName.endsWith('/')) {
+            pending.push(new Promise<void>((res, rej) => {
+              const destPath = join(cacheDir, entry.fileName)
+              const destDir = path.dirname(destPath)
+              if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true })
+              zipfile.openReadStream(entry, (err, stream) => {
+                if (err || !stream) { rej(err); return }
+                const out = fs.createWriteStream(destPath)
+                stream.pipe(out)
+                out.on('close', res)
+                out.on('error', rej)
+              })
+            }))
+            zipfile.readEntry()
           } else {
             zipfile.readEntry()
           }
         })
-        zipfile.on('end', () => {
-          if (!found) reject(new Error('board.json not found in container'))
-          zipfile.close()
+
+        zipfile.on('end', async () => {
+          try {
+            await Promise.all(pending)
+            zipfile.close()
+            resolve()
+          } catch(e) { reject(e) }
         })
+        zipfile.on('error', reject)
       })
     })
 
-    const boardData = JSON.parse(boardDataRaw)
-    const elements = boardData.elements || []
+    if (!boardJsonStr) return EMPTY_BOARD
 
-    // Convert relative zipped assets to the virtual streaming protocol URL
+    // Convert relative asset paths → absolute file:/// paths in cache
+    const boardData = JSON.parse(boardJsonStr)
+    const elements = boardData.elements || []
     for (const el of elements) {
       if (el.url && (el.url.startsWith('assets/') || el.url.startsWith('media/'))) {
-        const assetId = el.url.replace('assets/', '').replace('media/', '')
-        el.url = `board-asset://${assetId}?container=${encodeURIComponent(containerPath)}`
+        const assetFile = el.url.replace('assets/', '').replace('media/', '')
+        const fullPath = join(cacheDir, 'assets', assetFile)
+        el.url = `file:///${fullPath.replace(/\\/g, '/')}`
       }
     }
 
     return JSON.stringify(boardData)
   } catch (error) {
-    console.error('Failed to read .board container:', error)
-    return null
+    console.error('boards:open-board error:', error)
+    return JSON.stringify({ elements: [], viewport: { x: 0, y: 0, scale: 1 } })
   }
 })
 
-ipcMain.handle(
-
-  'boards:saveIbo',
-  async (_, dirPath: string, fileName: string, boardContent: string) => {
-    try {
-      const containerPath = join(dirPath, fileName)
-
-      // Ensure container directory exists (Async)
-      const containerExists = await fs.promises
-        .access(containerPath)
-        .then(() => true)
-        .catch(() => false)
-      if (!containerExists) {
-        await fs.promises.mkdir(containerPath, { recursive: true })
-      }
-
-      const mediaDirPath = join(containerPath, 'media')
-      const mediaExists = await fs.promises
-        .access(mediaDirPath)
-        .then(() => true)
-        .catch(() => false)
-      if (!mediaExists) {
-        await fs.promises.mkdir(mediaDirPath, { recursive: true })
-      }
-
-      let parsed: any = { elements: [], viewport: { x: 0, y: 0, scale: 1 } }
-      if (boardContent && boardContent.trim()) {
-        try {
-          parsed = JSON.parse(boardContent)
-        } catch (e) {
-          console.error('Parse error in saveIbo:', e)
-        }
-      }
-
-      const elements = parsed.elements || []
-
-      // Process all elements in parallel for maximum speed
-      await Promise.all(
-        elements.map(async (el: any) => {
-          if ((el.type !== 'image' && el.type !== 'video') || !el.url) return
-
-          // 1. Efficient Base64 handling
-          if (el.url.startsWith('data:')) {
-            const commaIndex = el.url.indexOf(',')
-            if (commaIndex !== -1) {
-              const mimePart = el.url.substring(0, commaIndex)
-              const base64Data = el.url.substring(commaIndex + 1)
-              const buffer = Buffer.from(base64Data, 'base64')
-
-              const mimeMatch = mimePart.match(/data:(.*?);/)
-              const ext = mimeMatch ? mimeMatch[1].split('/')[1] : 'png'
-              const assetName = `${el.id}.${ext}`
-
-              await fs.promises.writeFile(join(mediaDirPath, assetName), buffer)
-              el.url = `media/${assetName}`
-            }
-          }
-          // 2. Handle Absolute Local Files
-          else if (el.url.startsWith('file:///')) {
-            let sourcePath = el.url.replace('file:///', '')
-            try {
-              sourcePath = decodeURIComponent(sourcePath)
-            } catch (e) {}
-
-            const fileExists = await fs.promises
-              .access(sourcePath)
-              .then(() => true)
-              .catch(() => false)
-            if (fileExists) {
-              const ext = path.extname(sourcePath) || '.png'
-              const assetName = `${el.id}${ext}`
-              const destPath = join(mediaDirPath, assetName)
-
-              if (sourcePath !== destPath) {
-                await fs.promises.copyFile(sourcePath, destPath)
-              }
-              el.url = `media/${assetName}`
-            }
-          }
-        })
-      )
-
-      // Save the JSON (Async)
-      await fs.promises.writeFile(
-        join(containerPath, 'board.json'),
-        JSON.stringify(parsed, null, 2),
-        'utf-8'
-      )
-
-      return JSON.stringify(parsed)
-    } catch (error) {
-      console.error('Failed to save .ibo container:', error)
-      return null
-    }
-  }
-)
-
-ipcMain.handle('boards:readIbo', async (_, dirPath: string, fileName: string) => {
+/**
+ * boards:write-board-json
+ * Persists the current board state (JSON string) into the cache folder only.
+ * Fast — does NOT repack the ZIP.
+ */
+ipcMain.handle('boards:write-board-json', async (_, boardId: string, jsonStr: string) => {
   try {
-    const containerPath = join(dirPath, fileName)
-    if (!fs.existsSync(containerPath)) return null
+    const cacheDir = getBoardCacheDir(boardId)
+    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true })
 
-    // Fallback for legacy ZIP format
-    if (fs.statSync(containerPath).isFile()) {
-      const zipData = fs.readFileSync(containerPath)
-      const zip = await JSZip.loadAsync(zipData)
-      const jsonFile = zip.file('board.json')
-      if (!jsonFile) return null
-      const raw = await jsonFile.async('string')
-      const boardData = JSON.parse(raw)
-
-      // Migrate assets from ZIP to temp folder for display
-      const tempDir = join(app.getPath('userData'), 'ibo_temp', fileName.replace('.ibo', ''))
-      if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
-
-      const elements = boardData.elements || []
-      for (const el of elements) {
-        if (el.url && el.url.startsWith('media/')) {
-          const zipFile = zip.file(el.url)
-          if (zipFile) {
-            const data = await zipFile.async('nodebuffer')
-            const localPath = join(tempDir, path.basename(el.url))
-            fs.writeFileSync(localPath, data)
-            el.url = `file:///${localPath.replace(/\\/g, '/')}`
-          }
-        }
+    // Safe JSON parsing
+    let boardData
+    try {
+      // If it's literally empty, don't just erase it, throw to prevent data loss if it shouldn't be empty
+      if (!jsonStr || String(jsonStr).trim() === '') {
+        throw new Error("Empty jsonStr payload received")
       }
-      return JSON.stringify(boardData)
+      boardData = JSON.parse(jsonStr)
+    } catch (parseError) {
+      console.error('[write-board-json] CRITICAL: Failed to parse JSON. Aborting write to prevent data loss. Length was:', jsonStr ? jsonStr.length : 0, parseError)
+      return false // Return false to abort packing
     }
 
-    // Modern Directory format
-    const jsonPath = join(containerPath, 'board.json')
-    if (!fs.existsSync(jsonPath)) return null
-
-    const content = fs.readFileSync(jsonPath, 'utf-8')
-    const boardData = JSON.parse(content)
-
-    // Convert relative media/ paths to absolute file:/// URLs for renderer
     const elements = boardData.elements || []
     for (const el of elements) {
-      if (el.url && el.url.startsWith('media/')) {
-        const fullAssetPath = join(containerPath, el.url)
-        el.url = `file:///${fullAssetPath.replace(/\\/g, '/')}`
+      if (el.url && el.url.startsWith('file:///') && el.url.includes('/board-cache/')) {
+        const decoded = decodeURIComponent(el.url.replace('file:///', ''))
+        const baseName = path.basename(decoded)
+        el.url = `assets/${baseName}`
       }
     }
 
-    return JSON.stringify(boardData)
+    await fs.promises.writeFile(join(cacheDir, 'board.json'), JSON.stringify(boardData, null, 2), 'utf-8')
+    return true
   } catch (error) {
-    console.error('Failed to read .ibo container:', error)
+    console.error('boards:write-board-json error:', error)
+    return false
+  }
+})
+
+/**
+ * boards:add-asset
+ * Copies/decodes an asset into the cache's assets/ folder.
+ * Returns the absolute file:/// URL in the cache.
+ */
+ipcMain.handle('boards:add-asset', async (_, boardId: string, assetId: string, assetData: string) => {
+  try {
+    const cacheDir = getBoardCacheDir(boardId)
+    const assetsDir = join(cacheDir, 'assets')
+    if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true })
+
+    let assetName = ''
+
+    if (assetData.startsWith('data:')) {
+      const commaIndex = assetData.indexOf(',')
+      if (commaIndex !== -1) {
+        const mimePart = assetData.substring(0, commaIndex)
+        const base64Data = assetData.substring(commaIndex + 1)
+        const buffer = Buffer.from(base64Data, 'base64')
+        const mimeMatch = mimePart.match(/data:(.*?);/)
+        const ext = mimeMatch ? mimeMatch[1].split('/')[1] : 'png'
+        assetName = `${assetId}.${ext}`
+        await fs.promises.writeFile(join(assetsDir, assetName), buffer)
+      }
+    } else if (assetData.startsWith('file:///')) {
+      let sourcePath = assetData.replace('file:///', '')
+      try { sourcePath = decodeURIComponent(sourcePath) } catch(e) {}
+      const exists = await fs.promises.access(sourcePath).then(() => true).catch(() => false)
+      if (exists) {
+        const ext = path.extname(sourcePath) || '.png'
+        assetName = `${assetId}${ext}`
+        const destPath = join(assetsDir, assetName)
+        if (sourcePath !== destPath) {
+          await fs.promises.copyFile(sourcePath, destPath)
+        }
+      }
+    }
+
+    if (!assetName) return null
+
+    const fullPath = join(assetsDir, assetName)
+    return `file:///${fullPath.replace(/\\/g, '/')}`
+  } catch (error) {
+    console.error('boards:add-asset error:', error)
     return null
   }
 })
 
-ipcMain.handle(
-  'boards:saveAsset',
-  async (_, dirPath: string, fileName: string, assetId: string, assetData: string) => {
-    try {
-      const containerPath = join(dirPath, fileName)
-      const mediaDirPath = join(containerPath, 'media')
+/**
+ * boards:pack-board
+ * Packs the cache folder → .board ZIP atomically.
+ * Writes to .board.tmp first, then renames to .board.
+ */
+ipcMain.handle('boards:pack-board', async (_, boardId: string, dirPath: string, fileName: string) => {
+  try {
+    const cacheDir = getBoardCacheDir(boardId)
+    if (!fs.existsSync(cacheDir)) return false
 
-      // Use async access instead of existsSync
-      const exists = await fs.promises
-        .access(mediaDirPath)
-        .then(() => true)
-        .catch(() => false)
-      if (!exists) {
-        await fs.promises.mkdir(mediaDirPath, { recursive: true })
-      }
+    const containerPath = join(dirPath, fileName)
+    const tmpPath = containerPath + '.tmp'
 
-      let assetName = ''
-      let buffer: Buffer | null = null
+    // Ensure target dir exists
+    if (!fs.existsSync(dirPath)) fs.mkdirSync(dirPath, { recursive: true })
 
-      if (assetData.startsWith('data:')) {
-        const commaIndex = assetData.indexOf(',')
-        if (commaIndex !== -1) {
-          const mimePart = assetData.substring(0, commaIndex)
-          const base64Data = assetData.substring(commaIndex + 1)
-          buffer = Buffer.from(base64Data, 'base64')
+    const zipfile = new yazl.ZipFile()
+    const writeStream = fs.createWriteStream(tmpPath)
+    zipfile.outputStream.pipe(writeStream)
 
-          const mimeMatch = mimePart.match(/data:(.*?);/)
-          const ext = mimeMatch ? mimeMatch[1].split('/')[1] : 'png'
-          assetName = `${assetId}.${ext}`
-        }
-      } else if (assetData.startsWith('file:///')) {
-        let sourcePath = assetData.replace('file:///', '')
-        try {
-          sourcePath = decodeURIComponent(sourcePath)
-        } catch (e) {}
-
-        const fileExists = await fs.promises
-          .access(sourcePath)
-          .then(() => true)
-          .catch(() => false)
-        if (fileExists) {
-          const ext = path.extname(sourcePath) || '.png'
-          assetName = `${assetId}${ext}`
-          await fs.promises.copyFile(sourcePath, join(mediaDirPath, assetName))
-        }
-      }
-
-      if (assetName && (buffer || assetData.startsWith('file:///'))) {
-        const targetPath = join(mediaDirPath, assetName)
-        if (buffer) {
-          // Fire and forget? No, let's wait but ensure it's async
-          await fs.promises.writeFile(targetPath, buffer)
-        }
-        return {
-          url: `media/${assetName}`,
-          fullPath: `file:///${targetPath.replace(/\\/g, '/')}`
-        }
-      }
-      return null
-    } catch (error) {
-      console.error('Failed to save asset:', error)
-      return null
+    // Read board.json from cache (already has relative paths from write-board-json)
+    const boardJsonPath = join(cacheDir, 'board.json')
+    if (fs.existsSync(boardJsonPath)) {
+      zipfile.addFile(boardJsonPath, 'board.json')
     }
+
+    // Add all assets
+    const assetsDir = join(cacheDir, 'assets')
+    if (fs.existsSync(assetsDir)) {
+      const assetFiles = fs.readdirSync(assetsDir)
+      for (const f of assetFiles) {
+        zipfile.addFile(join(assetsDir, f), `assets/${f}`, { compress: false })
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      zipfile.end()
+      writeStream.on('close', resolve)
+      writeStream.on('error', reject)
+    })
+
+    // Atomic rename: tmp → final
+    if (fs.existsSync(containerPath)) {
+      // Remove old without .old files — use temp + rename
+      const backupPath = containerPath + '.replacing'
+      await fs.promises.rename(containerPath, backupPath)
+      await fs.promises.rename(tmpPath, containerPath)
+      setTimeout(() => { fs.promises.unlink(backupPath).catch(() => {}) }, 100)
+    } else {
+      await fs.promises.rename(tmpPath, containerPath)
+    }
+
+    return true
+  } catch (error) {
+    console.error('boards:pack-board error:', error)
+    return false
   }
-)
+})
+
+/**
+ * boards:close-board
+ * Deletes the cache folder for a board (cleanup after closing).
+ */
+ipcMain.handle('boards:close-board', async (_, boardId: string) => {
+  try {
+    const cacheDir = getBoardCacheDir(boardId)
+    if (fs.existsSync(cacheDir)) {
+      fs.rmSync(cacheDir, { recursive: true, force: true })
+    }
+    return true
+  } catch (error) {
+    console.error('boards:close-board error:', error)
+    return false
+  }
+})
 
 ipcMain.on('notification:show', (_, title, body) => {
   new Notification({ title, body, icon: globalIconPath }).show()

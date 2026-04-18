@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid'
 import { BoardElement, Viewport } from '../types'
 
 interface UseBoardAssetsProps {
+  boardId: string
   boardDir: string
   boardFileName: string
   viewport: Viewport
@@ -12,8 +13,7 @@ interface UseBoardAssetsProps {
 }
 
 export const useBoardAssets = ({
-  boardDir,
-  boardFileName,
+  boardId,
   viewport,
   containerRef,
   setElements,
@@ -55,7 +55,7 @@ export const useBoardAssets = ({
 
       const needsSaving =
         (type === 'image' || type === 'video') &&
-        (url.startsWith('data:') || (url.startsWith('file:///') && !url.includes('ibo_temp')))
+        (url.startsWith('data:') || url.startsWith('file:///'))
 
       const finalId = nanoid()
       const newElement: BoardElement = {
@@ -83,13 +83,13 @@ export const useBoardAssets = ({
 
         // @ts-ignore - api defined in preload
         window.api
-          .saveBoardAsset(boardDir, boardFileName, finalId, url)
-          .then((result: { url: string; fullPath: string } | null) => {
+          .addBoardAsset(boardId, finalId, url)
+          .then((cachedUrl: string | null) => {
             clearTimeout(safetyTimer)
-            if (result) {
+            if (cachedUrl) {
               setElements((prev) =>
                 prev.map((el) =>
-                  el.id === finalId ? { ...el, url: result.fullPath, isProcessing: false } : el
+                  el.id === finalId ? { ...el, url: cachedUrl, isProcessing: false } : el
                 )
               )
             } else {
@@ -108,7 +108,7 @@ export const useBoardAssets = ({
       }
       return finalId
     },
-    [viewport, pushToHistory, boardDir, boardFileName, containerRef, setElements]
+    [viewport, pushToHistory, boardId, containerRef, setElements]
   )
 
   const getMediaDimensions = async (
@@ -139,40 +139,53 @@ export const useBoardAssets = ({
       const files = Array.from(e.dataTransfer.files)
 
       if (files.length > 0) {
-        for (const file of files) {
+        const validFiles = files.filter((f) => f.type.startsWith('video/') || f.type.startsWith('image/'))
+        
+        validFiles.forEach((file) => {
           const isVideo = file.type.startsWith('video/')
-          const isImage = file.type.startsWith('image/')
-          if (!isVideo && !isImage) continue
+          const type = isVideo ? 'video' : 'image'
 
           let url = (file as File & { path?: string }).path
           if (url) {
             url = 'file:///' + url.replace(/\\/g, '/')
-            const dims = await getMediaDimensions(url, isVideo ? 'video' : 'image')
-            addElementAtPos(
-              isVideo ? 'video' : 'image',
-              url,
-              e.clientX,
-              e.clientY,
-              dims.width,
-              dims.height
-            )
+            // Add placeholder instantly to unblock UI
+            const id = addElementAtPos(type, url, e.clientX, e.clientY, 400, 300)
+            
+            // Load real dimensions in background
+            if (id) {
+              getMediaDimensions(url, type).then((dims) => {
+                let fw = dims.width, fh = dims.height
+                const maxSize = 800
+                if (fw > maxSize || fh > maxSize) {
+                  const ratio = fw / fh
+                  if (fw > fh) { fw = maxSize; fh = maxSize / ratio }
+                  else { fh = maxSize; fw = maxSize * ratio }
+                }
+                setElements((prev) => prev.map((el) => el.id === id ? { ...el, width: fw, height: fh } : el))
+              })
+            }
           } else {
             const reader = new FileReader()
             reader.onload = async (event) => {
               url = event.target?.result as string
-              const dims = await getMediaDimensions(url, isVideo ? 'video' : 'image')
-              addElementAtPos(
-                isVideo ? 'video' : 'image',
-                url,
-                e.clientX,
-                e.clientY,
-                dims.width,
-                dims.height
-              )
+              const id = addElementAtPos(type, url, e.clientX, e.clientY, 400, 300)
+              
+              if (id) {
+                getMediaDimensions(url, type).then((dims) => {
+                  let fw = dims.width, fh = dims.height
+                  const maxSize = 800
+                  if (fw > maxSize || fh > maxSize) {
+                    const ratio = fw / fh
+                    if (fw > fh) { fw = maxSize; fh = maxSize / ratio }
+                    else { fh = maxSize; fw = maxSize * ratio }
+                  }
+                  setElements((prev) => prev.map((el) => el.id === id ? { ...el, width: fw, height: fh } : el))
+                })
+              }
             }
             reader.readAsDataURL(file)
           }
-        }
+        })
       } else {
         const text = e.dataTransfer.getData('text')
         if (text && (text.startsWith('http') || text.startsWith('www'))) {
@@ -180,7 +193,7 @@ export const useBoardAssets = ({
         }
       }
     },
-    [addElementAtPos]
+    [addElementAtPos, setElements]
   )
 
   useEffect(() => {
@@ -197,37 +210,52 @@ export const useBoardAssets = ({
 
       const items = e.clipboardData?.items
       if (items) {
-        for (const item of Array.from(items)) {
-          if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
-            const file = item.getAsFile()
-            if (file) {
-              const reader = new FileReader()
-              reader.onload = (event) => {
-                const url = event.target?.result as string
-                const type = item.type.startsWith('video/')
-                  ? ('video' as const)
-                  : ('image' as const)
+        const validItems = Array.from(items).filter((item) =>
+          item.type.startsWith('image/') || item.type.startsWith('video/')
+        )
+        
+        validItems.forEach((item) => {
+          const type = item.type.startsWith('video/') ? ('video' as const) : ('image' as const)
+          const file = item.getAsFile()
+          
+          if (file) {
+            const reader = new FileReader()
+            reader.onload = (event) => {
+              const url = event.target?.result as string
+              
+              // Add placeholder instantly
+              const id = addElementAtPos(
+                type,
+                url,
+                rect.left + rect.width / 2,
+                rect.top + rect.height / 2,
+                400,
+                300
+              )
+              
+              // Load metrics in background
+              if (id) {
                 getMediaDimensions(url, type).then((dims) => {
-                  addElementAtPos(
-                    type,
-                    url,
-                    rect.left + rect.width / 2,
-                    rect.top + rect.height / 2,
-                    dims.width,
-                    dims.height
-                  )
+                  let fw = dims.width, fh = dims.height
+                  const maxSize = 800
+                  if (fw > maxSize || fh > maxSize) {
+                    const ratio = fw / fh
+                    if (fw > fh) { fw = maxSize; fh = maxSize / ratio }
+                    else { fh = maxSize; fw = maxSize * ratio }
+                  }
+                  setElements((prev) => prev.map((el) => el.id === id ? { ...el, width: fw, height: fh } : el))
                 })
               }
-              reader.readAsDataURL(file)
             }
+            reader.readAsDataURL(file)
           }
-        }
+        })
       }
     }
 
     window.addEventListener('paste', handlePaste)
     return () => window.removeEventListener('paste', handlePaste)
-  }, [addElementAtPos, containerRef])
+  }, [addElementAtPos, containerRef, setElements, viewport.scale])
 
   return { handleDrop, addElementAtPos }
 }

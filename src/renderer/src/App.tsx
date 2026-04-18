@@ -5,7 +5,6 @@ import {
   Settings as SettingsIcon,
   Pin,
   PanelLeft,
-  FolderOpen,
   User,
   X as CloseIcon,
   Minus as MinimizeIcon,
@@ -26,10 +25,12 @@ import ProjectOverview from './components/ProjectOverview'
 import PipelineView from './components/PipelineView'
 import NotificationCenter from './components/NotificationCenter'
 import GlobalSearchModal from './components/GlobalSearchModal'
+import AlarmCard from './components/AlarmCard'
 import { Bell } from 'lucide-react'
 
 import {
   TimerData,
+  AlarmData,
   TimelineTask,
   AppNote,
   UITheme,
@@ -117,6 +118,7 @@ function HeaderTimer({ currentView }: { currentView: string }) {
 
 function App() {
   const [timers, setTimers] = useState<TimerData[]>([])
+  const [alarms, setAlarms] = useState<AlarmData[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [timelineTasks, setTimelineTasks] = useState<TimelineTask[]>([])
   const [notes, setNotes] = useState<AppNote[]>([])
@@ -138,6 +140,7 @@ function App() {
   const [timerVolume, setTimerVolume] = useState<number>(0.5)
   const [previousWorkspacePath, setPreviousWorkspacePath] = useState<string | null>(null)
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
+  const [backupIntervalMinutes, setBackupIntervalMinutes] = useState(10)
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
@@ -149,6 +152,7 @@ function App() {
   const projectsRef = useRef(projects)
   const timelineTasksRef = useRef(timelineTasks)
   const focusedAreaRef = useRef<'app' | 'board' | 'notes'>('app')
+  const notificationRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     projectsRef.current = projects
@@ -186,6 +190,20 @@ function App() {
       return newHistory
     })
   }, [])
+
+  // Click outside notifications to close
+  useEffect(() => {
+    if (!showNotifications) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
+        setShowNotifications(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showNotifications])
 
   const allProjects = useMemo((): Project[] => {
     const flat: Project[] = []
@@ -353,7 +371,7 @@ function App() {
 
     const projectToDelete = findProject(projects, id)
     if (projectToDelete?.path) {
-      ;(window as any).api.deleteProjectFolder(projectToDelete.path)
+      ; (window as any).api.deleteProjectFolder(projectToDelete.path)
     }
 
     const deleteRecursive = (projs: Project[]): Project[] => {
@@ -394,65 +412,49 @@ function App() {
       const workspaceData = await api.readWorkspaceJson(workspaceFile)
 
       if (workspaceData) {
-        // Force cleanup of legacy data if not already done for this workspace
-        if (!workspaceData.isCleanedV1) {
-          setProjects([
-            {
-              id: 'default',
-              name: 'My Project',
-              isExpanded: true,
-              tasks: [
-                {
-                  id: 'default-task-1',
-                  text: 'Main Task',
-                  completed: false,
-                  isExpanded: true,
-                  subtasks: []
-                }
-              ]
-            }
-          ])
-          setTimers([])
-          setTimelineTasks([])
-          setNotes([])
-          // Note: isCleanedV1 will be saved by the auto-save effect
-        } else {
-          if (workspaceData.timers) setTimers(workspaceData.timers)
-          if (workspaceData.projects) {
-            const ensurePathsRecursive = (projs: Project[]): Project[] => {
-              return projs.map((p) => ({
-                ...p,
-                notesPath: p.notesPath || (p.path ? p.path + '/notes' : ''),
-                boardsPath: p.boardsPath || (p.path ? p.path + '/boards' : ''),
-                subprojects: p.subprojects ? ensurePathsRecursive(p.subprojects) : []
-              }))
-            }
-            setProjects(ensurePathsRecursive(workspaceData.projects))
+        if (workspaceData.timers) setTimers(workspaceData.timers)
+        if (workspaceData.alarms) setAlarms(workspaceData.alarms)
+        if (workspaceData.projects) {
+          const ensurePathsRecursive = (projs: Project[]): Project[] => {
+            return projs.map((p) => ({
+              ...p,
+              notesPath: p.notesPath || (p.path ? p.path + '/notes' : ''),
+              boardsPath: p.boardsPath || (p.path ? p.path + '/boards' : ''),
+              subprojects: p.subprojects ? ensurePathsRecursive(p.subprojects) : []
+            }))
           }
-          if (workspaceData.timelineTasks) setTimelineTasks(workspaceData.timelineTasks)
-          if (workspaceData.theme) setTheme(workspaceData.theme)
-          
-          // SCANNED NOTES - Consolidated Logic
-          // @ts-ignore
-          const scannedNotes = await api.scanAllNotes(savedWorkspace)
-          setNotes(scannedNotes)
+          setProjects(ensurePathsRecursive(workspaceData.projects))
+        }
+        if (workspaceData.timelineTasks) setTimelineTasks(workspaceData.timelineTasks)
+        if (workspaceData.theme) setTheme(workspaceData.theme)
 
-          if (workspaceData.showFPS !== undefined) setShowFPS(workspaceData.showFPS)
-          if (workspaceData.showTaskCounts !== undefined)
-            setShowTaskCounts(workspaceData.showTaskCounts)
-          if (workspaceData.useGPU !== undefined) setUseGPU(workspaceData.useGPU)
-          if (workspaceData.timerVolume !== undefined) setTimerVolume(workspaceData.timerVolume)
-          if (workspaceData.hiddenTimelineProjectIds !== undefined)
-            setHiddenTimelineProjectIds(workspaceData.hiddenTimelineProjectIds)
+        // SCANNED NOTES - Consolidated Logic
+        // @ts-ignore
+        const scannedNotes = await api.scanAllNotes(savedWorkspace)
+        setNotes(scannedNotes)
 
-          // Auto-restore last session
-          const lastView = await api.getStoreValue('last-view')
-          const lastProj = await api.getStoreValue('last-project-id')
-          const lastNote = await api.getStoreValue('last-note-id')
+        if (workspaceData.showFPS !== undefined) setShowFPS(workspaceData.showFPS)
+        if (workspaceData.showTaskCounts !== undefined)
+          setShowTaskCounts(workspaceData.showTaskCounts)
+        if (workspaceData.useGPU !== undefined) setUseGPU(workspaceData.useGPU)
+        if (workspaceData.timerVolume !== undefined) setTimerVolume(workspaceData.timerVolume)
+        if (workspaceData.hiddenTimelineProjectIds !== undefined)
+          setHiddenTimelineProjectIds(workspaceData.hiddenTimelineProjectIds)
+        if (workspaceData.backupIntervalMinutes !== undefined)
+          setBackupIntervalMinutes(workspaceData.backupIntervalMinutes)
 
-          if (lastView) setCurrentView(lastView)
-          if (lastProj) setSelectedProjectId(lastProj)
-          if (lastNote) setActiveNoteId(lastNote)
+        // Auto-restore last session
+        const lastView = await api.getStoreValue('last-view')
+        const lastProj = await api.getStoreValue('last-project-id')
+        const lastNote = await api.getStoreValue('last-note-id')
+
+        if (lastView) setCurrentView(lastView)
+        if (lastProj) setSelectedProjectId(lastProj)
+        if (lastNote) setActiveNoteId(lastNote)
+
+        const savedSidebarOpen = await api.getStoreValue('sidebar-is-open')
+        if (savedSidebarOpen !== undefined && savedSidebarOpen !== null) {
+          setIsSidebarOpen(savedSidebarOpen)
         }
       } else {
         // Fresh start for a new workspace
@@ -592,12 +594,12 @@ function App() {
                       ...p.events.map((ev) =>
                         ev.id === baseId
                           ? {
-                              ...ev,
-                              exceptions: {
-                                ...(ev.exceptions || {}),
-                                [originalDate]: { deleted: true, editedEventId: newExceptionId }
-                              }
+                            ...ev,
+                            exceptions: {
+                              ...(ev.exceptions || {}),
+                              [originalDate]: { deleted: true, editedEventId: newExceptionId }
                             }
+                          }
                           : ev
                       ),
                       newEvent
@@ -630,7 +632,7 @@ function App() {
 
       let choice: 'instance' | 'series' | null = null
       const isVirtual = eventId.includes('_inst_')
-      
+
       if (isVirtual) {
         if (window.confirm('Delete the entire series? (Click Cancel to delete only this instance)')) {
           choice = 'series'
@@ -647,7 +649,7 @@ function App() {
           return projs.map((p) => {
             if (p.id === projectId && p.events) {
               const realEventId = isVirtual ? eventId.split('_inst_')[0] : eventId
-              
+
               if (choice === 'series') {
                 return {
                   ...p,
@@ -661,12 +663,12 @@ function App() {
                   events: p.events.map((ev) =>
                     ev.id === realEventId
                       ? {
-                          ...ev,
-                          exceptions: {
-                            ...(ev.exceptions || {}),
-                            [originalDate]: { deleted: true }
-                          }
+                        ...ev,
+                        exceptions: {
+                          ...(ev.exceptions || {}),
+                          [originalDate]: { deleted: true }
                         }
+                      }
                       : ev
                   )
                 }
@@ -699,13 +701,18 @@ function App() {
   useEffect(() => {
     const checkReminders = () => {
       const now = Date.now()
+      const d = new Date()
+      const pad = (n: number) => n.toString().padStart(2, '0')
+      const dateStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+      const timeStr = `${pad(d.getHours())}:${pad(d.getMinutes())}`
       const newNotifications: AppNotification[] = []
 
+      // 1. Check PROJECT EVENTS
       setProjects(prevProjs => {
         let updated = false
         const updateRecursive = (projs: Project[]): Project[] => {
           return projs.map(p => {
-            let projectUpdated = false
+            let projectEventsUpdated = false
             const newEvents = p.events?.map(ev => {
               if (ev.date && ev.time && ev.reminder && !ev.reminder.isNotified) {
                 const eventDate = new Date(`${ev.date}T${ev.time}:00`)
@@ -713,7 +720,6 @@ function App() {
                 const reminderTs = eventTs - (ev.reminder.minutesBefore * 60000)
 
                 if (now >= reminderTs && now < eventTs + 60000) {
-                  // Trigger!
                   newNotifications.push({
                     id: uuidv4(),
                     type: 'reminder',
@@ -723,7 +729,7 @@ function App() {
                     isRead: false,
                     relatedId: ev.id
                   })
-                  projectUpdated = true
+                  projectEventsUpdated = true
                   updated = true
                   return { ...ev, reminder: { ...ev.reminder, isNotified: true } }
                 }
@@ -731,28 +737,57 @@ function App() {
               return ev
             })
 
+            const finalEvents = projectEventsUpdated ? newEvents : p.events
             let subprojects = p.subprojects
+            let subprojectsUpdated = false
             if (p.subprojects) {
               const updatedSubs = updateRecursive(p.subprojects)
               if (updatedSubs !== p.subprojects) {
                 subprojects = updatedSubs
-                projectUpdated = true
-                updated = true
+                subprojectsUpdated = true
               }
             }
 
-            if (projectUpdated) {
-              return { ...p, events: newEvents, subprojects }
+            if (projectEventsUpdated || subprojectsUpdated) {
+              return { ...p, events: finalEvents, subprojects }
             }
             return p
           })
         }
 
         const nextProjs = updateRecursive(prevProjs)
-        if (updated) {
-          return nextProjs
-        }
-        return prevProjs
+        return updated ? nextProjs : prevProjs
+      })
+
+      // 2. Check STANDALONE ALARMS
+      setAlarms(prevAlarms => {
+        let updated = false
+        const nextAlarms = prevAlarms.map(alarm => {
+          if (alarm.isEnabled && !alarm.isNotified) {
+            // Use string matching to avoid timezone issues
+            if (alarm.date === dateStr && alarm.time === timeStr) {
+              newNotifications.push({
+                id: uuidv4(),
+                type: 'reminder',
+                title: `Alarm: ${alarm.title}`,
+                message: alarm.taskName || 'Time is up!',
+                timestamp: now,
+                isRead: false,
+                relatedId: alarm.id
+              })
+
+              // Play Sound
+              const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3')
+              audio.volume = timerVolume
+              audio.play().catch(e => console.error('Alarm sound failed:', e))
+
+              updated = true
+              return { ...alarm, isNotified: true }
+            }
+          }
+          return alarm
+        })
+        return updated ? nextAlarms : prevAlarms
       })
 
       if (newNotifications.length > 0) {
@@ -760,9 +795,9 @@ function App() {
       }
     }
 
-    const interval = setInterval(checkReminders, 30000) // Every 30s
+    const interval = setInterval(checkReminders, 1000) // Much more responsive (1s)
     return () => clearInterval(interval)
-  }, [projects])
+  }, [projects, alarms])
 
   // Capture Timer completion
   useEffect(() => {
@@ -811,9 +846,10 @@ function App() {
 
     const saveData = async () => {
       const workspaceFile = workspacePath + '/workspace_data.json'
-      
+
       const workspaceData = {
         timers,
+        alarms,
         projects,
         timelineTasks,
         theme,
@@ -822,6 +858,7 @@ function App() {
         useGPU,
         timerVolume,
         hiddenTimelineProjectIds,
+        backupIntervalMinutes,
         isCleanedV1: true // Mark as clean
       }
       // @ts-ignore - preload api
@@ -834,6 +871,7 @@ function App() {
   }, [
     workspacePath,
     timers,
+    alarms,
     projects,
     timelineTasks,
     theme,
@@ -843,6 +881,7 @@ function App() {
     useGPU,
     timerVolume,
     hiddenTimelineProjectIds,
+    backupIntervalMinutes,
     isLoadingWorkspace
   ])
 
@@ -863,7 +902,9 @@ function App() {
     window.api.setStoreValue('last-project-id', selectedProjectId)
     // @ts-ignore
     window.api.setStoreValue('last-note-id', activeNoteId)
-  }, [currentView, selectedProjectId, activeNoteId, workspacePath, isLoadingWorkspace])
+    // @ts-ignore
+    window.api.setStoreValue('sidebar-is-open', isSidebarOpen)
+  }, [currentView, selectedProjectId, activeNoteId, isSidebarOpen, workspacePath, isLoadingWorkspace])
 
   const addTimer = () => {
     setTimers((prev) => [
@@ -905,6 +946,35 @@ function App() {
 
   const updateTimer = (id: string, updates: Partial<TimerData>) => {
     setTimers((prev) => prev.map((t) => (t.id === id ? { ...t, ...updates } : t)))
+  }
+
+  const addAlarm = () => {
+    const now = new Date()
+    const future = new Date(now.getTime() + 60000) // +1 minute
+    const pad = (n: number) => n.toString().padStart(2, '0')
+    const dateStr = `${future.getFullYear()}-${pad(future.getMonth() + 1)}-${pad(future.getDate())}`
+    const timeStr = `${pad(future.getHours())}:${pad(future.getMinutes())}`
+
+    setAlarms((prev) => [
+      ...prev,
+      {
+        id: uuidv4(),
+        title: `Alarm ${prev.length + 1}`,
+        taskName: null,
+        date: dateStr,
+        time: timeStr,
+        isEnabled: false,
+        isNotified: false
+      }
+    ])
+  }
+
+  const deleteAlarm = (id: string) => {
+    setAlarms((prev) => prev.filter((a) => a.id !== id))
+  }
+
+  const updateAlarm = (id: string, updates: Partial<AlarmData>) => {
+    setAlarms((prev) => prev.map((a) => (a.id === id ? { ...a, ...updates } : a)))
   }
 
   const handleCreateTimelineTask = (
@@ -1016,14 +1086,20 @@ function App() {
   return (
     <div className="app-container">
       <WindowResizeHandles />
-      <header className="header">
+      <header 
+        className="header" 
+        style={{ 
+          paddingLeft: '302px' // Locked at 306px total offset (4px container + 302px)
+        }}
+      >
         <div
           className="header-left"
           style={
             {
+              position: 'absolute',
+              left: '10px',
               display: 'flex',
               alignItems: 'center',
-              gap: '10px',
               WebkitAppRegion: 'no-drag'
             } as any
           }
@@ -1032,54 +1108,9 @@ function App() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              padding: '2px'
-            }}
-          >
-            <button
-              className="sidebar-toggle-btn"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: isSidebarOpen ? 0.6 : 0.4,
-                transition: 'opacity 0.2s',
-                width: '30px',
-                height: '30px'
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-              }
-            >
-              <PanelLeft size={18} />
-            </button>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
               gap: '6px'
             }}
           >
-            <button
-              className="pin-btn"
-              onClick={() => {
-                setPreviousWorkspacePath(workspacePath)
-                setWorkspacePath(null)
-              }}
-              title="Change Workspace"
-              style={{ background: 'transparent', border: 'none' }}
-            >
-              <FolderOpen size={18} />
-            </button>
             <button
               className="pin-btn"
               onClick={() => setShowSettings(true)}
@@ -1096,17 +1127,11 @@ function App() {
             >
               <User size={18} />
             </button>
-            <button
-              className="pin-btn"
-              onClick={() => setShowSearchModal(true)}
-              title="Global Search (Ctrl+K)"
-              style={{ background: 'transparent', border: 'none' }}
-            >
-              <Search size={18} />
-            </button>
-
             {/* Notification Bell */}
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div 
+              ref={notificationRef}
+              style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
+            >
               <button
                 className={`header-btn ${showNotifications ? 'active' : ''}`}
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -1160,41 +1185,43 @@ function App() {
                 />
               )}
             </div>
-          </div>
 
-          {/* View Toggle - Segmented Control Style */}
-          <div
-            className="view-toggle"
-            style={{
-              display: 'flex',
-              background: 'transparent',
-              padding: '2px',
-              position: 'relative',
-              borderRadius: 'var(--radius-md)'
-            }}
-          >
-            {[
-              { id: 'overview', label: 'Overview' },
-              { id: 'pipeline', label: 'Pipeline' },
-              { id: 'notes', label: 'Notes' },
-              { id: 'timeline', label: 'Calendar' },
-              { id: 'clock', label: 'Clock' }
-            ].map((view) => (
-              <button
-                key={view.id}
-                className={`view-tab ${currentView === view.id ? 'active' : ''}`}
-                onClick={() => setCurrentView(view.id as any)}
-              >
-                {view.label}
-              </button>
-            ))}
+            <button
+              className="pin-btn"
+              onClick={() => setShowSearchModal(true)}
+              title="Global Search (Ctrl+K)"
+              style={{ background: 'transparent', border: 'none' }}
+            >
+              <Search size={18} />
+            </button>
           </div>
+        </div>
+
+        {/* View Toggle - Segmented Control Style */}
+        <div className="view-toggle">
+          {[
+            { id: 'overview', label: 'Overview' },
+            { id: 'pipeline', label: 'Pipeline' },
+            { id: 'notes', label: 'Notes' },
+            { id: 'timeline', label: 'Calendar' },
+            { id: 'clock', label: 'Clock' }
+          ].map((view) => (
+            <button
+              key={view.id}
+              className={`view-tab ${currentView === view.id ? 'active' : ''}`}
+              onClick={() => setCurrentView(view.id as any)}
+            >
+              {view.label}
+            </button>
+          ))}
         </div>
 
         <div
           className="header-right"
           style={
             {
+              position: 'absolute',
+              right: '10px',
               display: 'flex',
               alignItems: 'center',
               gap: '16px',
@@ -1204,59 +1231,59 @@ function App() {
         >
           {/* Active Timer Indicator */}
           <HeaderTimer currentView={currentView} />
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              padding: '2px'
-            }}
-          >
-            <button
-              className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
-              onClick={toggleAlwaysOnTop}
-              title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div
               style={{
-                background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: 'none',
-                color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)'
+                display: 'flex',
+                alignItems: 'center',
+                padding: '2px'
               }}
             >
-              <Pin size={18} />
-            </button>
-          </div>
+              <button
+                className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
+                onClick={toggleAlwaysOnTop}
+                title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
+                style={{
+                  background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: 'none',
+                  color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)'
+                }}
+              >
+                <Pin size={18} />
+              </button>
+            </div>
 
-          {/* Window controls */}
-          <div
-            className="window-controls-group"
-            style={{
-              display: 'flex',
-              gap: '8px',
-              alignItems: 'center',
-              marginLeft: '8px'
-            }}
-          >
-            <button
-              className="window-control-btn minimize"
-              onClick={() => (window as any).api.minimizeWindow()}
-              title="Minimize"
+            {/* Window controls */}
+            <div
+              className="window-controls-group"
+              style={{
+                display: 'flex',
+                gap: '8px',
+                alignItems: 'center'
+              }}
             >
-              <MinimizeIcon size={8} strokeWidth={4} />
-            </button>
-            <button
-              className="window-control-btn maximize"
-              onClick={() => (window as any).api.maximizeWindow()}
-              title="Maximize"
-            >
-              <MaximizeIcon size={8} strokeWidth={4} />
-            </button>
-            <button
-              className="window-control-btn close"
-              onClick={() => (window as any).api.closeWindow()}
-              title="Close"
-            >
-              <CloseIcon size={8} strokeWidth={4} />
-            </button>
+              <button
+                className="window-control-btn minimize"
+                onClick={() => (window as any).api.minimizeWindow()}
+                title="Minimize"
+              >
+                <MinimizeIcon size={8} strokeWidth={4} />
+              </button>
+              <button
+                className="window-control-btn maximize"
+                onClick={() => (window as any).api.maximizeWindow()}
+                title="Maximize"
+              >
+                <MaximizeIcon size={8} strokeWidth={4} />
+              </button>
+              <button
+                className="window-control-btn close"
+                onClick={() => (window as any).api.closeWindow()}
+                title="Close"
+              >
+                <CloseIcon size={8} strokeWidth={4} />
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -1282,6 +1309,9 @@ function App() {
           onAssignTaskToTimer={(timerId, taskText) => {
             updateTimer(timerId, { taskName: taskText })
           }}
+          onAssignTaskToAlarm={(alarmId, taskText) => {
+            updateAlarm(alarmId, { taskName: taskText })
+          }}
           showTaskCounts={showTaskCounts}
         />
         <div className="main-content">
@@ -1290,6 +1320,7 @@ function App() {
             onClose={() => setShowProfile(false)}
             workspacePath={workspacePath}
             projectCount={allProjects.length}
+            onWorkspaceSelected={handleWorkspaceSelected}
           />
 
           <div className="views-wrapper">
@@ -1297,6 +1328,7 @@ function App() {
             <div style={{ display: currentView === 'overview' ? 'contents' : 'none' }}>
               {selectedProject ? (
                 <ProjectOverview
+                  key={selectedProject.id}
                   project={selectedProject}
                   allProjects={allProjects}
                   onUpdate={updateProject}
@@ -1305,6 +1337,8 @@ function App() {
                     setCurrentView('notes')
                     setActiveNoteId(noteId)
                   }}
+                  isSidebarOpen={isSidebarOpen}
+                  onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 />
               ) : (
                 <div
@@ -1322,7 +1356,12 @@ function App() {
             </div>
             <div style={{ display: currentView === 'pipeline' ? 'contents' : 'none' }}>
               {selectedProject ? (
-                <PipelineView project={selectedProject} onUpdate={updateProject} />
+                <PipelineView
+                  project={selectedProject}
+                  onUpdate={updateProject}
+                  isSidebarOpen={isSidebarOpen}
+                  onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                />
               ) : (
                 <div
                   style={{
@@ -1348,6 +1387,8 @@ function App() {
                 onAddProjectItem={handleCreateTimelineTask}
                 hiddenProjectIds={hiddenTimelineProjectIds}
                 setHiddenProjectIds={setHiddenTimelineProjectIds}
+                isSidebarOpen={isSidebarOpen}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
             </div>
             <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>
@@ -1363,8 +1404,11 @@ function App() {
                 setTheme={handleSetTheme}
                 showFPS={showFPS}
                 setCurrentView={setCurrentView}
+                backupIntervalMinutes={backupIntervalMinutes}
+                isSidebarOpen={isSidebarOpen}
+                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
-                        </div>
+            </div>
             <div
               className="clock-view-container"
               style={{
@@ -1389,6 +1433,31 @@ function App() {
                   gap: '8px'
                 }}
               >
+                <button
+                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    opacity: isSidebarOpen ? 0.6 : 0.4,
+                    transition: 'opacity 0.2s',
+                    width: '30px',
+                    height: '30px',
+                    marginRight: '8px'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                  onMouseLeave={(e) =>
+                    (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+                  }
+                >
+                  <PanelLeft size={18} />
+                </button>
                 <button
                   onClick={addTimer}
                   style={{
@@ -1426,15 +1495,35 @@ function App() {
                     transition: 'all 0.2s'
                   }}
                 >
-                  <TimerIcon size={14} /> 
+                  <TimerIcon size={14} />
                   Stopwatch
                 </button>
+                <button
+                  onClick={addAlarm}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: 'var(--text-primary)',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <Bell size={14} />
+                  Alarm
+                </button>
               </div>
-              <div 
-                className="timers-list" 
-                style={{ 
+              <div
+                className="timers-list"
+                style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', // auto-fill чтобы один таймер не растягивался
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', // auto-fill чтобы один таймер не растягивался
                   gridAutoRows: 'min-content',
                   justifyContent: 'start',
                   gap: '10px',
@@ -1444,27 +1533,38 @@ function App() {
                   minHeight: 0
                 }}
               >
-                {timers.length === 0 ? (
+                {timers.length === 0 && alarms.length === 0 ? (
                   <div className="empty-state" style={{ padding: '60px 0' }}>
                     <TimerIcon size={64} />
                     <p>
-                      No active timers.
+                      No active timers or alarms.
                       <br />
-                      Click the button above to add your first timer.
+                      Click the buttons above to add one.
                     </p>
                   </div>
                 ) : (
-                  timers.map((timer) => (
-                    <TimerCard
-                      key={timer.id}
-                      data={timer}
-                      theme={theme}
-                      isActiveView={currentView === 'clock'}
-                      timerVolume={timerVolume}
-                      onUpdate={(updates) => updateTimer(timer.id, updates)}
-                      onDelete={() => deleteTimer(timer.id)}
-                    />
-                  ))
+                  <>
+                    {timers.map((timer) => (
+                      <TimerCard
+                        key={timer.id}
+                        data={timer}
+                        theme={theme}
+                        isActiveView={currentView === 'clock'}
+                        timerVolume={timerVolume}
+                        onUpdate={(updates) => updateTimer(timer.id, updates)}
+                        onDelete={() => deleteTimer(timer.id)}
+                      />
+                    ))}
+                    {alarms.map((alarm) => (
+                      <AlarmCard
+                        key={alarm.id}
+                        data={alarm}
+                        theme={theme}
+                        onUpdate={(updates) => updateAlarm(alarm.id, updates)}
+                        onDelete={() => deleteAlarm(alarm.id)}
+                      />
+                    ))}
+                  </>
                 )}
               </div>
             </div>
@@ -1485,6 +1585,8 @@ function App() {
         setUseGPU={setUseGPU}
         timerVolume={timerVolume}
         setTimerVolume={setTimerVolume}
+        backupIntervalMinutes={backupIntervalMinutes}
+        setBackupIntervalMinutes={setBackupIntervalMinutes}
         onSaveThemeAsDefault={async () => {
           // @ts-ignore
           await window.api.setStoreValue('ui-theme', theme)

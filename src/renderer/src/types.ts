@@ -18,6 +18,9 @@ export interface PipelineStage {
   items: PipelineItem[]
   color?: string
   colorOpacity?: number
+  description?: string
+  startDate?: string
+  endDate?: string
 }
 
 export interface PipelineData {
@@ -61,6 +64,7 @@ export interface Project {
   pipeline?: PipelineStage[] // Legacy field
   pipelines?: PipelineData[] // New field
   activePipelineId?: string
+  bannerPosition?: number
 }
 
 export interface TimelineTask {
@@ -85,6 +89,16 @@ export interface TimerData {
   isStopwatch?: boolean
   isPinned?: boolean
   isHeaderPinned?: boolean
+}
+
+export interface AlarmData {
+  id: string
+  title: string
+  taskName: string | null
+  date: string // YYYY-MM-DD
+  time: string // HH:MM
+  isEnabled: boolean
+  isNotified: boolean
 }
 
 export interface AppNote {

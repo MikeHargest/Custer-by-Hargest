@@ -33,6 +33,7 @@ interface TaskSidebarProps {
   onTaskAdded: (projectId: string, name: string, parentId?: string, explicitId?: string) => void
   onTaskDeleted?: (taskName: string, taskId: string) => void
   onAssignTaskToTimer?: (timerId: string, taskText: string) => void
+  onAssignTaskToAlarm?: (alarmId: string, taskText: string) => void
   showTaskCounts: boolean
 }
 
@@ -48,6 +49,7 @@ export default memo(function TaskSidebar({
   onTaskAdded,
   onTaskDeleted,
   onAssignTaskToTimer,
+  onAssignTaskToAlarm,
   showTaskCounts
 }: TaskSidebarProps): React.ReactElement {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
@@ -76,6 +78,8 @@ export default memo(function TaskSidebar({
   const [isResizingTasks, setIsResizingTasks] = useState(false)
   const [resizeTasksStartY, setResizeTasksStartY] = useState(0)
   const [resizeTasksStartHeight, setResizeTasksStartHeight] = useState(350)
+  const [isTransitioning, setIsTransitioning] = useState(false)
+  const [isInitialLoading, setIsInitialLoading] = useState(true)
 
   // Refs
   const detailBlockRef = useRef<HTMLDivElement>(null)
@@ -90,6 +94,48 @@ export default memo(function TaskSidebar({
     projectsRef.current = projects
   }, [projects])
 
+  // Persistence: Load on Mount
+  useEffect(() => {
+    const loadSidebarState = async () => {
+      // @ts-ignore
+      const savedTasksExp = await window.api.getStoreValue('sidebar-tasks-expanded')
+      // @ts-ignore
+      const savedEventsExp = await window.api.getStoreValue('sidebar-events-expanded')
+      // @ts-ignore
+      const savedProjH = await window.api.getStoreValue('sidebar-projects-height')
+      // @ts-ignore
+      const savedTaskH = await window.api.getStoreValue('sidebar-tasks-height')
+
+      if (savedTasksExp !== null && savedTasksExp !== undefined) setIsTasksExpanded(savedTasksExp)
+      if (savedEventsExp !== null && savedEventsExp !== undefined) setIsEventsExpanded(savedEventsExp)
+      if (savedProjH) setProjectsHeight(savedProjH)
+      if (savedTaskH) setTasksHeight(savedTaskH)
+      
+      // Disable the "initial jump" effect by waiting for state to apply before enabling transitions
+      setTimeout(() => setIsInitialLoading(false), 50);
+    }
+    loadSidebarState()
+  }, [])
+
+  // Persistence: Save on Change
+  useEffect(() => {
+    const saveSidebarState = () => {
+      // Only save when not actively resizing for performance
+      if (!isResizingSidebar && !isResizingTasks) {
+        // @ts-ignore
+        window.api.setStoreValue('sidebar-tasks-expanded', isTasksExpanded)
+        // @ts-ignore
+        window.api.setStoreValue('sidebar-events-expanded', isEventsExpanded)
+        // @ts-ignore
+        window.api.setStoreValue('sidebar-projects-height', projectsHeight)
+        // @ts-ignore
+        window.api.setStoreValue('sidebar-tasks-height', tasksHeight)
+      }
+    }
+    const timeout = setTimeout(saveSidebarState, 500)
+    return () => clearTimeout(timeout)
+  }, [isTasksExpanded, isEventsExpanded, projectsHeight, tasksHeight, isResizingSidebar, isResizingTasks])
+
   useEffect(() => {
     if (!isResizingSidebar) return
 
@@ -97,8 +143,12 @@ export default memo(function TaskSidebar({
       const deltaY = e.clientY - resizeStartY
       const newHeight = resizeStartHeight + deltaY
 
-      // Constraints
-      if (newHeight > 60 && newHeight < 650) {
+      // Snapping to collapsed header (50px)
+      if (newHeight < 60) {
+        setProjectsHeight(50)
+      } else if (newHeight > window.innerHeight - 200) {
+        setProjectsHeight(window.innerHeight - 200)
+      } else {
         setProjectsHeight(newHeight)
       }
     }
@@ -126,22 +176,20 @@ export default memo(function TaskSidebar({
       const newHeight = resizeTasksStartHeight + deltaY
 
       const availableHeight = containerRect.height
-      const eventsHeaderHeight = 48
+      const eventsHeaderHeight = 50
       const maxTasksHeight = availableHeight - eventsHeaderHeight
-      const snapThreshold = 35
-      const expandThreshold = 80
 
       // --- SYMMETRIC SNAPPING LOGIC ---
 
       // 1. Downward Snap (Collapse Events)
-      if (newHeight > maxTasksHeight - snapThreshold) {
+      if (newHeight > maxTasksHeight - 40) {
         if (isEventsExpanded) {
           setIsEventsExpanded(false)
         }
         setTasksHeight(maxTasksHeight)
       }
       // 2. Upward Snap (Collapse Tasks)
-      else if (newHeight < snapThreshold) {
+      else if (newHeight < 60) {
         if (isTasksExpanded) {
           setIsTasksExpanded(false)
         }
@@ -149,12 +197,12 @@ export default memo(function TaskSidebar({
       }
       // 3. Normal Resizing with Hysteresis
       else {
-        // Re-expand Events if pulled up
-        if (!isEventsExpanded && newHeight < maxTasksHeight - expandThreshold) {
+        // Re-expand Events if pulled up significantly
+        if (!isEventsExpanded && newHeight < maxTasksHeight - 80) {
           setIsEventsExpanded(true)
         }
-        // Re-expand Tasks if pulled down
-        if (!isTasksExpanded && newHeight > expandThreshold) {
+        // Re-expand Tasks if pulled down significantly
+        if (!isTasksExpanded && newHeight > 80) {
           setIsTasksExpanded(true)
         }
 
@@ -184,16 +232,16 @@ export default memo(function TaskSidebar({
   // Dynamic height capping to prevent overflow
   useEffect(() => {
     const capHeights = (): void => {
-      if (!detailBlockRef.current || isResizingTasks) return
+      if (!detailBlockRef.current || isResizingTasks || isTransitioning) return
 
       const containerHeight = detailBlockRef.current.getBoundingClientRect().height
-      const eventsHeaderHeight = 48
+      const eventsHeaderHeight = 50
       const maxAllowed = containerHeight - eventsHeaderHeight
 
       if (!isEventsExpanded) {
         setTasksHeight(maxAllowed)
       } else {
-        if (tasksHeight > maxAllowed - 60) {
+        if (tasksHeight > maxAllowed - 50) {
           setTasksHeight(maxAllowed - 100)
         }
       }
@@ -202,7 +250,7 @@ export default memo(function TaskSidebar({
     capHeights()
     window.addEventListener('resize', capHeights)
     return () => window.removeEventListener('resize', capHeights)
-  }, [isEventsExpanded, isTasksExpanded, tasksHeight, isResizingTasks])
+  }, [isEventsExpanded, isTasksExpanded, tasksHeight, isResizingTasks, isTransitioning])
 
   const handleAddProject = useCallback(
     (name: string, parentId?: string) => {
@@ -311,11 +359,12 @@ export default memo(function TaskSidebar({
     taskId: string
   } | null>(null)
   const dropTargetRef = useRef<{
-    action: 'before' | 'after' | 'inside' | 'project' | 'timer' | 'timeline'
+    action: 'before' | 'after' | 'inside' | 'project' | 'timer' | 'alarm' | 'timeline'
     projectId: string
     taskId?: string
     projectIdTarget?: string
     timerId?: string
+    alarmId?: string
     timelineDate?: string
     type?: 'task' | 'project'
   } | null>(null)
@@ -706,7 +755,7 @@ export default memo(function TaskSidebar({
         return projs.map(p => {
           if (p.id === projectId) {
             let extractedTask: TaskItem | null = null;
-            
+
             const removeImmutable = (tasks: TaskItem[]): TaskItem[] => {
               const res: TaskItem[] = [];
               for (const t of tasks) {
@@ -747,7 +796,7 @@ export default memo(function TaskSidebar({
         return projs.map(p => {
           if (p.id === projectId) {
             let extractedTask: TaskItem | null = null;
-            
+
             const removeImmutable = (tasks: TaskItem[]): TaskItem[] => {
               const res: TaskItem[] = [];
               for (const t of tasks) {
@@ -1122,6 +1171,12 @@ export default memo(function TaskSidebar({
       return
     }
 
+    if (target && target.action === 'alarm' && target.alarmId) {
+      const taskText = findTaskTextById(source.taskId)
+      if (taskText && onAssignTaskToAlarm) onAssignTaskToAlarm(target.alarmId, taskText)
+      return
+    }
+
     if (!target) return
 
     if (source.type === 'project') {
@@ -1145,6 +1200,7 @@ export default memo(function TaskSidebar({
   }, [
     findTaskTextById,
     onAssignTaskToTimer,
+    onAssignTaskToAlarm,
     performProjectDropBefore,
     performProjectDropAfter,
     performProjectDropInside,
@@ -1267,18 +1323,38 @@ export default memo(function TaskSidebar({
         // Check for timer card
         const timerCard = el.closest('.timer-card') as HTMLElement | null
         if (timerCard && dragData.type === 'task') {
-          dropTargetRef.current = {
-            action: 'timer',
-            projectId: '',
-            taskId: undefined,
-            timerId: timerCard.dataset.timerId || '',
-            type: 'task'
+          // Determine if it's an alarm card or a standard timer
+          const alarmId = timerCard.dataset.alarmId
+          const timerId = timerCard.dataset.timerId
+
+          if (alarmId) {
+            dropTargetRef.current = {
+              action: 'alarm',
+              projectId: '',
+              taskId: undefined,
+              alarmId: alarmId,
+              type: 'task'
+            }
+          } else if (timerId) {
+            dropTargetRef.current = {
+              action: 'timer',
+              projectId: '',
+              taskId: undefined,
+              timerId: timerId,
+              type: 'task'
+            }
           }
+
           setDropIndicator(null)
-          document.querySelectorAll('.timer-card.drag-over-timer').forEach((tc) => {
-            tc.classList.remove('drag-over-timer')
+          document.querySelectorAll('.timer-card.drag-over-timer, .timer-card.drag-over-alarm').forEach((tc) => {
+            tc.classList.remove('drag-over-timer', 'drag-over-alarm')
           })
-          timerCard.classList.add('drag-over-timer')
+
+          if (alarmId) {
+            timerCard.classList.add('drag-over-alarm')
+          } else {
+            timerCard.classList.add('drag-over-timer')
+          }
 
           document.querySelectorAll('.timeline-add-btn.drag-over-btn').forEach((tc) => {
             tc.classList.remove('drag-over-btn')
@@ -1364,14 +1440,27 @@ export default memo(function TaskSidebar({
     <>
       <div className={`task-sidebar ${isOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-content">
-          <div className="sidebar-block has-resizer-after">
+          <div 
+            className="sidebar-block has-resizer-after" 
+            style={{ 
+              flex: (!isTasksExpanded && !isEventsExpanded) ? '1 1 0px' : `0 0 ${projectsHeight}px`, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              minHeight: 0,
+              transition: (isResizingSidebar || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
+          >
             <div
               style={{
                 padding: '0',
                 flexShrink: 0,
                 position: 'relative',
                 zIndex: 10,
-                overflow: 'visible'
+                overflow: 'visible',
+                display: 'flex',
+                flexDirection: 'column',
+                flex: 1,
+                minHeight: 0
               }}
             >
               <div
@@ -1427,14 +1516,16 @@ export default memo(function TaskSidebar({
                 className="task-list custom-scrollbar"
                 style={{
                   marginBottom: '8px',
-                  height: `${projectsHeight}px`,
-                  maxHeight: '70vh',
+                  flex: 1,
+                  minHeight: 0,
+                  maxHeight: 'none',
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   scrollbarGutter: 'stable',
                   padding: '0 0 0 18px',
                   display: 'flex',
-                  flexDirection: 'column'
+                  flexDirection: 'column',
+                  transition: (isResizingSidebar || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
               >
                 {projects.length === 0 ? (
@@ -1487,10 +1578,13 @@ export default memo(function TaskSidebar({
             </div>
           </div>
 
-          {/* SIDEBAR RESIZER */}
           <div
-            className={`sidebar-resizer projects-resizer is-resizable ${isResizingSidebar ? 'is-resizing' : ''
-              }`}
+            className={`sidebar-resizer projects-resizer is-resizable ${isResizingSidebar ? 'is-resizing' : ''}`}
+            style={{
+              opacity: 1,
+              pointerEvents: 'auto',
+              transition: isResizingSidebar ? 'none' : 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+            }}
             onMouseDown={(e) => {
               e.preventDefault()
               setResizeStartY(e.clientY)
@@ -1498,11 +1592,18 @@ export default memo(function TaskSidebar({
               setIsResizingSidebar(true)
             }}
           />
-
           <div
             ref={detailBlockRef}
             className="sidebar-block detail-block"
-            style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+            style={{ 
+              flex: (isTasksExpanded || isEventsExpanded) ? '1 1 0px' : '0 0 100px', 
+              minHeight: '100px', 
+              display: 'flex', 
+              flexDirection: 'column',
+              marginTop: '0px',
+              transition: (isResizingSidebar || isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              overflow: 'hidden'
+            }}
           >
             {selectedProject ? (
               <>
@@ -1534,8 +1635,7 @@ export default memo(function TaskSidebar({
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <button
-                      onClick={(e) => {
-                        e.stopPropagation()
+                      onClick={() => {
                         setIsArchiveView(!isArchiveView)
                       }}
                       className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`}
@@ -1614,7 +1714,19 @@ export default memo(function TaskSidebar({
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
+                        setIsTransitioning(true)
+                        
+                        // If collapsing Tasks AND Events is already collapsed, Projects will expand
+                        if (isTasksExpanded && !isEventsExpanded && detailBlockRef.current) {
+                           // This is handled by projectsHeight transition if we set it
+                           setProjectsHeight(window.innerHeight - 150)
+                        } else if (!isTasksExpanded) {
+                           // If re-expanding tasks, set a reasonable project height first
+                           setProjectsHeight(Math.min(projectsHeight, 400))
+                        }
+
                         setIsTasksExpanded(!isTasksExpanded)
+                        setTimeout(() => setIsTransitioning(false), 300)
                       }}
                       className="premium-sidebar-btn"
                       title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'}
@@ -1629,7 +1741,7 @@ export default memo(function TaskSidebar({
                         borderRadius: '6px',
                         color: 'var(--text-secondary)',
                         cursor: 'pointer',
-                        transition: 'all 0.2s ease',
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                         padding: 0
                       }}
                     >
@@ -1642,26 +1754,28 @@ export default memo(function TaskSidebar({
                   <div
                     className="tasks-list custom-scrollbar"
                     style={{
-                      height: isTasksExpanded ? `${tasksHeight}px` : '0px',
+                      flex: isEventsExpanded ? `0 2 ${tasksHeight}px` : '1 1 0px',
+                      height: '100%',
+                      minHeight: 0,
                       overflowY: 'auto',
                       scrollbarGutter: 'stable',
-                      padding: isTasksExpanded ? '0 12px 10px 20px' : '0 12px 0 20px',
+                      padding: '0 12px 30px 20px',
                       display: 'flex',
                       flexDirection: 'column',
                       gap: '4px',
-                      transition: isResizingTasks
+                      transition: (isResizingTasks || isInitialLoading)
                         ? 'none'
-                        : 'height 0.2s linear, padding 0.2s linear, opacity 0.2s linear',
-                      opacity: isTasksExpanded ? 1 : 0,
-                      pointerEvents: isTasksExpanded ? 'all' : 'none'
+                        : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      opacity: 1,
+                      pointerEvents: 'all'
                     }}
                   >
-                      <TaskTree
-                        project={selectedProject}
-                        isRoot={true}
-                        isArchiveView={isArchiveView}
-                        toggleTask={toggleTask}
-                        toggleTaskExpansion={toggleTaskExpansion}
+                    <TaskTree
+                      project={selectedProject}
+                      isRoot={true}
+                      isArchiveView={isArchiveView}
+                      toggleTask={toggleTask}
+                      toggleTaskExpansion={toggleTaskExpansion}
                       editingId={editingId}
                       editingValue={editingValue}
                       setEditingValue={setEditingValue}
@@ -1700,18 +1814,21 @@ export default memo(function TaskSidebar({
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    minHeight: 0,
-                    flex: isEventsExpanded ? '1 1 0%' : '0 0 auto',
-                    transition: isResizingTasks ? 'none' : 'flex 0.2s linear'
+                    minHeight: isEventsExpanded ? '100px' : '50px',
+                    flex: isEventsExpanded ? (isTasksExpanded ? '1 0 0%' : '1') : '0 0 50px',
+                    transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                   }}
                 >
                   {/* --- TASKS RESIZER --- */}
                   <div
-                    className={`sidebar-resizer section-divider ${isTasksExpanded && isEventsExpanded ? 'is-resizable' : ''
-                      } ${isResizingTasks && isTasksExpanded && isEventsExpanded ? 'is-resizing' : ''}`}
+                    className={`sidebar-resizer section-divider ${isTasksExpanded && isEventsExpanded ? 'is-resizable' : ''}`}
                     style={{
                       cursor: isTasksExpanded && isEventsExpanded ? 'row-resize' : 'default',
-                      transition: isResizingTasks ? 'none' : 'margin 0.3s ease'
+                      height: isTasksExpanded && isEventsExpanded ? '4px' : '1px',
+                      opacity: 1,
+                      pointerEvents: isTasksExpanded && isEventsExpanded ? 'auto' : 'none',
+                      margin: 0,
+                      transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}
                     onMouseDown={(e) => {
                       if (!isTasksExpanded || !isEventsExpanded) return
@@ -1779,7 +1896,24 @@ export default memo(function TaskSidebar({
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
+                          setIsTransitioning(true)
+                          
+                          // If collapsing Events, Tasks should expand to the full height
+                          if (isEventsExpanded && detailBlockRef.current) {
+                             const containerHeight = detailBlockRef.current.getBoundingClientRect().height
+                             setTasksHeight(containerHeight - 50) 
+                          } else if (!isEventsExpanded && detailBlockRef.current) {
+                             // If expanding Events, we need to ensure the starting height is correct
+                             // so it can animate back from "full" to its share
+                             const containerHeight = detailBlockRef.current.getBoundingClientRect().height
+                             setTasksHeight(containerHeight - 50)
+                             // We'll let the next frame or the natural flex-basis take over
+                             // Actually, let's just set it to a reasonable split like 50/50 for a moment
+                             setTimeout(() => setTasksHeight(Math.min(350, (containerHeight-100))), 10);
+                          }
+
                           setIsEventsExpanded(!isEventsExpanded)
+                          setTimeout(() => setIsTransitioning(false), 300)
                         }}
                         className="premium-sidebar-btn"
                         title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'}
@@ -1803,64 +1937,66 @@ export default memo(function TaskSidebar({
                     </div>
                   </div>
 
-                  <div
-                    className="events-list custom-scrollbar"
-                    style={{
-                      flex: isEventsExpanded ? '1 1 0%' : '0 0 0px',
-                      maxHeight: isEventsExpanded ? '1000px' : '0px',
-                      minHeight: 0,
-                      overflowY: 'auto',
-                      scrollbarGutter: 'stable',
-                      padding: isEventsExpanded ? '0 12px 20px 20px' : '0 12px 0 20px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                      transition: isResizingTasks
-                        ? 'none'
-                        : 'flex 0.2s linear, max-height 0.2s linear, padding 0.2s linear, opacity 0.2s linear',
-                      opacity: isEventsExpanded ? 1 : 0,
-                      pointerEvents: isEventsExpanded ? 'all' : 'none'
-                    }}
-                  >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                        {selectedProject.events?.map((event) => (
-                          <EventItem
-                            key={event.id}
-                            event={event}
-                            selectedProjectId={selectedProject.id}
-                            editingId={editingId}
-                            editingValue={editingValue}
-                            cancelEditing={cancelEditing}
-                            deleteEvent={handleDeleteEvent}
-                            updateEvent={handleUpdateEvent}
-                            setEditingValue={setEditingValue}
-                            saveEventName={saveEventName}
-                            isExpanded={expandedEventId === event.id}
-                            setExpandedEventId={setExpandedEventId}
-                            projectColor={selectedProject.color}
-                          />
-                        ))}
-                        {(!selectedProject.events || selectedProject.events.length === 0) && (
-                          <div
-                            style={{
-                              flex: 1,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              textAlign: 'center',
-                              padding: '20px',
-                              color: 'var(--text-secondary)',
-                              opacity: 0.4,
-                              fontSize: '12px'
-                            }}
-                          >
-                            No events planned
-                          </div>
-                        )}
-                      </div>
+                  {isEventsExpanded && (
+                    <div
+                      className="events-list custom-scrollbar"
+                      style={{
+                        flex: '1 1 0px',
+                        height: '100%',
+                        minHeight: 0,
+                        overflowY: 'auto',
+                        scrollbarGutter: 'stable',
+                        padding: '0 12px 30px 20px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        transition: (isResizingTasks || isInitialLoading)
+                          ? 'none'
+                          : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                        opacity: 1,
+                        pointerEvents: 'all'
+                      }}
+                    >
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
+                      {selectedProject.events?.map((event) => (
+                        <EventItem
+                          key={event.id}
+                          event={event}
+                          selectedProjectId={selectedProject.id}
+                          editingId={editingId}
+                          editingValue={editingValue}
+                          cancelEditing={cancelEditing}
+                          deleteEvent={handleDeleteEvent}
+                          updateEvent={handleUpdateEvent}
+                          setEditingValue={setEditingValue}
+                          saveEventName={saveEventName}
+                          isExpanded={expandedEventId === event.id}
+                          setExpandedEventId={setExpandedEventId}
+                          projectColor={selectedProject.color}
+                        />
+                      ))}
+                      {(!selectedProject.events || selectedProject.events.length === 0) && (
+                        <div
+                          style={{
+                            flex: 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            padding: '20px',
+                            color: 'var(--text-secondary)',
+                            opacity: 0.4,
+                            fontSize: '12px'
+                          }}
+                        >
+                          No events planned
+                        </div>
+                      )}
                     </div>
                   </div>
-                </>
+                )}
+              </div>
+            </>
             ) : (
               <div
                 style={{

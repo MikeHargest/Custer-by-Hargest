@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef, useEffect } from 'react'
 import {
   MousePointer2,
   Trash2,
@@ -11,7 +11,8 @@ import {
   Square,
   Eraser,
   Type,
-  Check
+  Check,
+  Maximize
 } from 'lucide-react'
 
 export interface ToolButtonProps extends Omit<React.ButtonHTMLAttributes<HTMLButtonElement>, 'onClick'> {
@@ -77,6 +78,15 @@ interface ToolbarProps {
   setEraserSettingsAnchor: (rect: DOMRect | null) => void
   deleteSelected: () => void
   selectedIdsCount: number
+  onFitToContent?: () => void
+  hasElements?: boolean
+  isSettingsPinned?: boolean
+  penSize?: number
+  setPenSize?: (s: number) => void
+  eraserSize?: number
+  setEraserSize?: (s: number) => void
+  textSize?: number
+  setTextSize?: (s: number) => void
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -96,10 +106,48 @@ const Toolbar: React.FC<ToolbarProps> = ({
   setPenSettingsAnchor,
   setEraserSettingsAnchor,
   deleteSelected,
-  selectedIdsCount
+  selectedIdsCount,
+  onFitToContent,
+  hasElements,
+  isSettingsPinned,
+  penSize,
+  setPenSize,
+  eraserSize,
+  setEraserSize,
+  textSize,
+  setTextSize
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent) => e.stopPropagation()
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [])
+  
+  let currentSize = penSize || 4
+  let min = 1
+  let max = 80
+  let setSizeFn: ((s: number) => void) | undefined = setPenSize
+
+  if (mode === 'eraser') {
+    currentSize = eraserSize || 24
+    min = 4
+    max = 200
+    setSizeFn = setEraserSize
+  } else if (mode === 'text') {
+    currentSize = textSize || 32
+    min = 8
+    max = 200
+    setSizeFn = setTextSize
+  }
+
   return (
     <div
+      ref={containerRef}
+      data-context-menu="true"
       style={{
         position: 'absolute',
         top: '50%',
@@ -119,13 +167,40 @@ const Toolbar: React.FC<ToolbarProps> = ({
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
     >
+      {setSizeFn && (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '4px', padding: '4px 0' }}>
+          <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', marginBottom: '8px', fontWeight: 'bold' }}>
+             {currentSize}
+          </div>
+          <input 
+            type="range"
+            min={min}
+            max={max}
+            value={currentSize}
+            onChange={(e) => setSizeFn && setSizeFn(Number(e.target.value))}
+            style={{
+              appearance: 'auto',
+              // @ts-ignore
+              WebkitAppearance: 'slider-vertical',
+              height: '80px',
+              width: '8px',
+              cursor: 'ns-resize',
+              margin: '0',
+            }}
+          />
+          <div style={{ height: '1px', width: '20px', background: 'rgba(255,255,255,0.15)', marginTop: '12px' }} />
+        </div>
+      )}
+
       <ToolButton
         active={mode === 'hand'}
         onClick={() => {
           setMode('hand')
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setShowColorPicker(false)
+          if (!isSettingsPinned) {
+            setShowPenSettings(false)
+            setShowEraserSettings(false)
+            setShowColorPicker(false)
+          }
         }}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -142,9 +217,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         active={mode === 'select'}
         onClick={() => {
           setMode('select')
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setShowColorPicker(false)
+          if (!isSettingsPinned) {
+            setShowPenSettings(false)
+            setShowEraserSettings(false)
+            setShowColorPicker(false)
+          }
         }}
         onContextMenu={(e) => {
           e.preventDefault()
@@ -161,9 +238,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         active={mode === 'pen'}
         onClick={() => {
           setMode('pen')
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setShowColorPicker(false)
+          if (!isSettingsPinned) {
+            setShowPenSettings(false)
+            setShowEraserSettings(false)
+            setShowColorPicker(false)
+          }
         }}
         onDoubleClick={(e): void => {
           setMode('pen')
@@ -190,9 +269,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         active={mode === 'eraser'}
         onClick={(): void => {
           setMode('eraser')
-          setShowEraserSettings(false)
-          setShowPenSettings(false)
-          setShowColorPicker(false)
+          if (!isSettingsPinned) {
+            setShowEraserSettings(false)
+            setShowPenSettings(false)
+            setShowColorPicker(false)
+          }
         }}
         onDoubleClick={(e: React.MouseEvent<HTMLButtonElement>): void => {
           setMode('eraser')
@@ -219,9 +300,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         active={mode === 'rect'}
         onClick={() => {
           setMode('rect')
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setShowColorPicker(false)
+          if (!isSettingsPinned) {
+            setShowPenSettings(false)
+            setShowEraserSettings(false)
+            setShowColorPicker(false)
+          }
         }}
         onDoubleClick={(e) => {
           setMode('rect')
@@ -248,9 +331,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
         active={mode === 'text'}
         onClick={() => {
           setMode('text')
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setShowColorPicker(false)
+          if (!isSettingsPinned) {
+            setShowPenSettings(false)
+            setShowEraserSettings(false)
+            setShowColorPicker(false)
+          }
         }}
         onDoubleClick={(e) => {
           setMode('text')
@@ -365,6 +450,16 @@ const Toolbar: React.FC<ToolbarProps> = ({
         title="Delete (Del)"
         danger
         disabled={selectedIdsCount === 0}
+      />
+
+      <div style={{ height: '1px', background: 'rgba(255,255,255,0.15)', margin: '0 6px' }} />
+
+      <ToolButton
+        active={false}
+        onClick={() => onFitToContent?.()}
+        icon={<Maximize size={18} />}
+        title="Fit to Content (F)"
+        disabled={!hasElements}
       />
     </div>
   )

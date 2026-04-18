@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
+import { Pin } from 'lucide-react'
 import ColorPicker from '../../ColorPicker'
 import { BoardElement, Viewport } from '../types'
 
@@ -23,6 +24,9 @@ interface EditorOverlaysProps {
   eraserSettingsAnchor: DOMRect | null
   eraserSize: number
   setEraserSize: (size: number) => void
+  pushToHistory: () => void
+  isSettingsPinned: boolean
+  setIsSettingsPinned: (val: boolean) => void
 }
 
 const EditorOverlays: React.FC<EditorOverlaysProps> = ({
@@ -45,8 +49,42 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
   showEraserSettings,
   eraserSettingsAnchor,
   eraserSize,
-  setEraserSize
+  setEraserSize,
+  pushToHistory,
+  isSettingsPinned,
+  setIsSettingsPinned
 }) => {
+  const penSettingsRef = useRef<HTMLDivElement>(null)
+  const eraserSettingsRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => e.stopPropagation()
+    const penEl = penSettingsRef.current
+    const eraserEl = eraserSettingsRef.current
+
+    if (penEl) penEl.addEventListener('wheel', handleWheel, { passive: false })
+    if (eraserEl) eraserEl.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      if (penEl) penEl.removeEventListener('wheel', handleWheel)
+      if (eraserEl) eraserEl.removeEventListener('wheel', handleWheel)
+    }
+  }, [showPenSettings, showEraserSettings])
+
+  useEffect(() => {
+    if (mode !== 'eraser') return
+    const moveCursor = (e: MouseEvent) => {
+      const el = document.getElementById('eraser-cursor')
+      if (el) {
+        el.style.left = `${e.clientX}px`
+        el.style.top = `${e.clientY}px`
+      }
+    }
+    // Fire once to position immediately
+    window.addEventListener('mousemove', moveCursor)
+    return () => window.removeEventListener('mousemove', moveCursor)
+  }, [mode])
+
   return (
     <>
       {/* Inline Text Editor Overlay */}
@@ -143,9 +181,9 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
             top: selectionRect.y,
             width: selectionRect.w,
             height: selectionRect.h,
-            background: 'rgba(0, 122, 255, 0.1)',
-            border: '2px solid rgba(0, 122, 255, 0.5)',
-            borderRadius: '4px',
+            background: 'rgba(0, 122, 255, 0.08)',
+            border: '1px solid rgba(0, 122, 255, 0.4)',
+            borderRadius: '2px',
             pointerEvents: 'none',
             zIndex: 1000
           }}
@@ -154,10 +192,10 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
 
       {/* Pen Settings Menu */}
       {showPenSettings && penSettingsAnchor && (
-        <div data-context-menu="true" onWheel={(e) => e.stopPropagation()}>
+        <div ref={penSettingsRef} data-context-menu="true" onWheel={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div
             style={{
-              position: 'fixed',
+              position: 'absolute',
               zIndex: 99999,
               top: penSettingsAnchor.top,
               left: penSettingsAnchor.right + 12,
@@ -170,7 +208,24 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
               backdropFilter: 'blur(20px)'
             }}
           >
-            <div style={{ marginBottom: '16px' }}>
+            <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); setIsSettingsPinned(!isSettingsPinned) }}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: isSettingsPinned ? '#fff' : 'rgba(255,255,255,0.4)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '4px',
+                }}
+                title={isSettingsPinned ? "Unpin settings" : "Pin settings"}
+              >
+                <Pin size={14} />
+              </button>
+            </div>
+            <div style={{ marginBottom: '16px', paddingRight: '20px' }}>
               <div
                 style={{
                   fontSize: '11px',
@@ -182,7 +237,7 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
               >
                 {mode === 'text' ? 'TEXT SIZE' : mode === 'rect' ? 'BORDER WIDTH' : 'PEN SIZE'}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} onPointerDownCapture={() => pushToHistory()}>
                 <input
                   type="range"
                   min={mode === 'text' ? '8' : '1'}
@@ -192,33 +247,8 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
                     const val = parseInt(e.target.value)
                     if (mode === 'text') {
                       setTextSize(val)
-                      if (selectedIds.length > 0) {
-                        setElements((prev) =>
-                          prev.map((el) => {
-                            if (selectedIds.includes(el.id) && el.type === 'text') {
-                              return {
-                                ...el,
-                                fontSize: val,
-                                height: Math.max(el.height, val * 1.5)
-                              }
-                            }
-                            return el
-                          })
-                        )
-                      }
                     } else {
                       setPenSize(val)
-                      if (selectedIds.length > 0) {
-                        setElements((prev) =>
-                          prev.map((el) => {
-                            if (selectedIds.includes(el.id)) {
-                              if (el.type === 'path') return { ...el, size: val }
-                              if (el.type === 'rect') return { ...el, strokeWidth: val }
-                            }
-                            return el
-                          })
-                        )
-                      }
                     }
                   }}
                   style={{ flex: 1, cursor: 'pointer', accentColor: 'var(--accent)' }}
@@ -257,7 +287,7 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
             >
               {mode === 'text' ? 'TEXT COLOR' : mode === 'rect' ? 'BORDER COLOR' : 'PEN COLOR'}
             </div>
-            <div style={{ position: 'relative', width: '100%' }}>
+            <div style={{ position: 'relative', width: '100%' }} onPointerDownCapture={() => pushToHistory()}>
               <ColorPicker
                 color={penColor}
                 onChange={(c) => {
@@ -285,10 +315,10 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
 
       {/* Eraser Settings Menu */}
       {showEraserSettings && eraserSettingsAnchor && (
-        <div data-context-menu="true" onWheel={(e) => e.stopPropagation()}>
+        <div ref={eraserSettingsRef} data-context-menu="true" onWheel={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()}>
           <div
             style={{
-              position: 'fixed',
+              position: 'absolute',
               zIndex: 99999,
               top: eraserSettingsAnchor.top,
               left: eraserSettingsAnchor.right + 12,
@@ -304,17 +334,34 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
               backdropFilter: 'blur(20px)'
             }}
           >
+            <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
+              <button
+                onClick={() => setIsSettingsPinned(!isSettingsPinned)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: isSettingsPinned ? '#fff' : 'rgba(255,255,255,0.4)',
+                  cursor: 'pointer',
+                  padding: '4px',
+                  borderRadius: '4px',
+                }}
+                title={isSettingsPinned ? "Unpin settings" : "Pin settings"}
+              >
+                <Pin size={14} />
+              </button>
+            </div>
             <div
               style={{
                 fontSize: '11px',
                 fontWeight: 800,
                 color: 'rgba(255,255,255,0.4)',
-                letterSpacing: '0.05em'
+                letterSpacing: '0.05em',
+                paddingRight: '20px'
               }}
             >
               ERASER SIZE
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }} onPointerDownCapture={() => pushToHistory()}>
               <input
                 type="range"
                 min="4"

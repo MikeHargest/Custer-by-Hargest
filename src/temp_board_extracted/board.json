@@ -1,0 +1,1017 @@
+{
+  "id": "272ca3f4-4139-40cc-a78b-2fe2e9b908bc",
+  "title": "test",
+  "content": "{\"elements\":[{\"id\":\"2bKPsVePym6OBwXzJXaqg\",\"type\":\"image\",\"x\":-4978.122102892071,\"y\":18.322963027017522,\"width\":751.6908212560386,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2bKPsVePym6OBwXzJXaqg.jpeg\"},{\"id\":\"qtwjDQ6qXO6hzz54ZLcQM\",\"type\":\"image\",\"x\":-4122.276692264052,\"y\":-55.2770369729825,\"width\":800,\"height\":652.8,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/qtwjDQ6qXO6hzz54ZLcQM.jpeg\"},{\"id\":\"hYjzvrvHow3vocOXIwSWR\",\"type\":\"image\",\"x\":-3274.776692264052,\"y\":-121.17703697298248,\"width\":735,\"height\":521,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/hYjzvrvHow3vocOXIwSWR.jpeg\"},{\"id\":\"bKXpfuJr7E990fjwr-ziW\",\"type\":\"image\",\"x\":-2427.276692264052,\"y\":-106.44767917481732,\"width\":800,\"height\":550.4587155963303,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/bKXpfuJr7E990fjwr-ziW.jpeg\"},{\"id\":\"QFTG5BPgU65XmOoX-vwYt\",\"type\":\"image\",\"x\":-1547.2766922640521,\"y\":-170.16744564687738,\"width\":800,\"height\":423.0191826522102,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/QFTG5BPgU65XmOoX-vwYt.jpeg\"},{\"id\":\"eVh7xO9U2I4rCqml-Fvw4\",\"type\":\"image\",\"x\":-667.2766922640521,\"y\":-110.34370363964916,\"width\":800,\"height\":542.6666666666666,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/eVh7xO9U2I4rCqml-Fvw4.jpeg\"},{\"id\":\"erG30CEE-BCZEy-BGpK1X\",\"type\":\"image\",\"x\":201.32303597437584,\"y\":-109.87694638579181,\"width\":800,\"height\":536,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/erG30CEE-BCZEy-BGpK1X.jpeg\"},{\"id\":\"ArbyeOHTGVS9BU355qVsS\",\"type\":\"image\",\"x\":1092.7233077359479,\"y\":-212.07703697298248,\"width\":800,\"height\":339.2,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ArbyeOHTGVS9BU355qVsS.jpeg\"},{\"id\":\"OBJuJIjsx8zu79bdk_fyL\",\"type\":\"image\",\"x\":1972.7233077359479,\"y\":-18.077036972982512,\"width\":800,\"height\":727.1999999999999,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/OBJuJIjsx8zu79bdk_fyL.jpeg\"},{\"id\":\"2JMzzS-FYrNH7bq8LN6Qa\",\"type\":\"image\",\"x\":2852.723307735948,\"y\":-234.34370363964916,\"width\":800,\"height\":294.66666666666663,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2JMzzS-FYrNH7bq8LN6Qa.jpeg\"},{\"id\":\"E1PGIxpNFxgjo8hDIb4Dx\",\"type\":\"image\",\"x\":3732.723307735948,\"y\":-9.366778424191807,\"width\":800,\"height\":744.6205170975813,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/E1PGIxpNFxgjo8hDIb4Dx.jpeg\"},{\"id\":\"DW3SBfrsqvWVK70IqEMBz\",\"type\":\"image\",\"x\":-4985.9675135200905,\"y\":838.3229630270175,\"width\":736,\"height\":680,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/DW3SBfrsqvWVK70IqEMBz.jpeg\"},{\"id\":\"D18uzGX8-A4hcSGtKgZJg\",\"type\":\"image\",\"x\":-4253.9675135200905,\"y\":744.8229630270175,\"width\":568,\"height\":493,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/D18uzGX8-A4hcSGtKgZJg.jpeg\"},{\"id\":\"NAFJNZnsZfEpl63s2HtAQ\",\"type\":\"image\",\"x\":-3522.4675135200905,\"y\":647.8229630270175,\"width\":735,\"height\":299,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/NAFJNZnsZfEpl63s2HtAQ.jpeg\"},{\"id\":\"qQmMVVlQROmUcjhcxC9rA\",\"type\":\"image\",\"x\":-2707.4675135200905,\"y\":738.3229630270175,\"width\":735,\"height\":480,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/qQmMVVlQROmUcjhcxC9rA.jpeg\"},{\"id\":\"obPvIwsoQD-3bTxgF6qEj\",\"type\":\"image\",\"x\":-1939.9675135200905,\"y\":737.8229630270175,\"width\":640,\"height\":479,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/obPvIwsoQD-3bTxgF6qEj.jpeg\"},{\"id\":\"aLmYuFwVfymDQ24KLrhMK\",\"type\":\"image\",\"x\":-1157.7611078261402,\"y\":898.3229630270175,\"width\":764.4128113879003,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/aLmYuFwVfymDQ24KLrhMK.jpeg\"},{\"id\":\"2-2svLx2ut1yLhUKEyDNp\",\"type\":\"image\",\"x\":-295.5547021321902,\"y\":725.9229630270175,\"width\":800,\"height\":455.2,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2-2svLx2ut1yLhUKEyDNp.jpeg\"},{\"id\":\"zUkMTAleLnY_1nTcaf42C\",\"type\":\"image\",\"x\":584.4452978678098,\"y\":723.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/zUkMTAleLnY_1nTcaf42C.jpeg\"},{\"id\":\"dmAWHN0IpLXnoejS_RTeX\",\"type\":\"image\",\"x\":1464.4452978678098,\"y\":723.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dmAWHN0IpLXnoejS_RTeX.jpeg\"},{\"id\":\"I6cOiKBnKhAYq4SHQyl8m\",\"type\":\"image\",\"x\":2344.44529786781,\"y\":648.3229630270175,\"width\":800,\"height\":300,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/I6cOiKBnKhAYq4SHQyl8m.jpeg\"},{\"id\":\"r8nC22G825wHyno7k6ovn\",\"type\":\"image\",\"x\":3224.44529786781,\"y\":723.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/r8nC22G825wHyno7k6ovn.jpeg\"},{\"id\":\"XvdOrLEVSYXujm_Mmscb3\",\"type\":\"image\",\"x\":-4953.9675135200905,\"y\":1528.3229630270175,\"width\":800,\"height\":300,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/XvdOrLEVSYXujm_Mmscb3.jpeg\"},{\"id\":\"ytrfusJL78IlCAbUwXyqd\",\"type\":\"image\",\"x\":-4073.9675135200905,\"y\":1603.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ytrfusJL78IlCAbUwXyqd.jpeg\"},{\"id\":\"dA9AwHXqbMSWB9JHajRPT\",\"type\":\"image\",\"x\":-3193.9675135200905,\"y\":1603.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dA9AwHXqbMSWB9JHajRPT.jpeg\"},{\"id\":\"dReo4HXvONiyf369iI4Iy\",\"type\":\"image\",\"x\":-2313.9675135200905,\"y\":1528.3229630270175,\"width\":800,\"height\":300,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dReo4HXvONiyf369iI4Iy.jpeg\"},{\"id\":\"vQkCde7nh8ZrL6ntmFLvs\",\"type\":\"image\",\"x\":-1433.9675135200905,\"y\":1548.5312963603508,\"width\":800,\"height\":340.4166666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/vQkCde7nh8ZrL6ntmFLvs.jpeg\"},{\"id\":\"Qb71MIU7C058KinT13Uj4\",\"type\":\"image\",\"x\":-553.9675135200905,\"y\":1603.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Qb71MIU7C058KinT13Uj4.jpeg\"},{\"id\":\"Gp-N8hf2YoJGvmulL5ZI9\",\"type\":\"image\",\"x\":326.0324864799095,\"y\":1628.3229630270175,\"width\":800,\"height\":500,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Gp-N8hf2YoJGvmulL5ZI9.jpeg\"},{\"id\":\"pFWdQwooWzf1M_LbxKajj\",\"type\":\"image\",\"x\":1206.0324864799095,\"y\":1548.5312963603508,\"width\":800,\"height\":340.4166666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/pFWdQwooWzf1M_LbxKajj.jpeg\"},{\"id\":\"0MgsdGabo7zoK15kMSOnj\",\"type\":\"image\",\"x\":2086.0324864799095,\"y\":1548.5312963603508,\"width\":800,\"height\":340.4166666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/0MgsdGabo7zoK15kMSOnj.jpeg\"},{\"id\":\"y_TWZtrGekjhP4RbeJNrJ\",\"type\":\"image\",\"x\":2966.0324864799095,\"y\":1603.3229630270175,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/y_TWZtrGekjhP4RbeJNrJ.jpeg\"},{\"id\":\"15HLQ1rST8DonbDfI9ZcA\",\"type\":\"image\",\"x\":3788.699153146576,\"y\":1778.3229630270175,\"width\":685.3333333333334,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/15HLQ1rST8DonbDfI9ZcA.jpeg\"},{\"id\":\"WsUE4wzcosRRMb8qBx6ii\",\"type\":\"image\",\"x\":-5113.9675135200905,\"y\":2498.3229630270175,\"width\":480,\"height\":480,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/WsUE4wzcosRRMb8qBx6ii.png\"},{\"id\":\"l80ev7pvLQGbMgLwOZnZF\",\"type\":\"image\",\"x\":-4393.9675135200905,\"y\":2508.3229630270175,\"width\":800,\"height\":500,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/l80ev7pvLQGbMgLwOZnZF.jpeg\"},{\"id\":\"nVaoVg39izPi6lqlA3qnY\",\"type\":\"image\",\"x\":-3513.9675135200905,\"y\":2508.3229630270175,\"width\":800,\"height\":500,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/nVaoVg39izPi6lqlA3qnY.jpeg\"},{\"id\":\"Xb3murho0rMr_slyFMSND\",\"type\":\"image\",\"x\":-2633.9675135200905,\"y\":2508.3229630270175,\"width\":800,\"height\":500,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Xb3murho0rMr_slyFMSND.jpeg\"},{\"id\":\"EtkWHrio_kLloEd0oGaOS\",\"type\":\"image\",\"x\":-1928.9455387178637,\"y\":2658.3229630270175,\"width\":450.04394960445353,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/EtkWHrio_kLloEd0oGaOS.jpeg\"},{\"id\":\"blTouFopX-9O_Klidb193\",\"type\":\"image\",\"x\":-1248.923563915637,\"y\":2625.8229630270175,\"width\":750,\"height\":735,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/blTouFopX-9O_Klidb193.png\"},{\"id\":\"YnBo86CppE_CIZ2GCDUh-\",\"type\":\"image\",\"x\":-393.92356391563703,\"y\":2649.6720876408176,\"width\":800,\"height\":782.6982492276005,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/YnBo86CppE_CIZ2GCDUh-.png\"},{\"id\":\"EatfnKXgY9ti13cN1aA3f\",\"type\":\"image\",\"x\":482.3727323806593,\"y\":2658.3229630270175,\"width\":792.5925925925926,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/EatfnKXgY9ti13cN1aA3f.png\"},{\"id\":\"oOTyUemrlKOxA4x86g-jT\",\"type\":\"image\",\"x\":1354.9653249732519,\"y\":2658.3229630270175,\"width\":792.5925925925926,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/oOTyUemrlKOxA4x86g-jT.png\"},{\"id\":\"dbviGjKSOaBPip3QZTBaK\",\"type\":\"image\",\"x\":2231.2616212695484,\"y\":2476.239629693684,\"width\":800,\"height\":435.83333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dbviGjKSOaBPip3QZTBaK.png\"},{\"id\":\"2prS4FSY5ND-wjnxZFNXi\",\"type\":\"image\",\"x\":3111.2616212695484,\"y\":2481.864629693684,\"width\":800,\"height\":447.0833333333333,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2prS4FSY5ND-wjnxZFNXi.png\"},{\"id\":\"cNGXZfxnvbTsSygjvFZn2\",\"type\":\"image\",\"x\":-5057.264216816794,\"y\":3538.3229630270175,\"width\":593.4065934065934,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/cNGXZfxnvbTsSygjvFZn2.png\"},{\"id\":\"t8-OCouzWT6R6I62JxSNN\",\"type\":\"image\",\"x\":-4280.560920113498,\"y\":3361.864629693684,\"width\":800,\"height\":447.0833333333333,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/t8-OCouzWT6R6I62JxSNN.png\"},{\"id\":\"h6GMtt67qkufTXETH-Ojv\",\"type\":\"image\",\"x\":-3400.5609201134976,\"y\":3265.406296360351,\"width\":800,\"height\":254.16666666666666,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/h6GMtt67qkufTXETH-Ojv.png\"},{\"id\":\"pJRr39tRrMcESyuxON85z\",\"type\":\"image\",\"x\":-2520.5609201134976,\"y\":3281.031296360351,\"width\":800,\"height\":285.41666666666663,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/pJRr39tRrMcESyuxON85z.png\"},{\"id\":\"PZuUu9mA8kWtYexINOVsu\",\"type\":\"image\",\"x\":-1640.5609201134976,\"y\":3346.864629693684,\"width\":800,\"height\":417.0833333333333,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/PZuUu9mA8kWtYexINOVsu.png\"},{\"id\":\"csmqxg1fXif8paHwQKLCd\",\"type\":\"image\",\"x\":-760.5609201134976,\"y\":3307.0729630270175,\"width\":800,\"height\":337.5,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/csmqxg1fXif8paHwQKLCd.png\"},{\"id\":\"e8PN_3qrJCzyxWe5V2oIY\",\"type\":\"image\",\"x\":119.43907988650244,\"y\":3324.989629693684,\"width\":800,\"height\":373.33333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/e8PN_3qrJCzyxWe5V2oIY.png\"},{\"id\":\"HDgImXZUykecRGoNqHSYD\",\"type\":\"image\",\"x\":999.4390798865024,\"y\":3327.6979630270175,\"width\":800,\"height\":378.75000000000006,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/HDgImXZUykecRGoNqHSYD.png\"},{\"id\":\"NVrckGasrXjnFeBx4wLIi\",\"type\":\"image\",\"x\":1879.4390798865024,\"y\":3307.0729630270175,\"width\":800,\"height\":337.5,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/NVrckGasrXjnFeBx4wLIi.png\"},{\"id\":\"5DqsXzFo6pRzcI15Sc2bU\",\"type\":\"image\",\"x\":2752.9821669468542,\"y\":3320.978857928596,\"width\":800,\"height\":362.08333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/5DqsXzFo6pRzcI15Sc2bU.png\"},{\"id\":\"7R51cisi3RWYDu8uzUKh7\",\"type\":\"image\",\"x\":3639.4390798865024,\"y\":3276.239629693684,\"width\":800,\"height\":275.83333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/7R51cisi3RWYDu8uzUKh7.png\"},{\"id\":\"3uklgyzetTHtFrgKwgPdy\",\"type\":\"image\",\"x\":-4953.9675135200905,\"y\":4187.072963027018,\"width\":800,\"height\":337.5,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3uklgyzetTHtFrgKwgPdy.png\"},{\"id\":\"cbyb8mOeZiwABEepDBrL-\",\"type\":\"image\",\"x\":-4268.839308391885,\"y\":4418.322963027018,\"width\":410.2564102564102,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/cbyb8mOeZiwABEepDBrL-.png\"},{\"id\":\"JpY_5BH4FMhJuQmAZrCZd\",\"type\":\"image\",\"x\":-3587.5625475552897,\"y\":4418.322963027018,\"width\":792.2971114167813,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/JpY_5BH4FMhJuQmAZrCZd.png\"},{\"id\":\"cBiIwQ_zC1LZjqQrG8oyH\",\"type\":\"image\",\"x\":-2711.413991846899,\"y\":4274.364629693684,\"width\":800,\"height\":512.0833333333333,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/cBiIwQ_zC1LZjqQrG8oyH.png\"},{\"id\":\"fmxO1mhj5_fRyzsqRZr_o\",\"type\":\"image\",\"x\":-1831.413991846899,\"y\":4227.906296360351,\"width\":800,\"height\":419.1666666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/fmxO1mhj5_fRyzsqRZr_o.png\"},{\"id\":\"uJBkDoA6scB1lgpI-Mt7d\",\"type\":\"image\",\"x\":-951.4139918468991,\"y\":4233.739629693684,\"width\":800,\"height\":430.83333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/uJBkDoA6scB1lgpI-Mt7d.png\"},{\"id\":\"vTvUu45_4JRFt9GQRmpex\",\"type\":\"image\",\"x\":-231.01332406726635,\"y\":4418.322963027018,\"width\":480.80133555926545,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/vTvUu45_4JRFt9GQRmpex.png\"},{\"id\":\"RB14gVTId95rknWomLekW\",\"type\":\"image\",\"x\":489.3873437123664,\"y\":4187.072963027018,\"width\":800,\"height\":337.5,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/RB14gVTId95rknWomLekW.png\"},{\"id\":\"8DoWV0km_zNRP1-NN_-kD\",\"type\":\"image\",\"x\":1369.3873437123664,\"y\":4227.906296360351,\"width\":800,\"height\":419.1666666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/8DoWV0km_zNRP1-NN_-kD.png\"},{\"id\":\"BbidLfJZ5viIjRrLzYH9C\",\"type\":\"image\",\"x\":2249.3873437123666,\"y\":4336.447963027018,\"width\":800,\"height\":636.25,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/BbidLfJZ5viIjRrLzYH9C.png\"},{\"id\":\"ztITHMVoFIKhpr8qcQ0h8\",\"type\":\"image\",\"x\":3129.3873437123666,\"y\":4336.447963027018,\"width\":800,\"height\":636.25,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ztITHMVoFIKhpr8qcQ0h8.png\"},{\"id\":\"fonlK135qmPwwb70gVvCP\",\"type\":\"image\",\"x\":-4953.9675135200905,\"y\":5073.947963027018,\"width\":800,\"height\":351.24999999999994,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/fonlK135qmPwwb70gVvCP.png\"},{\"id\":\"3sPRY2e3UywDe5ycPlbBl\",\"type\":\"image\",\"x\":-4073.9675135200905,\"y\":5107.906296360351,\"width\":800,\"height\":419.1666666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3sPRY2e3UywDe5ycPlbBl.png\"},{\"id\":\"Ra42KynHPQfVH9odyp6Wd\",\"type\":\"image\",\"x\":-3193.9675135200905,\"y\":5070.822963027018,\"width\":800,\"height\":345,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Ra42KynHPQfVH9odyp6Wd.png\"},{\"id\":\"oTCkECVZM9MwF8WqQbiYe\",\"type\":\"image\",\"x\":-2313.9675135200905,\"y\":5107.906296360351,\"width\":800,\"height\":419.1666666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/oTCkECVZM9MwF8WqQbiYe.png\"},{\"id\":\"E5qGZZ-qErxHhh6cakrg3\",\"type\":\"image\",\"x\":-1433.9675135200905,\"y\":5107.906296360351,\"width\":800,\"height\":419.1666666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/E5qGZZ-qErxHhh6cakrg3.png\"},{\"id\":\"xcxvA5DWcFXNDf7KqcA90\",\"type\":\"image\",\"x\":-553.9675135200905,\"y\":5193.739629693685,\"width\":800,\"height\":590.8333333333334,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/xcxvA5DWcFXNDf7KqcA90.png\"},{\"id\":\"enSOHLhNj9poRnSRYhHtE\",\"type\":\"image\",\"x\":326.0324864799095,\"y\":5066.239629693685,\"width\":800,\"height\":335.83333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/enSOHLhNj9poRnSRYhHtE.png\"},{\"id\":\"gd9FDCX6Ry2eYR6QvwKIP\",\"type\":\"image\",\"x\":1206.0324864799095,\"y\":5065.614629693685,\"width\":800,\"height\":334.58333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/gd9FDCX6Ry2eYR6QvwKIP.png\"},{\"id\":\"h6YwxvXhqOl6ihKLPih2B\",\"type\":\"image\",\"x\":2086.0324864799095,\"y\":5065.822963027018,\"width\":800,\"height\":335.00000000000006,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/h6YwxvXhqOl6ihKLPih2B.png\"},{\"id\":\"LRWjcSzOEZNUGEy_B1RAZ\",\"type\":\"image\",\"x\":2966.0324864799095,\"y\":5123.322963027018,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/LRWjcSzOEZNUGEy_B1RAZ.png\"},{\"id\":\"YKMSxLNPKuL7f5SngSQCR\",\"type\":\"image\",\"x\":3846.0324864799095,\"y\":5073.947963027018,\"width\":800,\"height\":351.24999999999994,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/YKMSxLNPKuL7f5SngSQCR.png\"},{\"id\":\"0tJZObILmbtOfo1zhNlHY\",\"type\":\"image\",\"x\":-4953.9675135200905,\"y\":5732.697963027018,\"width\":800,\"height\":327.08333333333337,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/0tJZObILmbtOfo1zhNlHY.png\"},{\"id\":\"Ft6YItar7veMvwnQPzAj5\",\"type\":\"image\",\"x\":-4073.9675135200905,\"y\":5794.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Ft6YItar7veMvwnQPzAj5.png\"},{\"id\":\"EpWjI-h-T6xUn7tc6o9N7\",\"type\":\"image\",\"x\":-3193.9675135200905,\"y\":5794.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/EpWjI-h-T6xUn7tc6o9N7.png\"},{\"id\":\"nQzdYFG8QkYjkZD4byZOp\",\"type\":\"image\",\"x\":-2313.9675135200905,\"y\":5794.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/nQzdYFG8QkYjkZD4byZOp.png\"},{\"id\":\"-tiu4WaymdX7rdENS2r8A\",\"type\":\"image\",\"x\":-1437.6826837987282,\"y\":5969.156296360351,\"width\":792.5696594427245,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/-tiu4WaymdX7rdENS2r8A.png\"},{\"id\":\"9o-AbmO-gE3XCjmRbQ7uv\",\"type\":\"image\",\"x\":-561.397854077366,\"y\":5794.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/9o-AbmO-gE3XCjmRbQ7uv.png\"},{\"id\":\"VsImllhG_bRxVnnHFvPxC\",\"type\":\"image\",\"x\":318.602145922634,\"y\":5933.797180338252,\"width\":800,\"height\":729.2817679558011,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/VsImllhG_bRxVnnHFvPxC.png\"},{\"id\":\"A1uTtBj08_PNi0E70Ddy4\",\"type\":\"image\",\"x\":1041.2436553565963,\"y\":5969.156296360351,\"width\":485.28301886792457,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/A1uTtBj08_PNi0E70Ddy4.png\"},{\"id\":\"FXm-87nbl9TKdmHjcHjRH\",\"type\":\"image\",\"x\":1763.8851647905585,\"y\":5788.739629693684,\"width\":800,\"height\":439.1666666666667,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/FXm-87nbl9TKdmHjcHjRH.png\"},{\"id\":\"XnY4NUClyI7WBiL0GQoAd\",\"type\":\"image\",\"x\":2642.0183378026395,\"y\":5854.156296360351,\"width\":800,\"height\":570,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/XnY4NUClyI7WBiL0GQoAd.png\"},{\"id\":\"G8Cjc-dxKOG6eFSd_n6yq\",\"type\":\"image\",\"x\":3523.8851647905585,\"y\":5794.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/G8Cjc-dxKOG6eFSd_n6yq.png\"},{\"id\":\"OvzRy9laJDEV4-8ofVlG7\",\"type\":\"image\",\"x\":-4953.9675135200905,\"y\":6763.891632554914,\"width\":800,\"height\":629.4706723891272,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/OvzRy9laJDEV4-8ofVlG7.png\"},{\"id\":\"0B6YFFmyNgGSjLzMYicPw\",\"type\":\"image\",\"x\":-4073.9675135200905,\"y\":6674.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/0B6YFFmyNgGSjLzMYicPw.png\"},{\"id\":\"DUTW9NGDqFbZgzYc_b8bx\",\"type\":\"image\",\"x\":-3193.9675135200905,\"y\":6674.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/DUTW9NGDqFbZgzYc_b8bx.png\"},{\"id\":\"3RL0E7ASZnP6CBHdyHmtq\",\"type\":\"image\",\"x\":-2313.9675135200905,\"y\":6674.156296360351,\"width\":800,\"height\":450,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3RL0E7ASZnP6CBHdyHmtq.png\"},{\"id\":\"yiikOlITi7zXBL-Yfu7mK\",\"type\":\"image\",\"x\":-1433.9675135200905,\"y\":6768.919434776339,\"width\":800,\"height\":639.5262768319762,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/yiikOlITi7zXBL-Yfu7mK.png\"},{\"id\":\"TIk8Ice3Ek-JFek5ak1B0\",\"type\":\"image\",\"x\":-553.9675135200905,\"y\":6703.322963027018,\"width\":800,\"height\":508.3333333333333,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/TIk8Ice3Ek-JFek5ak1B0.png\"},{\"id\":\"ecC-fYTJyss-RsvQ3eW-4\",\"type\":\"image\",\"x\":326.0324864799095,\"y\":6688.322963027018,\"width\":800,\"height\":478.3333333333333,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ecC-fYTJyss-RsvQ3eW-4.png\"},{\"id\":\"VSiDRxM4FKF5e_uUyNTrw\",\"type\":\"image\",\"x\":1206.0324864799095,\"y\":6617.906296360351,\"width\":800,\"height\":337.5,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/VSiDRxM4FKF5e_uUyNTrw.png\"},{\"id\":\"5MpXEvcgnD7pP-tPNvb2Z\",\"type\":\"image\",\"x\":2086.0324864799095,\"y\":6617.906296360351,\"width\":800,\"height\":337.5,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/5MpXEvcgnD7pP-tPNvb2Z.png\"},{\"id\":\"x_qhU4L5Rv2MJOo-9jbhY\",\"type\":\"image\",\"x\":2966.0324864799095,\"y\":6751.031296360351,\"width\":800,\"height\":603.75,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/x_qhU4L5Rv2MJOo-9jbhY.png\"},{\"id\":\"zdXgnxhjcd45UMoG-slzU\",\"type\":\"image\",\"x\":3846.0324864799095,\"y\":6649.156296360351,\"width\":800,\"height\":400,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/zdXgnxhjcd45UMoG-slzU.png\"},{\"id\":\"B7BT_BAWRCjzFqtq-j8m2\",\"type\":\"image\",\"x\":-5011.3008468534235,\"y\":7568.682573192327,\"width\":685.3333333333334,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/B7BT_BAWRCjzFqtq-j8m2.jpeg\"},{\"id\":\"v-RKTpl0IIOvhVrkZUppd\",\"type\":\"image\",\"x\":-4245.9675135200905,\"y\":7568.682573192327,\"width\":685.3333333333334,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/v-RKTpl0IIOvhVrkZUppd.jpeg\"},{\"id\":\"esdxI6oc_QSR1C26VjXbj\",\"type\":\"image\",\"x\":-3423.300846853424,\"y\":7396.062961633824,\"width\":800,\"height\":454.7607768829938,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/esdxI6oc_QSR1C26VjXbj.jpeg\"},{\"id\":\"-WaPIYnMkvzzh2wZdpbJQ\",\"type\":\"image\",\"x\":-2543.300846853424,\"y\":7368.682573192327,\"width\":800,\"height\":400,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/-WaPIYnMkvzzh2wZdpbJQ.jpeg\"},{\"id\":\"h2xs4ACH1sHxJ8AAkaZ7L\",\"type\":\"image\",\"x\":-1663.300846853424,\"y\":7568.682573192327,\"width\":800,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/h2xs4ACH1sHxJ8AAkaZ7L.jpeg\"},{\"id\":\"vvMHAr0yzMZT5sraJMcm3\",\"type\":\"image\",\"x\":-783.300846853424,\"y\":7368.682573192327,\"width\":800,\"height\":400,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/vvMHAr0yzMZT5sraJMcm3.jpeg\"},{\"id\":\"3utwFUwCRSZx6PLt94DRe\",\"type\":\"image\",\"x\":96.69915314657601,\"y\":7568.682573192327,\"width\":800,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3utwFUwCRSZx6PLt94DRe.jpeg\"},{\"id\":\"qyCUTnooXw_l5oroOQ8-5\",\"type\":\"image\",\"x\":976.699153146576,\"y\":7386.666224418485,\"width\":800,\"height\":435.96730245231606,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/qyCUTnooXw_l5oroOQ8-5.jpeg\"},{\"id\":\"paczrCBm1KOSjAXx5FQ1V\",\"type\":\"image\",\"x\":1856.699153146576,\"y\":7392.2503421722995,\"width\":800,\"height\":447.13553795994414,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/paczrCBm1KOSjAXx5FQ1V.jpeg\"},{\"id\":\"dnY8_uY3puAGfqpHFffWC\",\"type\":\"image\",\"x\":2704.699153146576,\"y\":7362.182573192327,\"width\":736,\"height\":387,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dnY8_uY3puAGfqpHFffWC.jpeg\"},{\"id\":\"DSqV8WulabKbk0x9za9XN\",\"type\":\"image\",\"x\":3449.665097419022,\"y\":7568.682573192327,\"width\":593.9318885448916,\"height\":800,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/DSqV8WulabKbk0x9za9XN.jpeg\"},{\"id\":\"_Tbu7UEiXA00BOAAkJYBi\",\"type\":\"image\",\"x\":-4949.945912126126,\"y\":8279.549669849881,\"width\":800,\"height\":480,\"url\":\"file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/_Tbu7UEiXA00BOAAkJYBi.png\"}],\"viewport\":{\"x\":-959.1685379429687,\"y\":432.08774406528926,\"scale\":0.5117742993363512}}",
+  "type": "board",
+  "projectId": "94ee1b4b-599c-45c3-9c39-9d586230627a",
+  "isTrash": false,
+  "lastModified": 1776453347346,
+  "createdAt": 1776191921777,
+  "fileName": "test_272ca3f4.board",
+  "elements": [
+    {
+      "id": "2bKPsVePym6OBwXzJXaqg",
+      "type": "image",
+      "x": -4978.122102892071,
+      "y": 18.322963027017522,
+      "width": 751.6908212560386,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2bKPsVePym6OBwXzJXaqg.jpeg"
+    },
+    {
+      "id": "qtwjDQ6qXO6hzz54ZLcQM",
+      "type": "image",
+      "x": -4122.276692264052,
+      "y": -55.2770369729825,
+      "width": 800,
+      "height": 652.8,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/qtwjDQ6qXO6hzz54ZLcQM.jpeg"
+    },
+    {
+      "id": "hYjzvrvHow3vocOXIwSWR",
+      "type": "image",
+      "x": -3274.776692264052,
+      "y": -121.17703697298248,
+      "width": 735,
+      "height": 521,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/hYjzvrvHow3vocOXIwSWR.jpeg"
+    },
+    {
+      "id": "bKXpfuJr7E990fjwr-ziW",
+      "type": "image",
+      "x": -2427.276692264052,
+      "y": -106.44767917481732,
+      "width": 800,
+      "height": 550.4587155963303,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/bKXpfuJr7E990fjwr-ziW.jpeg"
+    },
+    {
+      "id": "QFTG5BPgU65XmOoX-vwYt",
+      "type": "image",
+      "x": -1547.2766922640521,
+      "y": -170.16744564687738,
+      "width": 800,
+      "height": 423.0191826522102,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/QFTG5BPgU65XmOoX-vwYt.jpeg"
+    },
+    {
+      "id": "eVh7xO9U2I4rCqml-Fvw4",
+      "type": "image",
+      "x": -667.2766922640521,
+      "y": -110.34370363964916,
+      "width": 800,
+      "height": 542.6666666666666,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/eVh7xO9U2I4rCqml-Fvw4.jpeg"
+    },
+    {
+      "id": "erG30CEE-BCZEy-BGpK1X",
+      "type": "image",
+      "x": 201.32303597437584,
+      "y": -109.87694638579181,
+      "width": 800,
+      "height": 536,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/erG30CEE-BCZEy-BGpK1X.jpeg"
+    },
+    {
+      "id": "ArbyeOHTGVS9BU355qVsS",
+      "type": "image",
+      "x": 1092.7233077359479,
+      "y": -212.07703697298248,
+      "width": 800,
+      "height": 339.2,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ArbyeOHTGVS9BU355qVsS.jpeg"
+    },
+    {
+      "id": "OBJuJIjsx8zu79bdk_fyL",
+      "type": "image",
+      "x": 1972.7233077359479,
+      "y": -18.077036972982512,
+      "width": 800,
+      "height": 727.1999999999999,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/OBJuJIjsx8zu79bdk_fyL.jpeg"
+    },
+    {
+      "id": "2JMzzS-FYrNH7bq8LN6Qa",
+      "type": "image",
+      "x": 2852.723307735948,
+      "y": -234.34370363964916,
+      "width": 800,
+      "height": 294.66666666666663,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2JMzzS-FYrNH7bq8LN6Qa.jpeg"
+    },
+    {
+      "id": "E1PGIxpNFxgjo8hDIb4Dx",
+      "type": "image",
+      "x": 3732.723307735948,
+      "y": -9.366778424191807,
+      "width": 800,
+      "height": 744.6205170975813,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/E1PGIxpNFxgjo8hDIb4Dx.jpeg"
+    },
+    {
+      "id": "DW3SBfrsqvWVK70IqEMBz",
+      "type": "image",
+      "x": -4985.9675135200905,
+      "y": 838.3229630270175,
+      "width": 736,
+      "height": 680,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/DW3SBfrsqvWVK70IqEMBz.jpeg"
+    },
+    {
+      "id": "D18uzGX8-A4hcSGtKgZJg",
+      "type": "image",
+      "x": -4253.9675135200905,
+      "y": 744.8229630270175,
+      "width": 568,
+      "height": 493,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/D18uzGX8-A4hcSGtKgZJg.jpeg"
+    },
+    {
+      "id": "NAFJNZnsZfEpl63s2HtAQ",
+      "type": "image",
+      "x": -3522.4675135200905,
+      "y": 647.8229630270175,
+      "width": 735,
+      "height": 299,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/NAFJNZnsZfEpl63s2HtAQ.jpeg"
+    },
+    {
+      "id": "qQmMVVlQROmUcjhcxC9rA",
+      "type": "image",
+      "x": -2707.4675135200905,
+      "y": 738.3229630270175,
+      "width": 735,
+      "height": 480,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/qQmMVVlQROmUcjhcxC9rA.jpeg"
+    },
+    {
+      "id": "obPvIwsoQD-3bTxgF6qEj",
+      "type": "image",
+      "x": -1939.9675135200905,
+      "y": 737.8229630270175,
+      "width": 640,
+      "height": 479,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/obPvIwsoQD-3bTxgF6qEj.jpeg"
+    },
+    {
+      "id": "aLmYuFwVfymDQ24KLrhMK",
+      "type": "image",
+      "x": -1157.7611078261402,
+      "y": 898.3229630270175,
+      "width": 764.4128113879003,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/aLmYuFwVfymDQ24KLrhMK.jpeg"
+    },
+    {
+      "id": "2-2svLx2ut1yLhUKEyDNp",
+      "type": "image",
+      "x": -295.5547021321902,
+      "y": 725.9229630270175,
+      "width": 800,
+      "height": 455.2,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2-2svLx2ut1yLhUKEyDNp.jpeg"
+    },
+    {
+      "id": "zUkMTAleLnY_1nTcaf42C",
+      "type": "image",
+      "x": 584.4452978678098,
+      "y": 723.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/zUkMTAleLnY_1nTcaf42C.jpeg"
+    },
+    {
+      "id": "dmAWHN0IpLXnoejS_RTeX",
+      "type": "image",
+      "x": 1464.4452978678098,
+      "y": 723.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dmAWHN0IpLXnoejS_RTeX.jpeg"
+    },
+    {
+      "id": "I6cOiKBnKhAYq4SHQyl8m",
+      "type": "image",
+      "x": 2344.44529786781,
+      "y": 648.3229630270175,
+      "width": 800,
+      "height": 300,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/I6cOiKBnKhAYq4SHQyl8m.jpeg"
+    },
+    {
+      "id": "r8nC22G825wHyno7k6ovn",
+      "type": "image",
+      "x": 3224.44529786781,
+      "y": 723.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/r8nC22G825wHyno7k6ovn.jpeg"
+    },
+    {
+      "id": "XvdOrLEVSYXujm_Mmscb3",
+      "type": "image",
+      "x": -4953.9675135200905,
+      "y": 1528.3229630270175,
+      "width": 800,
+      "height": 300,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/XvdOrLEVSYXujm_Mmscb3.jpeg"
+    },
+    {
+      "id": "ytrfusJL78IlCAbUwXyqd",
+      "type": "image",
+      "x": -4073.9675135200905,
+      "y": 1603.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ytrfusJL78IlCAbUwXyqd.jpeg"
+    },
+    {
+      "id": "dA9AwHXqbMSWB9JHajRPT",
+      "type": "image",
+      "x": -3193.9675135200905,
+      "y": 1603.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dA9AwHXqbMSWB9JHajRPT.jpeg"
+    },
+    {
+      "id": "dReo4HXvONiyf369iI4Iy",
+      "type": "image",
+      "x": -2313.9675135200905,
+      "y": 1528.3229630270175,
+      "width": 800,
+      "height": 300,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dReo4HXvONiyf369iI4Iy.jpeg"
+    },
+    {
+      "id": "vQkCde7nh8ZrL6ntmFLvs",
+      "type": "image",
+      "x": -1433.9675135200905,
+      "y": 1548.5312963603508,
+      "width": 800,
+      "height": 340.4166666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/vQkCde7nh8ZrL6ntmFLvs.jpeg"
+    },
+    {
+      "id": "Qb71MIU7C058KinT13Uj4",
+      "type": "image",
+      "x": -553.9675135200905,
+      "y": 1603.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Qb71MIU7C058KinT13Uj4.jpeg"
+    },
+    {
+      "id": "Gp-N8hf2YoJGvmulL5ZI9",
+      "type": "image",
+      "x": 326.0324864799095,
+      "y": 1628.3229630270175,
+      "width": 800,
+      "height": 500,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Gp-N8hf2YoJGvmulL5ZI9.jpeg"
+    },
+    {
+      "id": "pFWdQwooWzf1M_LbxKajj",
+      "type": "image",
+      "x": 1206.0324864799095,
+      "y": 1548.5312963603508,
+      "width": 800,
+      "height": 340.4166666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/pFWdQwooWzf1M_LbxKajj.jpeg"
+    },
+    {
+      "id": "0MgsdGabo7zoK15kMSOnj",
+      "type": "image",
+      "x": 2086.0324864799095,
+      "y": 1548.5312963603508,
+      "width": 800,
+      "height": 340.4166666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/0MgsdGabo7zoK15kMSOnj.jpeg"
+    },
+    {
+      "id": "y_TWZtrGekjhP4RbeJNrJ",
+      "type": "image",
+      "x": 2966.0324864799095,
+      "y": 1603.3229630270175,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/y_TWZtrGekjhP4RbeJNrJ.jpeg"
+    },
+    {
+      "id": "15HLQ1rST8DonbDfI9ZcA",
+      "type": "image",
+      "x": 3788.699153146576,
+      "y": 1778.3229630270175,
+      "width": 685.3333333333334,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/15HLQ1rST8DonbDfI9ZcA.jpeg"
+    },
+    {
+      "id": "WsUE4wzcosRRMb8qBx6ii",
+      "type": "image",
+      "x": -5113.9675135200905,
+      "y": 2498.3229630270175,
+      "width": 480,
+      "height": 480,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/WsUE4wzcosRRMb8qBx6ii.png"
+    },
+    {
+      "id": "l80ev7pvLQGbMgLwOZnZF",
+      "type": "image",
+      "x": -4393.9675135200905,
+      "y": 2508.3229630270175,
+      "width": 800,
+      "height": 500,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/l80ev7pvLQGbMgLwOZnZF.jpeg"
+    },
+    {
+      "id": "nVaoVg39izPi6lqlA3qnY",
+      "type": "image",
+      "x": -3513.9675135200905,
+      "y": 2508.3229630270175,
+      "width": 800,
+      "height": 500,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/nVaoVg39izPi6lqlA3qnY.jpeg"
+    },
+    {
+      "id": "Xb3murho0rMr_slyFMSND",
+      "type": "image",
+      "x": -2633.9675135200905,
+      "y": 2508.3229630270175,
+      "width": 800,
+      "height": 500,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Xb3murho0rMr_slyFMSND.jpeg"
+    },
+    {
+      "id": "EtkWHrio_kLloEd0oGaOS",
+      "type": "image",
+      "x": -1928.9455387178637,
+      "y": 2658.3229630270175,
+      "width": 450.04394960445353,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/EtkWHrio_kLloEd0oGaOS.jpeg"
+    },
+    {
+      "id": "blTouFopX-9O_Klidb193",
+      "type": "image",
+      "x": -1248.923563915637,
+      "y": 2625.8229630270175,
+      "width": 750,
+      "height": 735,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/blTouFopX-9O_Klidb193.png"
+    },
+    {
+      "id": "YnBo86CppE_CIZ2GCDUh-",
+      "type": "image",
+      "x": -393.92356391563703,
+      "y": 2649.6720876408176,
+      "width": 800,
+      "height": 782.6982492276005,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/YnBo86CppE_CIZ2GCDUh-.png"
+    },
+    {
+      "id": "EatfnKXgY9ti13cN1aA3f",
+      "type": "image",
+      "x": 482.3727323806593,
+      "y": 2658.3229630270175,
+      "width": 792.5925925925926,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/EatfnKXgY9ti13cN1aA3f.png"
+    },
+    {
+      "id": "oOTyUemrlKOxA4x86g-jT",
+      "type": "image",
+      "x": 1354.9653249732519,
+      "y": 2658.3229630270175,
+      "width": 792.5925925925926,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/oOTyUemrlKOxA4x86g-jT.png"
+    },
+    {
+      "id": "dbviGjKSOaBPip3QZTBaK",
+      "type": "image",
+      "x": 2231.2616212695484,
+      "y": 2476.239629693684,
+      "width": 800,
+      "height": 435.83333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dbviGjKSOaBPip3QZTBaK.png"
+    },
+    {
+      "id": "2prS4FSY5ND-wjnxZFNXi",
+      "type": "image",
+      "x": 3111.2616212695484,
+      "y": 2481.864629693684,
+      "width": 800,
+      "height": 447.0833333333333,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/2prS4FSY5ND-wjnxZFNXi.png"
+    },
+    {
+      "id": "cNGXZfxnvbTsSygjvFZn2",
+      "type": "image",
+      "x": -5057.264216816794,
+      "y": 3538.3229630270175,
+      "width": 593.4065934065934,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/cNGXZfxnvbTsSygjvFZn2.png"
+    },
+    {
+      "id": "t8-OCouzWT6R6I62JxSNN",
+      "type": "image",
+      "x": -4280.560920113498,
+      "y": 3361.864629693684,
+      "width": 800,
+      "height": 447.0833333333333,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/t8-OCouzWT6R6I62JxSNN.png"
+    },
+    {
+      "id": "h6GMtt67qkufTXETH-Ojv",
+      "type": "image",
+      "x": -3400.5609201134976,
+      "y": 3265.406296360351,
+      "width": 800,
+      "height": 254.16666666666666,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/h6GMtt67qkufTXETH-Ojv.png"
+    },
+    {
+      "id": "pJRr39tRrMcESyuxON85z",
+      "type": "image",
+      "x": -2520.5609201134976,
+      "y": 3281.031296360351,
+      "width": 800,
+      "height": 285.41666666666663,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/pJRr39tRrMcESyuxON85z.png"
+    },
+    {
+      "id": "PZuUu9mA8kWtYexINOVsu",
+      "type": "image",
+      "x": -1640.5609201134976,
+      "y": 3346.864629693684,
+      "width": 800,
+      "height": 417.0833333333333,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/PZuUu9mA8kWtYexINOVsu.png"
+    },
+    {
+      "id": "csmqxg1fXif8paHwQKLCd",
+      "type": "image",
+      "x": -760.5609201134976,
+      "y": 3307.0729630270175,
+      "width": 800,
+      "height": 337.5,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/csmqxg1fXif8paHwQKLCd.png"
+    },
+    {
+      "id": "e8PN_3qrJCzyxWe5V2oIY",
+      "type": "image",
+      "x": 119.43907988650244,
+      "y": 3324.989629693684,
+      "width": 800,
+      "height": 373.33333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/e8PN_3qrJCzyxWe5V2oIY.png"
+    },
+    {
+      "id": "HDgImXZUykecRGoNqHSYD",
+      "type": "image",
+      "x": 999.4390798865024,
+      "y": 3327.6979630270175,
+      "width": 800,
+      "height": 378.75000000000006,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/HDgImXZUykecRGoNqHSYD.png"
+    },
+    {
+      "id": "NVrckGasrXjnFeBx4wLIi",
+      "type": "image",
+      "x": 1879.4390798865024,
+      "y": 3307.0729630270175,
+      "width": 800,
+      "height": 337.5,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/NVrckGasrXjnFeBx4wLIi.png"
+    },
+    {
+      "id": "5DqsXzFo6pRzcI15Sc2bU",
+      "type": "image",
+      "x": 2752.9821669468542,
+      "y": 3320.978857928596,
+      "width": 800,
+      "height": 362.08333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/5DqsXzFo6pRzcI15Sc2bU.png"
+    },
+    {
+      "id": "7R51cisi3RWYDu8uzUKh7",
+      "type": "image",
+      "x": 3639.4390798865024,
+      "y": 3276.239629693684,
+      "width": 800,
+      "height": 275.83333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/7R51cisi3RWYDu8uzUKh7.png"
+    },
+    {
+      "id": "3uklgyzetTHtFrgKwgPdy",
+      "type": "image",
+      "x": -4953.9675135200905,
+      "y": 4187.072963027018,
+      "width": 800,
+      "height": 337.5,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3uklgyzetTHtFrgKwgPdy.png"
+    },
+    {
+      "id": "cbyb8mOeZiwABEepDBrL-",
+      "type": "image",
+      "x": -4268.839308391885,
+      "y": 4418.322963027018,
+      "width": 410.2564102564102,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/cbyb8mOeZiwABEepDBrL-.png"
+    },
+    {
+      "id": "JpY_5BH4FMhJuQmAZrCZd",
+      "type": "image",
+      "x": -3587.5625475552897,
+      "y": 4418.322963027018,
+      "width": 792.2971114167813,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/JpY_5BH4FMhJuQmAZrCZd.png"
+    },
+    {
+      "id": "cBiIwQ_zC1LZjqQrG8oyH",
+      "type": "image",
+      "x": -2711.413991846899,
+      "y": 4274.364629693684,
+      "width": 800,
+      "height": 512.0833333333333,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/cBiIwQ_zC1LZjqQrG8oyH.png"
+    },
+    {
+      "id": "fmxO1mhj5_fRyzsqRZr_o",
+      "type": "image",
+      "x": -1831.413991846899,
+      "y": 4227.906296360351,
+      "width": 800,
+      "height": 419.1666666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/fmxO1mhj5_fRyzsqRZr_o.png"
+    },
+    {
+      "id": "uJBkDoA6scB1lgpI-Mt7d",
+      "type": "image",
+      "x": -951.4139918468991,
+      "y": 4233.739629693684,
+      "width": 800,
+      "height": 430.83333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/uJBkDoA6scB1lgpI-Mt7d.png"
+    },
+    {
+      "id": "vTvUu45_4JRFt9GQRmpex",
+      "type": "image",
+      "x": -231.01332406726635,
+      "y": 4418.322963027018,
+      "width": 480.80133555926545,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/vTvUu45_4JRFt9GQRmpex.png"
+    },
+    {
+      "id": "RB14gVTId95rknWomLekW",
+      "type": "image",
+      "x": 489.3873437123664,
+      "y": 4187.072963027018,
+      "width": 800,
+      "height": 337.5,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/RB14gVTId95rknWomLekW.png"
+    },
+    {
+      "id": "8DoWV0km_zNRP1-NN_-kD",
+      "type": "image",
+      "x": 1369.3873437123664,
+      "y": 4227.906296360351,
+      "width": 800,
+      "height": 419.1666666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/8DoWV0km_zNRP1-NN_-kD.png"
+    },
+    {
+      "id": "BbidLfJZ5viIjRrLzYH9C",
+      "type": "image",
+      "x": 2249.3873437123666,
+      "y": 4336.447963027018,
+      "width": 800,
+      "height": 636.25,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/BbidLfJZ5viIjRrLzYH9C.png"
+    },
+    {
+      "id": "ztITHMVoFIKhpr8qcQ0h8",
+      "type": "image",
+      "x": 3129.3873437123666,
+      "y": 4336.447963027018,
+      "width": 800,
+      "height": 636.25,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ztITHMVoFIKhpr8qcQ0h8.png"
+    },
+    {
+      "id": "fonlK135qmPwwb70gVvCP",
+      "type": "image",
+      "x": -4953.9675135200905,
+      "y": 5073.947963027018,
+      "width": 800,
+      "height": 351.24999999999994,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/fonlK135qmPwwb70gVvCP.png"
+    },
+    {
+      "id": "3sPRY2e3UywDe5ycPlbBl",
+      "type": "image",
+      "x": -4073.9675135200905,
+      "y": 5107.906296360351,
+      "width": 800,
+      "height": 419.1666666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3sPRY2e3UywDe5ycPlbBl.png"
+    },
+    {
+      "id": "Ra42KynHPQfVH9odyp6Wd",
+      "type": "image",
+      "x": -3193.9675135200905,
+      "y": 5070.822963027018,
+      "width": 800,
+      "height": 345,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Ra42KynHPQfVH9odyp6Wd.png"
+    },
+    {
+      "id": "oTCkECVZM9MwF8WqQbiYe",
+      "type": "image",
+      "x": -2313.9675135200905,
+      "y": 5107.906296360351,
+      "width": 800,
+      "height": 419.1666666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/oTCkECVZM9MwF8WqQbiYe.png"
+    },
+    {
+      "id": "E5qGZZ-qErxHhh6cakrg3",
+      "type": "image",
+      "x": -1433.9675135200905,
+      "y": 5107.906296360351,
+      "width": 800,
+      "height": 419.1666666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/E5qGZZ-qErxHhh6cakrg3.png"
+    },
+    {
+      "id": "xcxvA5DWcFXNDf7KqcA90",
+      "type": "image",
+      "x": -553.9675135200905,
+      "y": 5193.739629693685,
+      "width": 800,
+      "height": 590.8333333333334,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/xcxvA5DWcFXNDf7KqcA90.png"
+    },
+    {
+      "id": "enSOHLhNj9poRnSRYhHtE",
+      "type": "image",
+      "x": 326.0324864799095,
+      "y": 5066.239629693685,
+      "width": 800,
+      "height": 335.83333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/enSOHLhNj9poRnSRYhHtE.png"
+    },
+    {
+      "id": "gd9FDCX6Ry2eYR6QvwKIP",
+      "type": "image",
+      "x": 1206.0324864799095,
+      "y": 5065.614629693685,
+      "width": 800,
+      "height": 334.58333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/gd9FDCX6Ry2eYR6QvwKIP.png"
+    },
+    {
+      "id": "h6YwxvXhqOl6ihKLPih2B",
+      "type": "image",
+      "x": 2086.0324864799095,
+      "y": 5065.822963027018,
+      "width": 800,
+      "height": 335.00000000000006,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/h6YwxvXhqOl6ihKLPih2B.png"
+    },
+    {
+      "id": "LRWjcSzOEZNUGEy_B1RAZ",
+      "type": "image",
+      "x": 2966.0324864799095,
+      "y": 5123.322963027018,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/LRWjcSzOEZNUGEy_B1RAZ.png"
+    },
+    {
+      "id": "YKMSxLNPKuL7f5SngSQCR",
+      "type": "image",
+      "x": 3846.0324864799095,
+      "y": 5073.947963027018,
+      "width": 800,
+      "height": 351.24999999999994,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/YKMSxLNPKuL7f5SngSQCR.png"
+    },
+    {
+      "id": "0tJZObILmbtOfo1zhNlHY",
+      "type": "image",
+      "x": -4953.9675135200905,
+      "y": 5732.697963027018,
+      "width": 800,
+      "height": 327.08333333333337,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/0tJZObILmbtOfo1zhNlHY.png"
+    },
+    {
+      "id": "Ft6YItar7veMvwnQPzAj5",
+      "type": "image",
+      "x": -4073.9675135200905,
+      "y": 5794.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/Ft6YItar7veMvwnQPzAj5.png"
+    },
+    {
+      "id": "EpWjI-h-T6xUn7tc6o9N7",
+      "type": "image",
+      "x": -3193.9675135200905,
+      "y": 5794.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/EpWjI-h-T6xUn7tc6o9N7.png"
+    },
+    {
+      "id": "nQzdYFG8QkYjkZD4byZOp",
+      "type": "image",
+      "x": -2313.9675135200905,
+      "y": 5794.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/nQzdYFG8QkYjkZD4byZOp.png"
+    },
+    {
+      "id": "-tiu4WaymdX7rdENS2r8A",
+      "type": "image",
+      "x": -1437.6826837987282,
+      "y": 5969.156296360351,
+      "width": 792.5696594427245,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/-tiu4WaymdX7rdENS2r8A.png"
+    },
+    {
+      "id": "9o-AbmO-gE3XCjmRbQ7uv",
+      "type": "image",
+      "x": -561.397854077366,
+      "y": 5794.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/9o-AbmO-gE3XCjmRbQ7uv.png"
+    },
+    {
+      "id": "VsImllhG_bRxVnnHFvPxC",
+      "type": "image",
+      "x": 318.602145922634,
+      "y": 5933.797180338252,
+      "width": 800,
+      "height": 729.2817679558011,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/VsImllhG_bRxVnnHFvPxC.png"
+    },
+    {
+      "id": "A1uTtBj08_PNi0E70Ddy4",
+      "type": "image",
+      "x": 1041.2436553565963,
+      "y": 5969.156296360351,
+      "width": 485.28301886792457,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/A1uTtBj08_PNi0E70Ddy4.png"
+    },
+    {
+      "id": "FXm-87nbl9TKdmHjcHjRH",
+      "type": "image",
+      "x": 1763.8851647905585,
+      "y": 5788.739629693684,
+      "width": 800,
+      "height": 439.1666666666667,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/FXm-87nbl9TKdmHjcHjRH.png"
+    },
+    {
+      "id": "XnY4NUClyI7WBiL0GQoAd",
+      "type": "image",
+      "x": 2642.0183378026395,
+      "y": 5854.156296360351,
+      "width": 800,
+      "height": 570,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/XnY4NUClyI7WBiL0GQoAd.png"
+    },
+    {
+      "id": "G8Cjc-dxKOG6eFSd_n6yq",
+      "type": "image",
+      "x": 3523.8851647905585,
+      "y": 5794.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/G8Cjc-dxKOG6eFSd_n6yq.png"
+    },
+    {
+      "id": "OvzRy9laJDEV4-8ofVlG7",
+      "type": "image",
+      "x": -4953.9675135200905,
+      "y": 6763.891632554914,
+      "width": 800,
+      "height": 629.4706723891272,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/OvzRy9laJDEV4-8ofVlG7.png"
+    },
+    {
+      "id": "0B6YFFmyNgGSjLzMYicPw",
+      "type": "image",
+      "x": -4073.9675135200905,
+      "y": 6674.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/0B6YFFmyNgGSjLzMYicPw.png"
+    },
+    {
+      "id": "DUTW9NGDqFbZgzYc_b8bx",
+      "type": "image",
+      "x": -3193.9675135200905,
+      "y": 6674.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/DUTW9NGDqFbZgzYc_b8bx.png"
+    },
+    {
+      "id": "3RL0E7ASZnP6CBHdyHmtq",
+      "type": "image",
+      "x": -2313.9675135200905,
+      "y": 6674.156296360351,
+      "width": 800,
+      "height": 450,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3RL0E7ASZnP6CBHdyHmtq.png"
+    },
+    {
+      "id": "yiikOlITi7zXBL-Yfu7mK",
+      "type": "image",
+      "x": -1433.9675135200905,
+      "y": 6768.919434776339,
+      "width": 800,
+      "height": 639.5262768319762,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/yiikOlITi7zXBL-Yfu7mK.png"
+    },
+    {
+      "id": "TIk8Ice3Ek-JFek5ak1B0",
+      "type": "image",
+      "x": -553.9675135200905,
+      "y": 6703.322963027018,
+      "width": 800,
+      "height": 508.3333333333333,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/TIk8Ice3Ek-JFek5ak1B0.png"
+    },
+    {
+      "id": "ecC-fYTJyss-RsvQ3eW-4",
+      "type": "image",
+      "x": 326.0324864799095,
+      "y": 6688.322963027018,
+      "width": 800,
+      "height": 478.3333333333333,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/ecC-fYTJyss-RsvQ3eW-4.png"
+    },
+    {
+      "id": "VSiDRxM4FKF5e_uUyNTrw",
+      "type": "image",
+      "x": 1206.0324864799095,
+      "y": 6617.906296360351,
+      "width": 800,
+      "height": 337.5,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/VSiDRxM4FKF5e_uUyNTrw.png"
+    },
+    {
+      "id": "5MpXEvcgnD7pP-tPNvb2Z",
+      "type": "image",
+      "x": 2086.0324864799095,
+      "y": 6617.906296360351,
+      "width": 800,
+      "height": 337.5,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/5MpXEvcgnD7pP-tPNvb2Z.png"
+    },
+    {
+      "id": "x_qhU4L5Rv2MJOo-9jbhY",
+      "type": "image",
+      "x": 2966.0324864799095,
+      "y": 6751.031296360351,
+      "width": 800,
+      "height": 603.75,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/x_qhU4L5Rv2MJOo-9jbhY.png"
+    },
+    {
+      "id": "zdXgnxhjcd45UMoG-slzU",
+      "type": "image",
+      "x": 3846.0324864799095,
+      "y": 6649.156296360351,
+      "width": 800,
+      "height": 400,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/zdXgnxhjcd45UMoG-slzU.png"
+    },
+    {
+      "id": "B7BT_BAWRCjzFqtq-j8m2",
+      "type": "image",
+      "x": -5011.3008468534235,
+      "y": 7568.682573192327,
+      "width": 685.3333333333334,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/B7BT_BAWRCjzFqtq-j8m2.jpeg"
+    },
+    {
+      "id": "v-RKTpl0IIOvhVrkZUppd",
+      "type": "image",
+      "x": -4245.9675135200905,
+      "y": 7568.682573192327,
+      "width": 685.3333333333334,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/v-RKTpl0IIOvhVrkZUppd.jpeg"
+    },
+    {
+      "id": "esdxI6oc_QSR1C26VjXbj",
+      "type": "image",
+      "x": -3423.300846853424,
+      "y": 7396.062961633824,
+      "width": 800,
+      "height": 454.7607768829938,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/esdxI6oc_QSR1C26VjXbj.jpeg"
+    },
+    {
+      "id": "-WaPIYnMkvzzh2wZdpbJQ",
+      "type": "image",
+      "x": -2543.300846853424,
+      "y": 7368.682573192327,
+      "width": 800,
+      "height": 400,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/-WaPIYnMkvzzh2wZdpbJQ.jpeg"
+    },
+    {
+      "id": "h2xs4ACH1sHxJ8AAkaZ7L",
+      "type": "image",
+      "x": -1663.300846853424,
+      "y": 7568.682573192327,
+      "width": 800,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/h2xs4ACH1sHxJ8AAkaZ7L.jpeg"
+    },
+    {
+      "id": "vvMHAr0yzMZT5sraJMcm3",
+      "type": "image",
+      "x": -783.300846853424,
+      "y": 7368.682573192327,
+      "width": 800,
+      "height": 400,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/vvMHAr0yzMZT5sraJMcm3.jpeg"
+    },
+    {
+      "id": "3utwFUwCRSZx6PLt94DRe",
+      "type": "image",
+      "x": 96.69915314657601,
+      "y": 7568.682573192327,
+      "width": 800,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/3utwFUwCRSZx6PLt94DRe.jpeg"
+    },
+    {
+      "id": "qyCUTnooXw_l5oroOQ8-5",
+      "type": "image",
+      "x": 976.699153146576,
+      "y": 7386.666224418485,
+      "width": 800,
+      "height": 435.96730245231606,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/qyCUTnooXw_l5oroOQ8-5.jpeg"
+    },
+    {
+      "id": "paczrCBm1KOSjAXx5FQ1V",
+      "type": "image",
+      "x": 1856.699153146576,
+      "y": 7392.2503421722995,
+      "width": 800,
+      "height": 447.13553795994414,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/paczrCBm1KOSjAXx5FQ1V.jpeg"
+    },
+    {
+      "id": "dnY8_uY3puAGfqpHFffWC",
+      "type": "image",
+      "x": 2704.699153146576,
+      "y": 7362.182573192327,
+      "width": 736,
+      "height": 387,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/dnY8_uY3puAGfqpHFffWC.jpeg"
+    },
+    {
+      "id": "DSqV8WulabKbk0x9za9XN",
+      "type": "image",
+      "x": 3449.665097419022,
+      "y": 7568.682573192327,
+      "width": 593.9318885448916,
+      "height": 800,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/DSqV8WulabKbk0x9za9XN.jpeg"
+    },
+    {
+      "id": "_Tbu7UEiXA00BOAAkJYBi",
+      "type": "image",
+      "x": -4949.945912126126,
+      "y": 8279.549669849881,
+      "width": 800,
+      "height": 480,
+      "url": "file:///E:/PROGRAMS/for project manager/container/HARGEST/Setup/boards/Untitled Board_272ca3f4.ibo/media/_Tbu7UEiXA00BOAAkJYBi.png"
+    }
+  ],
+  "viewport": {
+    "x": -959.1685379429687,
+    "y": 432.08774406528926,
+    "scale": 0.5117742993363512
+  }
+}

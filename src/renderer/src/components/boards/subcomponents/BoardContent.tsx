@@ -60,18 +60,26 @@ const SnappingGuidesRenderer: React.FC<{
   scale: number
   theme?: UITheme
 }> = ({ guidesRef, scale, theme }) => {
-  // Use a fast tick-based or animation-frame based check instead of React state for smooth rendering
-  // But for legacy compatibility, we keep this if needed. Let's optimize it.
+  const gRef = useRef<PIXI.Graphics | null>(null)
 
-  return (
-    <Graphics
-      draw={(g: PIXI.Graphics): void => {
+  useEffect(() => {
+    let lastGuidesStr = ''
+    const ticker = PIXI.Ticker.shared
+    
+    const updateGuides = () => {
+      const g = gRef.current
+      if (!g || !guidesRef.current) return
+      
+      const guidesStr = JSON.stringify(guidesRef.current)
+      if (guidesStr !== lastGuidesStr) {
+        lastGuidesStr = guidesStr
         g.clear()
-        if (!guidesRef.current || guidesRef.current.length === 0) return
+        if (guidesRef.current.length === 0) return
+        
         const accentColor = theme?.boardAccent
           ? parseInt(theme.boardAccent.replace('#', ''), 16)
           : 0x007aff
-
+        
         guidesRef.current.forEach((guide) => {
           if (guide.x !== undefined) {
             g.moveTo(guide.x, -100000)
@@ -82,12 +90,19 @@ const SnappingGuidesRenderer: React.FC<{
             g.lineTo(200000, guide.y)
           }
         })
-
         // @ts-ignore - PIXI v8 stroke API
-        g.stroke({ width: 1 / scale, color: accentColor, alpha: 0.5 })
-      }}
-    />
-  )
+        g.stroke({ width: 1 / Math.max(0.001, scale), color: accentColor, alpha: 0.5 })
+      }
+    }
+    
+    ticker.add(updateGuides)
+    return () => {
+      ticker.remove(updateGuides)
+      if (gRef.current) gRef.current.clear()
+    }
+  }, [scale, theme, guidesRef])
+
+  return <pixiGraphics ref={gRef} draw={() => {}} />
 }
 
 /** Legacy Graphics support for PIXI v8 with @pixi/react */
@@ -185,8 +200,20 @@ const BoardContent = React.memo(
 
       const onPointerMove = (e: PointerEvent): void => {
         if (!dragStartData.current) return
-        const dx = (e.clientX - dragStartData.current.mx) / viewport.scale
-        const dy = (e.clientY - dragStartData.current.my) / viewport.scale
+
+        if (!(dragStartData.current as any).dragStarted) {
+          const screenDx = e.clientX - dragStartData.current.mx
+          const screenDy = e.clientY - dragStartData.current.my
+          if (screenDx * screenDx + screenDy * screenDy < 25) return // 5px threshold
+          ;(dragStartData.current as any).dragStarted = true
+        }
+
+        let dx = (e.clientX - dragStartData.current.mx) / viewport.scale
+        let dy = (e.clientY - dragStartData.current.my) / viewport.scale
+
+        if (e.shiftKey) {
+          if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0;
+        }
 
         const SNAP_THRESHOLD = 5 / viewport.scale
         const distSqr =
@@ -299,15 +326,18 @@ const BoardContent = React.memo(
 
       const onPointerUp = (e: PointerEvent): void => {
         if (!dragStartData.current) return
-        const dx = (e.clientX - dragStartData.current.mx) / viewport.scale
-        const dy = (e.clientY - dragStartData.current.my) / viewport.scale
 
-        // Call onMove with snapped position to commit to state
-        onMove(
-          dragStartData.current.id,
-          dragStartData.current.x + dx + currentSnapDX,
-          dragStartData.current.y + dy + currentSnapDY
-        )
+        if ((dragStartData.current as any).dragStarted) {
+          const dx = (e.clientX - dragStartData.current.mx) / viewport.scale
+          const dy = (e.clientY - dragStartData.current.my) / viewport.scale
+
+          // Call onMove with snapped position to commit to state
+          onMove(
+            dragStartData.current.id,
+            dragStartData.current.x + dx + currentSnapDX,
+            dragStartData.current.y + dy + currentSnapDY
+          )
+        }
 
         // Reset bbox position — React state will re-render with correct coords
         if (selectionBBoxRef.current) {
@@ -495,13 +525,67 @@ const BoardContent = React.memo(
                 key={el.id}
                 element={el}
                 isSelected={isSelected}
-                zoomScale={isSelected ? viewport.scale : 1}
+                zoomScale={viewport.scale}
                 activeLevel={activeLevel}
                 onSelect={onElementSelect}
                 onMove={onMove}
                 onResize={onResize}
                 onRotate={onRotate}
                 onInteractionStart={onInteractionStart}
+                onDragStart={(id, ev) => {
+                  const clickedEl = elements.find(e => e.id === id)
+                  const isGroupSelection = selectedIds.length > 1 || clickedEl?.groupId
+
+                  if (isGroupSelection && ev && clickedEl) {
+                    ev.stopPropagation()
+                    onInteractionStart()
+                    setIsDraggingSelection(true)
+
+                    dragStartData.current = {
+                      id: clickedEl.id,
+                      x: clickedEl.x,
+                      y: clickedEl.y,
+                      mx: ev.nativeEvent.clientX,
+                      my: ev.nativeEvent.clientY,
+                      dragStarted: false
+                    } as any
+                    document.body.style.cursor = 'move'
+                  }
+
+                  if (dragContextRef) {
+                    const ctxTargets: CachedSnapTarget[] = []
+                    for(let j = 0; j < elements.length; j++) {
+                      if (elements[j].id === id) continue
+                      
+                      const ew = elements[j].width || 0
+                      const eh = elements[j].height || 0
+                      const ex = elements[j].x
+                      const ey = elements[j].y
+                      
+                      // CULLING: Only include snap targets that are roughly within the visible viewport 
+                      // to massively optimize O(N) tracking during pointer movement
+                      if (
+                        ex + ew / 2 < worldX - CULL_MARGIN ||
+                        ex - ew / 2 > worldX + screenW + CULL_MARGIN ||
+                        ey + eh / 2 < worldY - CULL_MARGIN ||
+                        ey - eh / 2 > worldY + screenH + CULL_MARGIN
+                      ) {
+                        continue;
+                      }
+
+                      ctxTargets.push({
+                        l: ex - ew/2, r: ex + ew/2,
+                        t: ey - eh/2, b: ey + eh/2,
+                        cx: ex, cy: ey
+                      })
+                    }
+                    if (dragContextRef.current === null) {
+                      dragContextRef.current = { movers: [], targets: ctxTargets, lastId: id }
+                    } else {
+                      dragContextRef.current.targets = ctxTargets
+                    }
+                  }
+                }}
                 onDoubleClick={onDoubleClick}
                 isEditing={isEditing}
                 renderable={true}
@@ -568,7 +652,33 @@ const BoardContent = React.memo(
                     eventMode="static"
                     cursor="move"
                     onPointerDown={(e: PIXI.FederatedPointerEvent): void => {
-                      if (e.ctrlKey || e.button === 1 || isNavigatingRef?.current) return
+                      if (e.button === 1 || isNavigatingRef?.current) return
+
+                      if (e.ctrlKey || e.shiftKey || e.metaKey) {
+                        e.stopPropagation()
+                        const localP = e.getLocalPosition(e.currentTarget)
+                        for (let i = selectedElements.length - 1; i >= 0; i--) {
+                          const el = selectedElements[i]
+                          const ew = el.width || 0
+                          const eh = el.height || 0
+                          if (
+                            localP.x >= el.x - ew / 2 &&
+                            localP.x <= el.x + ew / 2 &&
+                            localP.y >= el.y - eh / 2 &&
+                            localP.y <= el.y + eh / 2
+                          ) {
+                            if (e.ctrlKey) {
+                              // Ctrl ONLY deselects
+                              onSelect(selectedIds.filter(id => id !== el.id))
+                            } else {
+                              // Shift toggles
+                              onElementSelect(el.id, true)
+                            }
+                            return
+                          }
+                        }
+                        return
+                      }
 
                       const now = Date.now()
                       if (now - lastMultiClickTime.current < 500) {
@@ -583,6 +693,39 @@ const BoardContent = React.memo(
                       e.stopPropagation()
                       onInteractionStart()
                       setIsDraggingSelection(true)
+
+                      if (dragContextRef) {
+                        const ctxTargets: CachedSnapTarget[] = []
+                        for(let j = 0; j < elements.length; j++) {
+                          if (selectedIdsSet.has(elements[j].id)) continue
+                          
+                          const ew = elements[j].width || 0
+                          const eh = elements[j].height || 0
+                          const ex = elements[j].x
+                          const ey = elements[j].y
+                          
+                          if (
+                            ex + ew / 2 < worldX - CULL_MARGIN ||
+                            ex - ew / 2 > worldX + screenW + CULL_MARGIN ||
+                            ey + eh / 2 < worldY - CULL_MARGIN ||
+                            ey - eh / 2 > worldY + screenH + CULL_MARGIN
+                          ) {
+                            continue;
+                          }
+
+                          ctxTargets.push({
+                            l: ex - ew/2, r: ex + ew/2,
+                            t: ey - eh/2, b: ey + eh/2,
+                            cx: ex, cy: ey
+                          })
+                        }
+                        if (dragContextRef.current === null) {
+                          dragContextRef.current = { movers: [], targets: ctxTargets, lastId: 'multi' }
+                        } else {
+                          dragContextRef.current.targets = ctxTargets
+                        }
+                      }
+
                       const mainTarget = selectedElements[0]
                       if (mainTarget) {
                         dragStartData.current = {
@@ -590,21 +733,96 @@ const BoardContent = React.memo(
                           x: mainTarget.x,
                           y: mainTarget.y,
                           mx: e.nativeEvent.clientX,
-                          my: e.nativeEvent.clientY
-                        }
+                          my: e.nativeEvent.clientY,
+                          dragStarted: false
+                        } as any
                         document.body.style.cursor = 'move'
                       }
                     }}
                     draw={(g: PIXI.Graphics): void => {
                       g.clear()
-                      g.rect(minX, minY, w, h)
+                      
+                      // Невидимая заливка только по площади самих элементов, 
+                      // чтобы пустое пространство внутри рамки было прозрачным для кликов (прокликивалось насквозь)
+                      selectedElements.forEach(el => {
+                        const ew = el.width || 0
+                        const eh = el.height || 0
+                        g.rect(el.x - ew / 2, el.y - eh / 2, ew, eh)
+                      })
                       g.fill({ color: 0xffffff, alpha: 0.001 })
 
+                      // Визуальный контур группового выделения
+                      g.rect(minX, minY, w, h)
                       // @ts-ignore - PIXI v8 stroke API
                       g.stroke({ width: lineWidth, color: accentColor, alpha: 1 })
                     }}
                   />
-                  {handles.map((hd) => (
+                  {handles.map((hd) => {
+                    const handleMultiResizeStart = (e: PIXI.FederatedPointerEvent): void => {
+                      if (e.button === 1 || isNavigatingRef?.current) return
+                      e.stopPropagation()
+                      onInteractionStart()
+
+                      const mouseEv = e.nativeEvent as MouseEvent
+                      const startMx = mouseEv.clientX
+                      const startMy = mouseEv.clientY
+                      const startW = w
+                      const startH = h
+                      const startCx = cx
+                      const startCy = cy
+                      const handle = hd.id
+
+                      // The "anchor" is the main selected element — onResize with handle triggers group math
+                      const mainEl = selectedElements[0]
+                      if (!mainEl) return
+
+                      const onPtrMove = (ev: PointerEvent): void => {
+                        const ddx = (ev.clientX - startMx) / viewport.scale
+                        const ddy = (ev.clientY - startMy) / viewport.scale
+
+                        let nW = startW, nH = startH
+                        if (handle.includes('right')) nW = Math.max(20, startW + ddx)
+                        else if (handle.includes('left')) nW = Math.max(20, startW - ddx)
+                        if (handle.includes('bottom')) nH = Math.max(20, startH + ddy)
+                        else if (handle.includes('top')) nH = Math.max(20, startH - ddy)
+
+                        let targetScale = 1
+                        if (handle.includes('-')) {
+                          const scaleX = nW / startW
+                          const scaleY = nH / startH
+                          targetScale = Math.max(scaleX, scaleY)
+                        } else {
+                          const scaleX = nW / startW
+                          const scaleY = nH / startH
+                          if (handle.includes('right') || handle.includes('left')) {
+                            targetScale = scaleX
+                          } else {
+                            targetScale = scaleY
+                          }
+                        }
+
+                        nW = Math.max(20, startW * targetScale)
+                        nH = Math.max(20, startH * targetScale)
+
+                        let nX = startCx, nY = startCy
+                        if (handle.includes('right')) nX = startCx + (nW - startW) / 2
+                        else if (handle.includes('left')) nX = startCx - (nW - startW) / 2
+                        if (handle.includes('bottom')) nY = startCy + (nH - startH) / 2
+                        else if (handle.includes('top')) nY = startCy - (nH - startH) / 2
+
+                        onResize(mainEl.id, nW, nH, nX, nY, handle)
+                      }
+                      const onPtrUp = (): void => {
+                        window.removeEventListener('pointermove', onPtrMove)
+                        window.removeEventListener('pointerup', onPtrUp)
+                        document.body.style.cursor = 'auto'
+                      }
+                      window.addEventListener('pointermove', onPtrMove)
+                      window.addEventListener('pointerup', onPtrUp)
+                      document.body.style.cursor = hd.cursor
+                    }
+
+                    return (
                     <Graphics
                       key={hd.id}
                       x={hd.x}
@@ -612,8 +830,12 @@ const BoardContent = React.memo(
                       // @ts-ignore - PIXI v8 stroke API
                       eventMode="static"
                       cursor={hd.cursor}
+                      onPointerDown={handleMultiResizeStart}
                       draw={(g: PIXI.Graphics): void => {
                         g.clear()
+                        const hitArea = handleSize * 3
+                        g.rect(-hitArea / 2, -hitArea / 2, hitArea, hitArea)
+                        g.fill({ color: 0, alpha: 0 })
                         let hw = handleSize
                         let hh = handleSize
                         if (hd.id === 'top' || hd.id === 'bottom') {
@@ -627,7 +849,8 @@ const BoardContent = React.memo(
                         g.fill({ color: accentColor })
                       }}
                     />
-                  ))}
+                    )
+                  })}
                 </Container>
               )
             })()}

@@ -11,15 +11,31 @@ const loadingPromises = new Map<
   Promise<{ high: PIXI.Texture; mid: PIXI.Texture; low: PIXI.Texture; source: any }>
 >()
 
+const releaseTimers = new Map<string, ReturnType<typeof setTimeout>>()
+
 export const getSharedTexture = (
   url: string,
   type: 'image' | 'video'
 ): Promise<{ high: PIXI.Texture; mid: PIXI.Texture; low: PIXI.Texture; source: any }> => {
   const cached = sharedTextureCache.get(url)
   if (cached) {
-    cached.refCount++
-    cached.lastUsed = Date.now()
-    return Promise.resolve({ high: cached.high, mid: cached.mid, low: cached.low, source: cached.source })
+    // Check if textures were destroyed by PixiJS context loss or unmount
+    if (cached.high.destroyed || (cached.high as any).source?.destroyed) {
+      sharedTextureCache.delete(url)
+      // Fall through to reload
+    } else {
+      cached.refCount++
+      cached.lastUsed = Date.now()
+      
+      // If it was scheduled for destruction, cancel it
+      const timer = releaseTimers.get(url)
+      if (timer) {
+        clearTimeout(timer)
+        releaseTimers.delete(url)
+      }
+
+      return Promise.resolve({ high: cached.high, mid: cached.mid, low: cached.low, source: cached.source })
+    }
   }
 
   const existingPromise = loadingPromises.get(url)
@@ -108,15 +124,29 @@ export const releaseSharedTexture = (url: string): void => {
   if (cached) {
     cached.refCount--
     if (cached.refCount <= 0) {
-      cached.high.destroy(true)
-      if (cached.mid !== cached.high) cached.mid.destroy(true)
-      if (cached.low !== cached.high) cached.low.destroy(true)
-      if (cached.source instanceof HTMLVideoElement) {
-        cached.source.pause()
-        cached.source.src = ''
-        cached.source.load()
-      }
-      sharedTextureCache.delete(url)
+      // Don't destroy immediately. Give it a 15-second grace period.
+      // This prevents massive FPS drops when panning back and forth across the whiteboard margins.
+      const timer = setTimeout(() => {
+        const c = sharedTextureCache.get(url)
+        if (c && c.refCount <= 0) {
+          try {
+            if (!c.high.destroyed) c.high.destroy(true)
+            if (c.mid !== c.high && !c.mid.destroyed) c.mid.destroy(true)
+            if (c.low !== c.high && !c.low.destroyed) c.low.destroy(true)
+          } catch (e) {
+            console.error('Failed to destroy textures:', e)
+          }
+          if (c.source instanceof HTMLVideoElement) {
+            c.source.pause()
+            c.source.src = ''
+            c.source.load()
+          }
+          sharedTextureCache.delete(url)
+        }
+        releaseTimers.delete(url)
+      }, 15000) // 15 seconds grace period
+      
+      releaseTimers.set(url, timer)
     }
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { Application, extend } from '@pixi/react'
 import * as PIXI from 'pixi.js'
 import Stats from 'stats.js'
@@ -110,6 +110,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   showFPS = false,
   theme,
   setTheme,
+  boardId,
   boardDir,
   boardFileName
 }) => {
@@ -138,8 +139,29 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   const [penSettingsAnchor, setPenSettingsAnchor] = useState<DOMRect | null>(null)
   const [showEraserSettings, setShowEraserSettings] = useState(false)
   const [eraserSettingsAnchor, setEraserSettingsAnchor] = useState<DOMRect | null>(null)
+  const [isSettingsPinned, setIsSettingsPinned] = useState(false)
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [isSavedFlash, setIsSavedFlash] = useState(false)
+
+  const adjustAnchor = useCallback((rect: DOMRect | null) => {
+    if (!rect || !containerRef.current) return null
+    const board = containerRef.current.getBoundingClientRect()
+    return {
+      top: rect.top - board.top,
+      bottom: rect.bottom - board.top,
+      left: rect.left - board.left,
+      right: rect.right - board.left,
+      width: rect.width,
+      height: rect.height,
+      x: rect.x - board.left,
+      y: rect.y - board.top,
+      toJSON: () => {}
+    } as DOMRect
+  }, [])
+
+  const handleSetPickerAnchor = useCallback((r: DOMRect | null) => setPickerAnchor(adjustAnchor(r)), [adjustAnchor])
+  const handleSetPenSettingsAnchor = useCallback((r: DOMRect | null) => setPenSettingsAnchor(adjustAnchor(r)), [adjustAnchor])
+  const handleSetEraserSettingsAnchor = useCallback((r: DOMRect | null) => setEraserSettingsAnchor(adjustAnchor(r)), [adjustAnchor])
 
   // Refs for logic
   const isBoardActiveRef = useRef(false)
@@ -162,11 +184,61 @@ const BoardsView: React.FC<BoardsViewProps> = ({
 
   // Settings
   const [penColor, setPenColor] = useState('#ffffff')
-  const [penSize, setPenSize] = useState(4)
-  const [textSize, setTextSize] = useState(32)
-  const [eraserSize, setEraserSize] = useState(24)
+  const [penSize, setPenSizeState] = useState(4)
+  const [textSize, setTextSizeState] = useState(32)
+  const [eraserSize, setEraserSizeState] = useState(24)
 
-  const isSyncing = useMemo(() => elements.some((el) => el.isProcessing), [elements])
+  const setPenSize = useCallback(
+    (val: number) => {
+      setPenSizeState(val)
+      if (selectedIds.length > 0) {
+        setElements((prev) =>
+          prev.map((el) => {
+            if (selectedIds.includes(el.id)) {
+              if (el.type === 'path') return { ...el, size: val }
+              if (el.type === 'rect') return { ...el, strokeWidth: val }
+            }
+            return el
+          })
+        )
+      }
+    },
+    [selectedIds, setElements]
+  )
+
+  const setTextSize = useCallback(
+    (val: number) => {
+      setTextSizeState(val)
+      if (selectedIds.length > 0) {
+        setElements((prev) =>
+          prev.map((el) => {
+            if (selectedIds.includes(el.id) && el.type === 'text') {
+              return { ...el, fontSize: val, height: Math.max((el.height || 0), val * 1.5) }
+            }
+            return el
+          })
+        )
+      }
+    },
+    [selectedIds, setElements]
+  )
+
+  const setEraserSize = useCallback(
+    (val: number) => {
+      setEraserSizeState(val)
+      if (selectedIds.length > 0) {
+        setElements((prev) =>
+          prev.map((el) => {
+            return el
+          })
+        )
+      }
+    },
+    [selectedIds, setElements]
+  )
+
+  const processingCount = useMemo(() => elements.filter((el) => el.isProcessing).length, [elements])
+  const isSyncing = processingCount > 0
 
   // --- Refs to avoid dependency churn on callbacks ---
   // These stabilize handleManualSave and the autosave effect
@@ -175,6 +247,10 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   useEffect(() => {
     elementsRef.current = elements
   }, [elements])
+  const selectedIdsRef = useRef(selectedIds)
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds
+  }, [selectedIds])
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     onChangeRef.current = onChange
@@ -198,6 +274,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   }, [viewport])
 
   const { handleDrop } = useBoardAssets({
+    boardId,
     boardDir,
     boardFileName,
     viewport,
@@ -280,13 +357,56 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     }
   }, [selectedIds, pushToHistory, setElements])
 
+  /** Fit viewport to show all elements or just selected ones */
+  const fitToContent = useCallback((): void => {
+    const els = elementsRef.current
+    if (els.length === 0) return
+
+    const selectedIds = selectedIdsRef.current
+    const targetEls = selectedIds.length > 0 
+      ? els.filter((el) => selectedIds.includes(el.id))
+      : els
+      
+    if (targetEls.length === 0) return
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+    targetEls.forEach((el) => {
+      const w = el.width || 0
+      const h = el.height || 0
+      minX = Math.min(minX, el.x - w / 2)
+      minY = Math.min(minY, el.y - h / 2)
+      maxX = Math.max(maxX, el.x + w / 2)
+      maxY = Math.max(maxY, el.y + h / 2)
+    })
+
+    const contentW = maxX - minX
+    const contentH = maxY - minY
+    if (contentW <= 0 || contentH <= 0) return
+
+    const centerX = minX + contentW / 2
+    const centerY = minY + contentH / 2
+
+    const dims = prevDimsRef.current
+    const screenW = dims.width > 0 ? dims.width : window.innerWidth
+    const screenH = dims.height > 0 ? dims.height : window.innerHeight
+
+    const padding = 80
+    const scaleX = (screenW - padding * 2) / contentW
+    const scaleY = (screenH - padding * 2) / contentH
+    const newScale = Math.min(Math.max(Math.min(scaleX, scaleY), 0.05), 2)
+
+    const newX = screenW / 2 - centerX * newScale
+    const newY = screenH / 2 - centerY * newScale
+
+    setViewport({ x: newX, y: newY, scale: newScale })
+  }, [setViewport])
+
   // --- Effects ---
 
   // Initial Data Load
   useEffect(() => {
     if (boardData && boardData === lastPushedDataRef.current) return
     if (!boardData) return
-    console.log('[BoardsView] Loading boardData:', boardData.substring(0, 100) + '...')
     try {
       const parsed = JSON.parse(boardData)
       if (parsed && typeof parsed === 'object') {
@@ -302,12 +422,52 @@ const BoardsView: React.FC<BoardsViewProps> = ({
           if (prev.length === 0 && cleanElements.length === 0) return prev
           return cleanElements
         })
-        if (parsed.viewport) setViewport(parsed.viewport)
+
+        if (parsed.viewport) {
+          setViewport(parsed.viewport)
+
+          // Auto-fit: detect if saved viewport doesn't show ANY elements
+          if (cleanElements.length > 0) {
+            const vp = parsed.viewport
+            const invScale = 1 / Math.max(0.0001, vp.scale)
+            const sw = (window.innerWidth || 1920) * invScale
+            const sh = (window.innerHeight || 1080) * invScale
+            const wx = -vp.x * invScale
+            const wy = -vp.y * invScale
+            const margin = 1000
+
+            const anyVisible = cleanElements.some((el: BoardElement) => {
+              const hw = (el.width || 0) / 2
+              const hh = (el.height || 0) / 2
+              return (
+                el.x + hw >= wx - margin &&
+                el.x - hw <= wx + sw + margin &&
+                el.y + hh >= wy - margin &&
+                el.y - hh <= wy + sh + margin
+              )
+            })
+
+            if (!anyVisible) {
+              console.warn('[BoardsView] No elements visible at saved viewport — auto-fitting to content.')
+              // Schedule fit after state settles
+              requestAnimationFrame(() => {
+                elementsRef.current = cleanElements
+                fitToContent()
+              })
+            }
+          }
+        } else if (cleanElements.length > 0) {
+          // No viewport saved — fit to content
+          requestAnimationFrame(() => {
+            elementsRef.current = cleanElements
+            fitToContent()
+          })
+        }
       }
     } catch {
       console.error('Failed to parse board data')
     }
-  }, [boardData, setViewport])
+  }, [boardData, setViewport, fitToContent])
 
   // Mark dirty on any change
   useEffect(() => {
@@ -326,7 +486,16 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         isDirtyRef.current = false
       }
     }, 10000)
-    return () => clearInterval(interval)
+    return () => {
+      clearInterval(interval)
+      // CRITICAL: Save viewport + elements on unmount (note switch, etc)
+      const els = elementsRef.current.map(({ isProcessing: _ip, ...rest }) => rest)
+      const dataStr = JSON.stringify({ elements: els, viewport: viewportRef.current })
+      if (dataStr !== lastPushedDataRef.current) {
+        lastPushedDataRef.current = dataStr
+        onChangeRef.current(dataStr)
+      }
+    }
   }, [])
 
   // Resize Observer
@@ -338,7 +507,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         const newW = Math.round(entry.contentRect.width)
         const newH = Math.round(entry.contentRect.height)
         const prev = prevDimsRef.current
-        
+
         if (prev.width > 0 && prev.height > 0) {
           const dw = newW - prev.width
           const dh = newH - prev.height
@@ -394,6 +563,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         if (e.code === 'KeyR') setMode('rect')
         if (e.code === 'KeyE') setMode('eraser')
         if (e.code === 'KeyT') setMode('text')
+        if (e.code === 'KeyF') fitToContent()
         if (e.code === 'Delete' || e.code === 'Backspace') {
           e.preventDefault()
           deleteSelected()
@@ -443,15 +613,25 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     pasteElements,
     duplicateElements,
     groupElements,
-    ungroupElements
+    ungroupElements,
+    fitToContent
   ])
 
   // --- Event Handlers ---
   const handleMouseDown = useCallback((e: React.MouseEvent): void => {
     isBoardActiveRef.current = true
+    setContextMenuPos(null)
+    
+    // Auto-hide settings if not pinned
+    if (!isSettingsPinned) {
+      setShowPenSettings(false)
+      setShowEraserSettings(false)
+      setShowColorPicker(false)
+    }
+
     onNavPointerDown(e)
     if (isNavigatingRef.current === false) onToolPointerDown(e)
-  }, [onNavPointerDown, onToolPointerDown, isNavigatingRef])
+  }, [onNavPointerDown, onToolPointerDown, isNavigatingRef, isSettingsPinned])
 
   const handleDoubleClick = useCallback((e: React.MouseEvent): void => {
     if (Date.now() - lastElementDoubleClickTime.current < 500) return
@@ -471,8 +651,9 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   // Stable callback for onDoubleClick on element
   const handleElementDoubleClick = useCallback((id: string): void => {
     lastElementDoubleClickTime.current = Date.now()
+    pushToHistory()
     setEditingTextId(id)
-  }, [])
+  }, [pushToHistory])
 
   return (
     <div
@@ -505,7 +686,9 @@ const BoardsView: React.FC<BoardsViewProps> = ({
       onDragOver={(e) => e.preventDefault()}
       onContextMenu={(e) => {
         e.preventDefault()
-        setContextMenuPos({ x: e.clientX, y: e.clientY })
+        if (!containerRef.current) return
+        const board = containerRef.current.getBoundingClientRect()
+        setContextMenuPos({ x: e.clientX - board.left, y: e.clientY - board.top })
       }}
     >
       <Toolbar
@@ -519,13 +702,22 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         isSavedFlash={isSavedFlash}
         showColorPicker={showColorPicker}
         setShowColorPicker={setShowColorPicker}
-        setPickerAnchor={setPickerAnchor}
+        setPickerAnchor={handleSetPickerAnchor}
         setShowPenSettings={setShowPenSettings}
         setShowEraserSettings={setShowEraserSettings}
-        setPenSettingsAnchor={setPenSettingsAnchor}
-        setEraserSettingsAnchor={setEraserSettingsAnchor}
+        setPenSettingsAnchor={handleSetPenSettingsAnchor}
+        setEraserSettingsAnchor={handleSetEraserSettingsAnchor}
         deleteSelected={deleteSelected}
         selectedIdsCount={selectedIds.length}
+        onFitToContent={fitToContent}
+        hasElements={elements.length > 0}
+        isSettingsPinned={isSettingsPinned}
+        penSize={penSize}
+        setPenSize={setPenSize}
+        eraserSize={eraserSize}
+        setEraserSize={setEraserSize}
+        textSize={textSize}
+        setTextSize={setTextSize}
       />
 
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
@@ -560,7 +752,10 @@ const BoardsView: React.FC<BoardsViewProps> = ({
               onMove={handleElementMove}
               onResize={handleElementResize}
               onRotate={handleElementRotate}
-              onInteractionStart={pushToHistory}
+              onInteractionStart={() => {
+                pushToHistory()
+                setContextMenuPos(null)
+              }}
               onDoubleClick={handleElementDoubleClick}
               editingTextId={editingTextId}
               mode={mode}
@@ -600,9 +795,17 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         eraserSettingsAnchor={eraserSettingsAnchor}
         eraserSize={eraserSize}
         setEraserSize={setEraserSize}
+        pushToHistory={pushToHistory}
+        isSettingsPinned={isSettingsPinned}
+        setIsSettingsPinned={setIsSettingsPinned}
       />
 
-      <BoardBottomBar elementsCount={elements.length} scale={viewport.scale} isSyncing={isSyncing} />
+      <BoardBottomBar 
+        elementsCount={elements.length} 
+        scale={viewport.scale} 
+        isSyncing={isSyncing} 
+        processingCount={processingCount} 
+      />
 
       <div style={{ position: 'absolute', top: '24px', right: '24px', zIndex: 1100, display: 'flex', gap: '8px' }}>
         <button
@@ -650,11 +853,26 @@ const BoardsView: React.FC<BoardsViewProps> = ({
       )}
 
       {showColorPicker && pickerAnchor && (
-        <div style={{ position: 'fixed', zIndex: 10000, top: pickerAnchor.bottom + 10, left: pickerAnchor.left }}>
+        <div
+          style={{
+            position: 'absolute',
+            zIndex: 10000,
+            top: pickerAnchor.bottom + 10,
+            left: pickerAnchor.left,
+            background: 'var(--card-bg)',
+            borderRadius: '10px',
+            border: '1px solid rgba(255,255,255,0.1)',
+            padding: '12px',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+            width: '260px',
+            userSelect: 'none'
+          }}
+        >
           <ColorPicker
             color={theme?.boardBg || '#1b1b1b'}
             onChange={(c) => setTheme && setTheme({ ...theme!, boardBg: c })}
             onClose={() => setShowColorPicker(false)}
+            inline={true}
           />
         </div>
       )}

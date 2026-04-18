@@ -4,7 +4,6 @@ import {
   Calendar,
   Flag,
   CheckCircle2,
-  Clock,
   Edit2,
   Save,
   FileText,
@@ -14,12 +13,27 @@ import {
   Link as LinkIcon,
   Paperclip,
   ExternalLink,
-  Folder as FolderIcon
+  Folder as FolderIcon,
+  PanelLeft,
+  Settings,
+  Move,
+  Check,
+  X
 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Project, TaskItem, AppNote } from '../types'
 
 // --- STYLES (Keep logic clean by moving objects down) ---
+const topMenuStyle: React.CSSProperties = {
+  height: '45px',
+  display: 'flex',
+  alignItems: 'center',
+  padding: '0 10px',
+  borderBottom: '1px solid rgba(255,255,255,0.05)',
+  flexShrink: 0,
+  gap: '12px',
+  background: 'transparent'
+}
 const containerStyle: React.CSSProperties = {
   flex: 1,
   padding: '0',
@@ -42,7 +56,9 @@ const bannerStyle: React.CSSProperties = {
   position: 'relative',
   transition:
     'height 0.3s cubic-bezier(0.4, 0, 0.2, 1), min-height 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-  overflow: 'hidden'
+  overflow: 'hidden',
+  borderRadius: 0,
+  margin: 0
 }
 const sidebarStyle: React.CSSProperties = {
   width: '280px',
@@ -104,14 +120,6 @@ const mainDividerStyle: React.CSSProperties = {
   width: 'auto',
   display: 'block'
 }
-const labelStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  fontSize: '12px',
-  color: 'var(--text-secondary)',
-  fontWeight: 600
-}
 const iconBoxStyle: React.CSSProperties = {
   width: '64px',
   height: '64px',
@@ -137,6 +145,21 @@ const editBtnStyle: React.CSSProperties = {
   gap: '6px',
   fontSize: '12px',
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+}
+const bannerActionBtnStyle: React.CSSProperties = {
+  width: '30px',
+  height: '30px',
+  background: 'transparent',
+  border: 'none',
+  borderRadius: '6px',
+  color: 'var(--text-secondary)',
+  cursor: 'pointer',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  opacity: 0.6,
+  transition: 'all 0.2s',
+  padding: 0
 }
 const descriptionViewStyle: React.CSSProperties = {
   color: 'var(--text-secondary)',
@@ -390,6 +413,8 @@ interface ProjectOverviewProps {
   onUpdate: (id: string, updates: Partial<Project>) => void
   notes: AppNote[]
   onNoteClick?: (noteId: string) => void
+  isSidebarOpen: boolean
+  onToggleSidebar: () => void
 }
 
 const MONOCHROME_ICONS = [
@@ -416,7 +441,7 @@ const MONOCHROME_ICONS = [
   'Gamepad2',
   'Palette',
   'Lightbulb',
-  'PenTool',
+  'Pencil',
   'Compass',
   'Anchor',
   'Box',
@@ -515,7 +540,9 @@ export default function ProjectOverview({
   allProjects,
   onUpdate,
   notes,
-  onNoteClick
+  onNoteClick,
+  isSidebarOpen,
+  onToggleSidebar
 }: ProjectOverviewProps): React.ReactElement | null {
   const [isEditingDescription, setIsEditingDescription] = useState(false)
   const [descriptionValue, setDescriptionValue] = useState(project.description || '')
@@ -526,6 +553,15 @@ export default function ProjectOverview({
   const [resourceType, setResourceType] = useState<'file' | 'link' | 'folder'>('file')
   const [resourcePath, setResourcePath] = useState('')
   const [resourceName, setResourceName] = useState('')
+  const [showBannerMenu, setShowBannerMenu] = useState(false)
+  const bannerMenuRef = useRef<HTMLDivElement>(null)
+
+  // Repositioning state
+  const [isRepositioning, setIsRepositioning] = useState(false)
+  const [tempPosition, setTempPosition] = useState(project.bannerPosition ?? 50)
+  const [isDragging, setIsDragging] = useState(false)
+  const [startY, setStartY] = useState(0)
+  const [startPos, setStartPos] = useState(0)
 
   useEffect(() => {
     setDescriptionValue(project.description || '')
@@ -534,6 +570,25 @@ export default function ProjectOverview({
   useEffect(() => {
     setNameValue(project.name || '')
   }, [project.name, project.id])
+
+  useEffect(() => {
+    setTempPosition(project.bannerPosition ?? 50)
+  }, [project.bannerPosition, project.id])
+
+  // Close banner menu on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (bannerMenuRef.current && !bannerMenuRef.current.contains(event.target as Node)) {
+        setShowBannerMenu(false)
+      }
+    }
+    if (showBannerMenu) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [showBannerMenu])
 
   // Memoized Task Calculations
   const stats = useMemo(() => {
@@ -556,36 +611,12 @@ export default function ProjectOverview({
     return { total, completed }
   }, [project])
 
-  const pipelineStats = useMemo(() => {
-    let total = 0
-    let completed = 0
-
-    // Use active pipeline if available
-    // , otherwise fallback to legacy field
-    const activePipeline = project.activePipelineId
-      ? project.pipelines?.find((p) => p.id === project.activePipelineId)
-      : project.pipelines?.[0]
-
-    const stages = activePipeline?.stages || project.pipeline || []
-
-    stages.forEach((stage) => {
-      stage.items.forEach((item) => {
-        total++
-        if (item.completed) completed++
-      })
-    })
-    return { total, completed }
-  }, [project.pipelines, project.activePipelineId, project.pipeline])
 
   const progressPercent = useMemo(() => {
     if (project.progressMode === 'manual') return project.manualProgress || 0
-    if (project.progressMode === 'pipeline') {
-      if (pipelineStats.total === 0) return 0
-      return Math.round((pipelineStats.completed / pipelineStats.total) * 100)
-    }
     if (stats.total === 0) return 0
     return Math.round((stats.completed / stats.total) * 100)
-  }, [project, stats, pipelineStats])
+  }, [project, stats])
 
   // Handlers
   const handleBannerChange = async (): Promise<void> => {
@@ -596,6 +627,42 @@ export default function ProjectOverview({
       const fileUrl = `file://${normalizedPath.startsWith('/') ? '' : '/'}${encodeURI(normalizedPath)}`
       onUpdate(project.id, { banner: fileUrl })
     }
+  }
+
+  const handleStartReposition = () => {
+    setIsRepositioning(true)
+    setShowBannerMenu(false)
+    setTempPosition(project.bannerPosition ?? 50)
+  }
+
+  const handleBannerMouseDown = (e: React.MouseEvent) => {
+    if (!isRepositioning) return
+    setIsDragging(true)
+    setStartY(e.clientY)
+    setStartPos(tempPosition)
+  }
+
+  const handleBannerMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !isRepositioning) return
+    const deltaY = e.clientY - startY
+    const sensitivity = 0.4 // Adjust drag speed
+    let nextPos = startPos - deltaY * sensitivity
+    nextPos = Math.max(0, Math.min(100, nextPos))
+    setTempPosition(nextPos)
+  }
+
+  const handleBannerMouseUp = () => {
+    setIsDragging(false)
+  }
+
+  const saveReposition = () => {
+    onUpdate(project.id, { bannerPosition: tempPosition })
+    setIsRepositioning(false)
+  }
+
+  const cancelReposition = () => {
+    setTempPosition(project.bannerPosition ?? 50)
+    setIsRepositioning(false)
   }
 
   const saveDescription = (): void => {
@@ -634,6 +701,191 @@ export default function ProjectOverview({
   return (
     <div className="project-overview-container" style={containerStyle}>
       <div className="project-card" style={cardStyle}>
+        {/* --- TOP MENU --- */}
+        <div className="project-top-menu" style={topMenuStyle}>
+          <button
+            onClick={onToggleSidebar}
+            title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+              cursor: 'pointer',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: isSidebarOpen ? 0.6 : 0.4,
+              transition: 'opacity 0.2s',
+              width: '30px',
+              height: '30px',
+              marginRight: '8px'
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+            onMouseLeave={(e) =>
+              (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+            }
+          >
+            <PanelLeft size={18} />
+          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
+            {/* Settings (Banner Menu Toggle) */}
+            <div ref={bannerMenuRef} style={{ position: 'relative', display: 'flex' }}>
+              <button
+                onClick={() => setShowBannerMenu(!showBannerMenu)}
+                style={{
+                  ...bannerActionBtnStyle,
+                  background: showBannerMenu ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  opacity: showBannerMenu ? 1 : 0.6
+                }}
+                title="Banner Settings"
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                onMouseLeave={(e) => {
+                  if (!showBannerMenu) e.currentTarget.style.opacity = '0.6'
+                }}
+              >
+                <Settings size={18} />
+              </button>
+
+              {/* Dropdown Menu */}
+              {showBannerMenu && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: '8px',
+                    background: '#1a1a1a',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: '10px',
+                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                    padding: '6px',
+                    minWidth: '180px',
+                    zIndex: 1000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '2px'
+                  }}
+                >
+                  <button
+                    onClick={() => {
+                      handleBannerChange()
+                      setShowBannerMenu(false)
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: 'var(--text-primary)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      width: '100%',
+                      textAlign: 'left',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <ImageIcon size={14} style={{ opacity: 0.7 }} />
+                    Select Banner Image
+                  </button>
+
+                  <button
+                    disabled={!project.banner}
+                    onClick={handleStartReposition}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: project.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: project.banner ? 'pointer' : 'not-allowed',
+                      opacity: project.banner ? 1 : 0.4,
+                      width: '100%',
+                      textAlign: 'left',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (project.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    }}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <Move size={14} style={{ opacity: 0.7 }} />
+                    Reposition Banner
+                  </button>
+
+                  <button
+                    disabled={!project.banner}
+                    onClick={() => {
+                      onUpdate(project.id, { banner: undefined })
+                      setShowBannerMenu(false)
+                    }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '10px',
+                      padding: '8px 12px',
+                      background: 'transparent',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: project.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: 500,
+                      cursor: project.banner ? 'pointer' : 'not-allowed',
+                      opacity: project.banner ? 1 : 0.4,
+                      width: '100%',
+                      textAlign: 'left',
+                      transition: 'background 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (project.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                    }}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <Trash2 size={14} style={{ opacity: 0.7 }} />
+                    Remove Banner
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Collapse/Expand Banner (Far Right) */}
+            <button
+              disabled={!project.banner}
+              onClick={() => onUpdate(project.id, { bannerCollapsed: !project.bannerCollapsed })}
+              style={{
+                ...bannerActionBtnStyle,
+                opacity: project.banner ? 0.6 : 0.2,
+                cursor: project.banner ? 'pointer' : 'not-allowed',
+                marginLeft: '4px'
+              }}
+              title={project.bannerCollapsed ? 'Expand Banner' : 'Collapse Banner'}
+              onMouseEnter={(e) => {
+                if (project.banner) e.currentTarget.style.opacity = '1'
+              }}
+              onMouseLeave={(e) => {
+                if (project.banner) e.currentTarget.style.opacity = '0.6'
+              }}
+            >
+              {project.bannerCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+            </button>
+          </div>
+        </div>
+
         <div
           style={{
             display: 'flex',
@@ -647,21 +899,155 @@ export default function ProjectOverview({
           {/* --- BANNER SECTION --- */}
           <div
             className="banner"
+            onMouseDown={handleBannerMouseDown}
+            onMouseMove={handleBannerMouseMove}
+            onMouseUp={handleBannerMouseUp}
+            onMouseLeave={handleBannerMouseUp}
             style={{
               ...bannerStyle,
               height: project.bannerCollapsed || !project.banner ? '0px' : '280px',
               minHeight: project.bannerCollapsed || !project.banner ? '0px' : '280px',
+              cursor: isRepositioning ? 'ns-resize' : 'default',
+              userSelect: 'none',
               background: project.banner
-                ? `url("${project.banner}") center/cover no-repeat`
-                : `linear-gradient(135deg, ${project.color || 'var(--accent)'}, var(--bg-surface))`
+                ? `url("${project.banner}")`
+                : `linear-gradient(135deg, ${project.color || 'var(--accent)'}, var(--bg-surface))`,
+              backgroundSize: 'cover',
+              backgroundPosition: `50% ${tempPosition}%`,
+              backgroundRepeat: 'no-repeat'
             }}
-          />
+          >
+            {isRepositioning && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.3)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '20px',
+                  zIndex: 10
+                }}
+              >
+                <div style={{ 
+                  padding: '8px 16px', 
+                  background: 'rgba(0,0,0,0.8)', 
+                  borderRadius: '20px', 
+                  color: 'white', 
+                  fontSize: '12px', 
+                  fontWeight: 600,
+                  backdropFilter: 'blur(10px)',
+                  border: '1px solid rgba(255,255,255,0.1)'
+                }}>
+                  Drag up or down to reposition
+                </div>
+                
+                <div style={{ display: 'flex', gap: '10px' }}>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); saveReposition(); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      background: 'var(--accent)',
+                      color: 'white',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    <Check size={16} /> Save
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); cancelReposition(); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '8px 20px',
+                      borderRadius: '8px',
+                      background: 'rgba(255,255,255,0.1)',
+                      color: 'white',
+                      border: 'none',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      backdropFilter: 'blur(5px)'
+                    }}
+                  >
+                    <X size={16} /> Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
           <hr style={{ ...dividerStyle, margin: 0, width: '100%' }} />
 
           <div style={{ display: 'flex', flexShrink: 0, minHeight: 'min-content' }}>
             {/* --- SIDEBAR (METADATA) --- */}
             <aside style={{ ...sidebarStyle, flexShrink: 0 }}>
-              <div style={{ height: '64px' }} />
+              <div className="progress-module" style={{ height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
+                  <button
+                    onClick={() => onUpdate(project.id, { progressMode: 'tasks' })}
+                    style={{
+                      ...toggleBtnStyle(project.progressMode === 'tasks' || !project.progressMode),
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      height: '24px',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: (project.progressMode === 'tasks' || !project.progressMode) ? (project.color || 'var(--accent)') : 'transparent' }} />
+                    Tasks
+                  </button>
+                  <button
+                    onClick={() => onUpdate(project.id, { progressMode: 'manual' })}
+                    style={{
+                      ...toggleBtnStyle(project.progressMode === 'manual'),
+                      padding: '4px 8px',
+                      fontSize: '11px',
+                      height: '24px',
+                      textAlign: 'left',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: project.progressMode === 'manual' ? (project.color || 'var(--accent)') : 'transparent' }} />
+                    Manual
+                  </button>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <span
+                    style={{
+                      fontWeight: 900,
+                      fontSize: '32px',
+                      lineHeight: '1',
+                      color: project.color || 'var(--danger)',
+                      letterSpacing: '-0.04em'
+                    }}
+                  >
+                    {progressPercent}
+                    <span style={{ fontSize: '14px', opacity: 0.5, marginLeft: '2px', fontWeight: 600 }}>%</span>
+                  </span>
+                </div>
+              </div>
               <hr style={{ ...sidebarDividerStyle, marginTop: '16px', marginBottom: '16px' }} />
               <MetaField icon={<CheckCircle2 size={14} color={project.color} />} label="Status">
                 <CustomSelect
@@ -708,78 +1094,7 @@ export default function ProjectOverview({
                 />
               </MetaField>
 
-              <hr style={sidebarDividerStyle} />
 
-              <div className="progress-module">
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginBottom: '10px'
-                  }}
-                >
-                  <span style={labelStyle}>
-                    <Clock size={14} /> Progress
-                  </span>
-                  <span
-                    style={{
-                      fontWeight: 800,
-                      fontSize: '14px',
-                      color: project.color || 'var(--danger)'
-                    }}
-                  >
-                    {progressPercent}%
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                  <button
-                    onClick={() => onUpdate(project.id, { progressMode: 'tasks' })}
-                    style={toggleBtnStyle(
-                      project.progressMode === 'tasks' || !project.progressMode
-                    )}
-                  >
-                    Tasks
-                  </button>
-                  <button
-                    onClick={() => onUpdate(project.id, { progressMode: 'pipeline' })}
-                    style={toggleBtnStyle(project.progressMode === 'pipeline')}
-                  >
-                    Pipeline
-                  </button>
-                  <button
-                    onClick={() => onUpdate(project.id, { progressMode: 'manual' })}
-                    style={toggleBtnStyle(project.progressMode === 'manual')}
-                  >
-                    Manual
-                  </button>
-                </div>
-                {(() => {
-                  const sliderVal =
-                    project.progressMode === 'manual'
-                      ? project.manualProgress || 0
-                      : progressPercent
-                  const fillColor = project.color || 'var(--accent)'
-                  return (
-                    <input
-                      type="range"
-                      min={0}
-                      max={100}
-                      value={sliderVal}
-                      onChange={(e) =>
-                        onUpdate(project.id, { manualProgress: Number(e.target.value) })
-                      }
-                      disabled={project.progressMode !== 'manual'}
-                      className="progress-slider"
-                      style={{
-                        width: '100%',
-                        ['--slider-color' as string]: fillColor,
-                        background: `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${sliderVal}%, #2a2a2a ${sliderVal}%, #2a2a2a 100%)`
-                      }}
-                    />
-                  )
-                })()}
-              </div>
             </aside>
 
             {/* --- MAIN CONTENT --- */}
@@ -855,84 +1170,6 @@ export default function ProjectOverview({
                       {project.name}
                     </h1>
                   )}
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '6px',
-                    alignSelf: 'flex-start'
-                  }}
-                >
-                  {/* Banner Action (Select or Remove) */}
-                  <button
-                    onClick={
-                      project.banner
-                        ? () => onUpdate(project.id, { banner: undefined })
-                        : handleBannerChange
-                    }
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '4px',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      outline: 'none'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                      e.currentTarget.style.color = project.banner
-                        ? 'var(--danger)'
-                        : 'var(--text-primary)'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-                      e.currentTarget.style.color = 'var(--text-secondary)'
-                    }}
-                  >
-                    {project.banner ? <Trash2 size={10} /> : <ImageIcon size={10} />}
-                  </button>
-
-                  <button
-                    disabled={!project.banner}
-                    onClick={() =>
-                      onUpdate(project.id, { bannerCollapsed: !project.bannerCollapsed })
-                    }
-                    style={{
-                      width: '24px',
-                      height: '24px',
-                      borderRadius: '4px',
-                      background: 'rgba(255,255,255,0.03)',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: project.banner ? 'pointer' : 'not-allowed',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      transition: 'all 0.2s',
-                      outline: 'none',
-                      opacity: project.banner ? 1 : 0.3
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!project.banner) return
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                      e.currentTarget.style.color = 'var(--text-primary)'
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!project.banner) return
-                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
-                      e.currentTarget.style.color = 'var(--text-secondary)'
-                    }}
-                    title={project.bannerCollapsed ? 'Show Banner' : 'Hide Banner'}
-                  >
-                    {project.bannerCollapsed ? <ChevronDown size={10} /> : <ChevronUp size={10} />}
-                  </button>
                 </div>
               </header>
 

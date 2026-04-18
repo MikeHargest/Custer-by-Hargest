@@ -14,7 +14,8 @@ import {
   SlidersHorizontal,
   RotateCcw,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  PanelLeft
 } from 'lucide-react'
 
 const isParentTask = (
@@ -52,6 +53,8 @@ interface TimelineViewProps {
   ) => string
   hiddenProjectIds: string[]
   setHiddenProjectIds: (ids: string[]) => void
+  isSidebarOpen: boolean
+  onToggleSidebar: () => void
 }
 
 export default function TimelineView({
@@ -60,7 +63,9 @@ export default function TimelineView({
   setTimelineTasks,
   onAddProjectItem,
   hiddenProjectIds,
-  setHiddenProjectIds
+  setHiddenProjectIds,
+  isSidebarOpen,
+  onToggleSidebar
 }: TimelineViewProps): React.ReactElement {
   const PAST_DAYS = 14
   const minCellWidth = 150
@@ -591,19 +596,46 @@ export default function TimelineView({
               zIndex: 45,
               background: 'var(--card-bg)',
               height: '45px',
+              padding: '0 10px',
               borderBottom: '1px solid rgba(255,255,255,0.05)',
               display: 'flex',
               alignItems: 'center',
               width: 'max-content',
-              minWidth: '100%'
+              minWidth: '100%',
+              boxSizing: 'border-box'
             }}
           >
+            <button
+              onClick={onToggleSidebar}
+              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isSidebarOpen ? 0.6 : 0.4,
+                transition: 'opacity 0.2s',
+                width: '30px',
+                height: '30px',
+                marginRight: '8px'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+              }
+            >
+              <PanelLeft size={18} />
+            </button>
             <div
               style={{
-                width: '185px',
-                minWidth: '185px',
+                width: '200px',
+                minWidth: '200px',
                 height: '100%',
-                padding: '0 12px',
+                padding: '0 12px 0 24px',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
@@ -692,10 +724,10 @@ export default function TimelineView({
                   <th
                     rowSpan={2}
                     style={{
-                      width: '185px',
-                      minWidth: '185px',
+                      width: '200px',
+                      minWidth: '200px',
                       height: '90px',
-                      padding: '8px 8px 8px 12px',
+                      padding: '8px 8px 8px 24px',
                       borderBottom: '1px solid rgba(255,255,255,0.05)',
                       color: 'var(--text-secondary)',
                       fontWeight: 600,
@@ -766,7 +798,7 @@ export default function TimelineView({
                                 gap: '10px',
                                 width: '100%',
                                 padding: '8px 12px',
-                                paddingLeft: `${12 + (p.depth || 0) * 16}px`,
+                                paddingLeft: `${24 + (p.depth || 0) * 16}px`,
                                 background: 'transparent',
                                 border: 'none',
                                 color: hiddenProjects.has(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
@@ -845,7 +877,7 @@ export default function TimelineView({
                       <div
                         style={{
                           position: 'sticky',
-                          left: '201px',
+                          left: '216px',
                           display: 'inline-block',
                           width: 'max-content',
                           fontSize: '13px',
@@ -929,9 +961,9 @@ export default function TimelineView({
                         {/* Project Title Column */}
                         <td
                           style={{
-                            width: '185px',
-                            minWidth: '185px',
-                            padding: `10px 8px 10px ${12 + (project.depth || 0) * 16}px`,
+                            width: '200px',
+                            minWidth: '200px',
+                            padding: `10px 8px 10px ${24 + (project.depth || 0) * 16}px`,
                             position: 'sticky',
                             left: 0,
                             background: 'var(--card-bg)',

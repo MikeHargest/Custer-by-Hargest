@@ -16,11 +16,18 @@ import {
   List,
   ListTodo,
   Minus,
-  PenTool,
   PanelRight,
   ArrowLeft,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  History,
+  RotateCcw,
+  Presentation,
+  Pencil,
+  Save,
+  Check,
+  FolderOpen,
+  PanelLeft
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -50,6 +57,9 @@ interface NotesViewProps {
   setTheme: (theme: any) => void
   showFPS?: boolean
   setCurrentView: (view: any) => void
+  backupIntervalMinutes?: number
+  isSidebarOpen: boolean
+  onToggleSidebar: () => void
 }
 
 const findProjectRecursive = (projs: Project[], id: string | null): Project | undefined => {
@@ -91,7 +101,10 @@ export default function NotesView({
   theme,
   setTheme,
   showFPS,
-  setCurrentView
+  setCurrentView,
+  backupIntervalMinutes = 10,
+  isSidebarOpen,
+  onToggleSidebar
 }: NotesViewProps): React.ReactElement {
   const activeProjectId = selectedProjectId || 'default'
   const [showTrash, setShowTrash] = useState(false)
@@ -105,10 +118,33 @@ export default function NotesView({
   const titleEffectRef = useRef<string>(localTitle)
   const [collapsedNotes, setCollapsedNotes] = useState<Set<string>>(new Set())
   const notesRef = useRef(notes)
+  // Board cache: stores loaded board content per board id
+  const [boardContent, setBoardContent] = useState<Record<string, string>>({})
+  const boardContentRef = useRef<Record<string, string>>({})
   
+  const [sidebarContextMenu, setSidebarContextMenu] = useState<{
+    x: number
+    y: number
+    note: AppNote
+  } | null>(null)
+  
+  // Save State
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  
+  // Backup / History States
+  const [isPreviewMode, setIsPreviewMode] = useState(false)
+  const [previewContent, setPreviewContent] = useState<string | null>(null)
+  const [historyList, setHistoryList] = useState<any[]>([])
+  const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
+  const lastBackedUpContentRef = useRef<Record<string, string>>({})
+
   useEffect(() => {
     notesRef.current = notes
   }, [notes])
+
+  useEffect(() => {
+    boardContentRef.current = boardContent
+  }, [boardContent])
   
   useEffect(() => {
     titleEffectRef.current = localTitle
@@ -118,6 +154,180 @@ export default function NotesView({
     activeNoteIdRef.current = activeNoteId
   }, [activeNoteId])
 
+  // FLUSH ON CLOSE: Synchronously save all pending changes when the app quits or window is closed
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      const pendingIds = Object.keys(saveTimers.current)
+      for (const id of pendingIds) {
+        clearTimeout(saveTimers.current[id])
+        const currentNoteVersion = notesRef.current.find((n) => n.id === id)
+        if (!currentNoteVersion) continue
+
+        const type = currentNoteVersion.type || 'markdown'
+        const isBoard = type === 'board'
+        let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
+
+        const noteProjectId = currentNoteVersion.projectId || 'default'
+        if (noteProjectId !== 'trash') {
+          const project = findProjectRecursive(projects, noteProjectId)
+          if (project) {
+            if (isBoard) {
+              targetDir = (project as any).boardsPath || (project.path ? `${project.path}/boards` : targetDir)
+            } else {
+              targetDir = project.notesPath || (project.path ? `${project.path}/notes` : targetDir)
+            }
+          }
+        }
+
+        const ext = isBoard ? 'board' : 'md'
+        const fileName = currentNoteVersion.fileName || getFileName(currentNoteVersion.title, id, ext)
+
+        if (isBoard) {
+          // @ts-ignore
+          window.api.writeBoardJson(id, boardContentRef.current[id] || currentNoteVersion.content || '{}').then(ok => {
+            // @ts-ignore
+            if (ok) window.api.packBoard(id, targetDir, fileName)
+          })
+        } else {
+          ;(window as any).api.saveNote(targetDir, fileName, currentNoteVersion)
+        }
+      }
+    }
+
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [workspacePath, projects])
+
+  // BACKUP SYSTEM
+  const createBackupSnapshot = useCallback(async (noteToBackup: AppNote) => {
+    const isBoard = noteToBackup.type === 'board'
+    const noteProjectId = noteToBackup.projectId || 'default'
+    const isTrash = noteToBackup.isTrash || noteProjectId === 'trash'
+    const pId = noteProjectId === 'trash' ? 'default' : noteProjectId
+    
+    let targetDir: string
+    if (isBoard) {
+      targetDir = workspacePath + '/boards'
+      if (pId !== 'default') {
+        const project = findProjectRecursive(projects, pId)
+        if (project) {
+          // @ts-ignore
+          if (project.boardsPath) targetDir = project.boardsPath
+          else if (project.path) targetDir = `${project.path}/boards`
+        }
+      }
+      if (isTrash) targetDir = `${targetDir}/trash`
+    } else {
+      targetDir = workspacePath + '/notes'
+      if (pId !== 'default') {
+        const project = findProjectRecursive(projects, pId)
+        if (project) {
+          targetDir = project.notesPath || (project.path ? `${project.path}/notes` : targetDir)
+        }
+      }
+      if (isTrash) targetDir = `${targetDir}/trash`
+    }
+    
+    // For markdown notes, check if content changed. For boards, always allow.
+    if (!isBoard) {
+      const content = noteToBackup.content || ''
+      if (lastBackedUpContentRef.current[noteToBackup.id] === content) {
+        return // No changes
+      }
+    }
+
+    const ext = isBoard ? 'board' : 'md'
+    const fileName = noteToBackup.fileName || getFileName(noteToBackup.title, noteToBackup.id, ext)
+    // @ts-ignore
+    const success = await window.api.createNoteBackup(targetDir, noteToBackup, fileName)
+    if (success && !isBoard) {
+      lastBackedUpContentRef.current[noteToBackup.id] = noteToBackup.content || ''
+    }
+  }, [workspacePath, projects])
+
+  // Periodic Backup Timer
+  useEffect(() => {
+    const ms = backupIntervalMinutes * 60 * 1000
+    const interval = setInterval(() => {
+      const activeId = activeNoteIdRef.current
+      if (!activeId || isPreviewMode) return
+      const currentNote = notesRef.current.find(n => n.id === activeId)
+      if (currentNote) {
+        createBackupSnapshot(currentNote)
+      }
+    }, ms)
+    return () => clearInterval(interval)
+  }, [backupIntervalMinutes, createBackupSnapshot, isPreviewMode])
+
+  // Save final snapshot on Note Switch
+  useEffect(() => {
+    const previousId = lastActiveIdRef.current
+    if (previousId && previousId !== activeNoteId) {
+       const previousNote = notesRef.current.find(n => n.id === previousId)
+       if (previousNote) {
+         createBackupSnapshot(previousNote)
+       }
+    }
+    lastActiveIdRef.current = activeNoteId
+    // Reset preview mode on switch
+    setIsPreviewMode(false)
+    setPreviewContent(null)
+    setSaveStatus('saved') // Reset save state on note switch
+  }, [activeNoteId, createBackupSnapshot])
+
+  const handleLoadHistory = async () => {
+    if (!activeNoteId) return
+    const currentNote =  notesRef.current.find(n => n.id === activeNoteId)
+    if (!currentNote || currentNote.type === 'board') return
+    
+    let targetDir = workspacePath + '/notes'
+    const noteProjectId = currentNote.projectId || 'default'
+    if (noteProjectId !== 'trash') {
+      const project = findProjectRecursive(projects, noteProjectId)
+      if (project) {
+        targetDir = project.notesPath || (project.path ? `${project.path}/notes` : targetDir)
+      }
+    }
+    const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'md')
+    
+    // @ts-ignore
+    const backups = await window.api.listNoteBackups(targetDir, fileName)
+    setHistoryList(backups)
+    setShowHistoryDropdown(!showHistoryDropdown)
+  }
+
+  const handlePreviewHistory = async (backupItem: any) => {
+    // @ts-ignore
+    const text = await window.api.readNoteBackup(backupItem.path)
+    if (text !== null) {
+      setPreviewContent(text)
+      setIsPreviewMode(true)
+      setShowHistoryDropdown(false)
+      editor?.commands.setContent(text)
+    }
+  }
+
+  const handleCancelPreview = () => {
+    const currentNote = notesRef.current.find(n => n.id === activeNoteId)
+    if (!currentNote) return
+    setIsPreviewMode(false)
+    setPreviewContent(null)
+    editor?.commands.setContent(currentNote.content || '')
+  }
+
+  const handleRestorePreview = async () => {
+    const currentNote = notesRef.current.find(n => n.id === activeNoteId)
+    if (!currentNote || !previewContent) return
+    
+    // Force backup of current state
+    await createBackupSnapshot(currentNote)
+    
+    const newContent = previewContent
+    setIsPreviewMode(false)
+    setPreviewContent(null)
+    
+    handleUpdateNoteRef.current(currentNote.id, { content: newContent })
+  }
 
   const handleUpdateNote = useCallback(
     (id: string, updates: Partial<AppNote>): void => {
@@ -133,12 +343,17 @@ export default function NotesView({
 
       // Save content logic (Renaming is now handled separately by handleTitleBlur)
       if (updates.content !== undefined) {
+        setSaveStatus('unsaved')
         if (saveTimers.current[id]) clearTimeout(saveTimers.current[id])
         saveTimers.current[id] = setTimeout(
           async (): Promise<void> => {
+            setSaveStatus('saving')
             // Read from ref to always get the LATEST notes state, not a stale closure
             const currentNoteVersion = notesRef.current.find((n) => n.id === id)
-            if (!currentNoteVersion) return
+            if (!currentNoteVersion) {
+              setSaveStatus('saved')
+              return
+            }
 
             const type = currentNoteVersion.type || 'markdown'
             const isBoard = type === 'board'
@@ -166,12 +381,22 @@ export default function NotesView({
             const fileName = currentNoteVersion.fileName || getFileName(currentNoteVersion.title, id, ext)
 
             if (isBoard) {
+              // Write to cache only (fast, no ZIP repacking)
               // @ts-ignore
-              await window.api.saveContainer(targetDir, fileName, currentNoteVersion)
+              const ok = await window.api.writeBoardJson(id, updates.content)
+              if (ok) {
+                // Pack to .board file
+                // @ts-ignore
+                await window.api.packBoard(id, targetDir, fileName)
+              } else {
+                console.error("writeBoardJson failed, skipping packBoard to prevent ZIP overwrite")
+              }
             } else {
               // @ts-ignore
               window.api.saveNote(targetDir, fileName, currentNoteVersion)
             }
+            setSaveStatus('saved')
+            delete saveTimers.current[id]
           },
           1000
         )
@@ -179,6 +404,59 @@ export default function NotesView({
     },
     [workspacePath, projects, setNotes]
   )
+
+  const handleManualSave = useCallback(async () => {
+    if (!activeNoteId) return
+    const currentNote = notesRef.current.find((n) => n.id === activeNoteId)
+    if (!currentNote) return
+
+    if (saveTimers.current[activeNoteId]) {
+      clearTimeout(saveTimers.current[activeNoteId])
+      delete saveTimers.current[activeNoteId]
+    }
+
+    setSaveStatus('saving')
+
+    const type = currentNote.type || 'markdown'
+    const isBoard = type === 'board'
+    let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
+
+    const noteProjectId = currentNote.projectId || 'default'
+    if (noteProjectId !== 'trash') {
+      const project = findProjectRecursive(projects, noteProjectId)
+      if (project) {
+        if (isBoard) {
+          // @ts-ignore
+          if (project.boardsPath) targetDir = project.boardsPath
+          else if (project.path) targetDir = `${project.path}/boards`
+        } else {
+          if (project.notesPath) targetDir = project.notesPath
+          else if (project.path) targetDir = `${project.path}/notes`
+        }
+      }
+    }
+
+    if (!targetDir) {
+      setSaveStatus('saved')
+      return
+    }
+
+    const ext = isBoard ? 'board' : 'md'
+    const fileName = currentNote.fileName || getFileName(currentNote.title, activeNoteId, ext)
+
+    if (isBoard) {
+      // Write cache then pack
+      // @ts-ignore
+      const ok = await window.api.writeBoardJson(activeNoteId, currentNote.content || '{}')
+      // @ts-ignore
+      if (ok) await window.api.packBoard(activeNoteId, targetDir, fileName)
+    } else {
+      // @ts-ignore
+      await window.api.saveNote(targetDir, fileName, currentNote)
+    }
+    
+    setSaveStatus('saved')
+  }, [activeNoteId, workspacePath, projects])
 
   const activeNote = notes.find((n) => n.id === activeNoteId)
   const handleUpdateNoteRef = useRef(handleUpdateNote)
@@ -215,14 +493,11 @@ export default function NotesView({
     if (!editor) return
 
     const onUpdate = ({ editor: e }: { editor: any }) => {
-      // ONLY save if the editor is focused (meaning user initiated change)
-      // This prevents background sync/initialization from wiping content
-      if (e.isFocused) {
-        const currentId = activeNoteIdRef.current
-        if (currentId) {
-          const markdownString = (e.storage as any).markdown.getMarkdown()
-          handleUpdateNoteRef.current(currentId, { content: markdownString })
-        }
+      const currentId = activeNoteIdRef.current
+      if (currentId) {
+        // Debouncing logic is handled inside handleUpdateNoteRef
+        const markdownString = (e.storage as any).markdown.getMarkdown()
+        handleUpdateNoteRef.current(currentId, { content: markdownString })
       }
     }
 
@@ -231,6 +506,11 @@ export default function NotesView({
       editor.off('update', onUpdate)
     }
   }, [editor])
+
+  // Lock/unlock editor when entering/exiting history preview mode
+  useEffect(() => {
+    if (editor) editor.setEditable(!isPreviewMode)
+  }, [isPreviewMode, editor])
 
   // Sync editor content when active note changes or content loads from disk
   useEffect(() => {
@@ -413,7 +693,9 @@ export default function NotesView({
 
         if (isBoard) {
           // @ts-ignore
-          await window.api.saveContainer(targetDir, newFileName, finalNote)
+          const ok = await window.api.writeBoardJson(id, boardContentRef.current[id] || noteToSave.content || '{}')
+          // @ts-ignore
+          if (ok) await window.api.packBoard(id, targetDir, newFileName)
         } else {
           // @ts-ignore
           await window.api.saveNote(targetDir, newFileName, finalNote)
@@ -502,8 +784,18 @@ export default function NotesView({
 
     // Save physical file immediately
     if (targetDir) {
-      // @ts-ignore
-      window.api.saveNote(targetDir, initialFileName, newNote)
+      if (isBoard) {
+        // Initialize empty board in cache and pack to .board ZIP
+        const emptyBoard = JSON.stringify({ elements: [], viewport: { x: 0, y: 0, scale: 1 } })
+        // @ts-ignore
+        window.api.writeBoardJson(newNote.id, emptyBoard).then(() => {
+          // @ts-ignore
+          window.api.packBoard(newNote.id, targetDir, initialFileName)
+        })
+      } else {
+        // @ts-ignore
+        window.api.saveNote(targetDir, initialFileName, newNote)
+      }
     }
   }
 
@@ -719,13 +1011,12 @@ export default function NotesView({
       // commit current local title and filename to the global state once
       setNotes(prev => prev.map(n => n.id === activeNoteId ? { ...n, fileName: newFileName, title: localTitle } : n))
       
-      // Force immediate save of metadata with new title
-      // @ts-ignore
-      const noteToSave = { ...activeNote, title: localTitle, fileName: newFileName }
       if (isBoard) {
         // @ts-ignore
-        await window.api.saveContainer(targetDir, newFileName, noteToSave)
+        await window.api.packBoard(activeNoteId, targetDir, newFileName)
       } else {
+        // @ts-ignore
+        const noteToSave = { ...activeNote, title: localTitle, fileName: newFileName }
         // @ts-ignore
         await window.api.saveNote(targetDir, newFileName, noteToSave)
       }
@@ -743,13 +1034,29 @@ export default function NotesView({
   const handleBoardChange = useCallback(
     (content: string): void => {
       if (activeNote) {
+        // Track board content separately without triggering full note re-save
+        setBoardContent(prev => ({ ...prev, [activeNote.id]: content }))
         handleUpdateNote(activeNote.id, { content })
       }
     },
     [activeNote, handleUpdateNote]
   )
 
-
+  // Open board: unpack from .board archive into cache when switching to a board
+  useEffect(() => {
+    if (!activeNote || activeNote.type !== 'board') return
+    const note = activeNote
+    const targetDir = getBoardTargetDir(note.projectId, note.isTrash)
+    const fileName = note.fileName || getFileName(note.title, note.id, 'board')
+    // @ts-ignore
+    window.api.openBoard(targetDir, fileName).then((loaded: string | null) => {
+      if (loaded) {
+        setBoardContent(prev => ({ ...prev, [note.id]: loaded }))
+        setNotes(prev => prev.map(n => n.id === note.id ? { ...n, content: loaded } : n))
+      }
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNote?.id])
 
   type FlattenedItem =
     | { type: 'project'; project: Project; level: number }
@@ -965,18 +1272,14 @@ export default function NotesView({
                 }}
               >
                 <div
-                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                  style={{ 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'space-between', 
+                    gap: '8px', 
+                    width: '100%' 
+                  }}
                 >
-                  <h2
-                    style={{
-                      fontSize: '14px',
-                      margin: 0,
-                      fontWeight: 600,
-                      color: 'var(--text-secondary)'
-                    }}
-                  >
-                    Boards (Visual Mode)
-                  </h2>
                   <div style={{ display: 'flex', gap: '4px' }}>
                     <button
                       onClick={() => handleCreateNote('markdown')}
@@ -1010,27 +1313,26 @@ export default function NotesView({
                         justifyContent: 'center'
                       }}
                     >
-                      <PenTool size={16} />
+                      <Presentation size={16} />
                     </button>
                   </div>
-                </div>
 
-                <button
-                  onClick={() => setShowTrash(!showTrash)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: 'var(--radius-sm)',
-                    background: showTrash ? '#ef444433' : 'rgba(255,255,255,0.03)',
-                    color: showTrash ? '#ef4444' : 'var(--text-secondary)',
-                    border: showTrash ? '1px solid #ef444455' : '1px solid transparent',
-                    fontSize: '11px',
-                    cursor: 'pointer',
-                    marginTop: '4px',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  🗑 Trash
-                </button>
+                  <button
+                    onClick={() => setShowTrash(!showTrash)}
+                    style={{
+                      padding: '4px 10px',
+                      borderRadius: 'var(--radius-sm)',
+                      background: showTrash ? '#ef444433' : 'rgba(255,255,255,0.03)',
+                      color: showTrash ? '#ef4444' : 'var(--text-secondary)',
+                      border: showTrash ? '1px solid #ef444455' : '1px solid transparent',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    🗑 Trash
+                  </button>
+                </div>
               </div>
 
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
@@ -1083,6 +1385,15 @@ export default function NotesView({
                         return (
                           <div
                             onClick={() => setActiveNoteId(note.id)}
+                            onContextMenu={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              setSidebarContextMenu({
+                                x: e.clientX,
+                                y: e.clientY,
+                                note
+                              })
+                            }}
                             style={{
                               padding: `8px 12px 8px ${12 + renderLevel * 16}px`,
                               borderBottom: '1px solid rgba(255,255,255,0.03)',
@@ -1126,7 +1437,7 @@ export default function NotesView({
                               <div style={{ width: '16px', flexShrink: 0 }} />
                             )}
                             {note.type === 'board' ? (
-                              <PenTool
+                              <Pencil
                                 size={14}
                                 color={isActive ? projectColor : 'var(--text-secondary)'}
                                 style={{ opacity: isActive ? 1 : 0.4, flexShrink: 0 }}
@@ -1270,17 +1581,42 @@ export default function NotesView({
                   <>
                     <div
                       style={{
-                        padding: '8px 16px',
+                        padding: '0 10px',
                         borderBottom: '1px solid rgba(255,255,255,0.05)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         background: 'transparent',
-                        minHeight: '44px',
+                        height: '45px',
                         boxSizing: 'border-box',
                         gap: '8px'
                       }}
                     >
+                      <button
+                        onClick={onToggleSidebar}
+                        title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: isSidebarOpen ? 0.6 : 0.4,
+                          transition: 'opacity 0.2s',
+                          width: '30px',
+                          height: '30px',
+                          marginRight: '8px'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+                        }
+                      >
+                        <PanelLeft size={18} />
+                      </button>
                       <button
                         onClick={() => setCurrentView('overview')}
                         title="Back to Project"
@@ -1365,14 +1701,15 @@ export default function NotesView({
                     >
                       <BoardsView
                         key={activeNote.id}
-                        boardData={activeNote.content}
+                        boardData={boardContent[activeNote.id] ?? activeNote.content}
                         onChange={handleBoardChange}
                         theme={theme}
                         setTheme={setTheme}
                         showFPS={showFPS}
                         isSidebarOpen={showSidebar}
+                        boardId={activeNote.id}
                         boardDir={getBoardTargetDir(activeNote.projectId, activeNote.isTrash)}
-                        boardFileName={getFileName(activeNote.title, activeNote.id, 'ibo')}
+                        boardFileName={getFileName(activeNote.title, activeNote.id, 'board')}
                       />
                     </div>
                   </>
@@ -1381,15 +1718,42 @@ export default function NotesView({
                     {/* Toolbar at top */}
                     <div
                       style={{
-                        padding: '8px 16px',
+                        padding: '0 10px',
                         borderBottom: '1px solid rgba(255,255,255,0.05)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
                         background: 'transparent',
+                        height: '45px',
+                        boxSizing: 'border-box',
                         gap: '12px'
                       }}
                     >
+                      <button
+                        onClick={onToggleSidebar}
+                        title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: '4px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          opacity: isSidebarOpen ? 0.6 : 0.4,
+                          transition: 'opacity 0.2s',
+                          width: '30px',
+                          height: '30px',
+                          marginRight: '8px'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                        onMouseLeave={(e) =>
+                          (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+                        }
+                      >
+                        <PanelLeft size={18} />
+                      </button>
                       <button
                         onClick={() => setCurrentView('overview')}
                         title="Back to Project"
@@ -1420,6 +1784,73 @@ export default function NotesView({
                         className="centered-container"
                         style={{ gap: '8px', flexWrap: 'wrap', flex: 1 }}
                       >
+                        <div style={{ position: 'relative' }}>
+                          <ToolbarButton onClick={() => { handleLoadHistory() }} title="Version History">
+                            <History size={16} />
+                          </ToolbarButton>
+                          {showHistoryDropdown && (
+                            <div style={{
+                              position: 'absolute', top: '100%', left: 0, marginTop: '8px', zIndex: 100,
+                              background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
+                              borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                            }}>
+                              <div style={{ padding: '0 4px 6px', fontSize: '11px', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '4px' }}>Version History</div>
+                              {historyList.length === 0 ? (
+                                <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>No backups yet.</div>
+                              ) : (
+                                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                  {historyList.map((h, i) => {
+                                    const dt = new Date(h.timestamp)
+                                    const dateStr = dt.toLocaleDateString()
+                                    const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })
+                                    return (
+                                      <button key={i} onClick={() => handlePreviewHistory(h)} style={{
+                                        padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
+                                      }} className="file-item-hover">
+                                        <RotateCcw size={12} color="var(--text-secondary)" />
+                                        <span style={{flex: 1}}>{dateStr} <span style={{opacity:0.6}}>{timeStr}</span></span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ position: 'relative' }}>
+                          <ToolbarButton 
+                            onClick={handleManualSave} 
+                            title={saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Save'} 
+                          >
+                            {saveStatus === 'saved' ? (
+                              <Check size={16} style={{ opacity: 0.7 }} />
+                            ) : (
+                              <Save size={16} style={{ opacity: saveStatus === 'unsaved' ? 1 : 0.7 }} />
+                            )}
+                            {saveStatus === 'unsaved' && (
+                              <div style={{
+                                position: 'absolute',
+                                top: 4,
+                                right: 4,
+                                width: 6,
+                                height: 6,
+                                borderRadius: '50%',
+                                background: 'var(--accent-primary, #7c5cbf)',
+                                border: '1px solid var(--card-bg)'
+                              }} />
+                            )}
+                          </ToolbarButton>
+                        </div>
+                        <div
+                          style={{
+                            width: '1px',
+                            height: '20px',
+                            background: 'rgba(255,255,255,0.1)',
+                            margin: '0 4px'
+                          }}
+                        />
                         <ToolbarButton onClick={() => applyFormatting('bold')} title="Bold">
                           <Bold size={16} />
                         </ToolbarButton>
@@ -1542,7 +1973,7 @@ export default function NotesView({
                         display: 'flex',
                         flexDirection: 'column',
                         background: 'transparent',
-                        overflowY: 'auto',
+                        overflowY: 'scroll',
                         position: 'relative'
                       }}
                     >
@@ -1725,6 +2156,29 @@ export default function NotesView({
                             </>
                           )
                         })()}
+
+                        {isPreviewMode && (
+                          <div style={{
+                            background: 'rgba(120, 120, 120, 0.1)', border: '1px solid var(--accent)', borderRadius: 'var(--radius-md)',
+                            padding: '10px 14px', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                              <RotateCcw size={16} color="var(--accent)" />
+                              <span style={{ fontSize: '13px', color: 'var(--text-primary)', fontWeight: 500 }}>Previewing History Version</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <button onClick={handleCancelPreview} style={{
+                                background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-primary)',
+                                padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s'
+                              }}>Cancel</button>
+                              <button onClick={handleRestorePreview} style={{
+                                background: 'var(--accent)', border: 'none', color: 'white',
+                                padding: '6px 12px', borderRadius: 'var(--radius-md)', fontSize: '12px', cursor: 'pointer', fontWeight: 500, transition: 'all 0.2s'
+                              }}>Restore this version</button>
+                            </div>
+                          </div>
+                        )}
+
                         <EditorContent
                           editor={editor}
                           style={{
@@ -1750,8 +2204,41 @@ export default function NotesView({
                 }}
               >
                 <div
-                  style={{ display: 'flex', justifyContent: 'flex-end', padding: '16px 24px 0' }}
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    padding: '0 10px', 
+                    alignItems: 'center',
+                    height: '45px',
+                    borderBottom: '1px solid rgba(255,255,255,0.05)',
+                    boxSizing: 'border-box'
+                  }}
                 >
+                  <button
+                    onClick={onToggleSidebar}
+                    title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      opacity: isSidebarOpen ? 0.6 : 0.4,
+                      transition: 'opacity 0.2s',
+                      width: '30px',
+                      height: '30px',
+                      marginRight: '8px'
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+                    }
+                  >
+                    <PanelLeft size={18} />
+                  </button>
                   <button
                     onClick={() => setShowSidebar(!showSidebar)}
                     title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
@@ -1807,6 +2294,68 @@ export default function NotesView({
           anchorRect={textColorPickerRect}
         />
       )}
+
+      {sidebarContextMenu && (
+        <>
+          <div
+            style={{ position: 'fixed', inset: 0, zIndex: 9999 }}
+            onClick={(e) => {
+              e.stopPropagation()
+              setSidebarContextMenu(null)
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setSidebarContextMenu(null)
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              left: sidebarContextMenu.x,
+              top: sidebarContextMenu.y,
+              zIndex: 10000,
+              background: 'var(--card-bg)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              borderRadius: '8px',
+              padding: '6px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              minWidth: '160px'
+            }}
+          >
+            <button
+              onClick={() => {
+                const { note } = sidebarContextMenu
+                const targetDir = note.type === 'board'
+                  ? getBoardTargetDir(note.projectId, note.isTrash)
+                  : getNoteTargetDir(note.projectId, note.isTrash)
+                if (targetDir) {
+                  // @ts-ignore
+                  window.api.openPath(targetDir)
+                }
+                setSidebarContextMenu(null)
+              }}
+              className="file-item-hover"
+              style={{
+                width: '100%',
+                padding: '6px 10px',
+                textAlign: 'left',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-primary)',
+                fontSize: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                cursor: 'pointer',
+                borderRadius: '4px'
+              }}
+            >
+              <FolderOpen size={14} />
+              Open Folder
+            </button>
+          </div>
+        </>
+      )}
     </>
   )
 }
@@ -1814,16 +2363,19 @@ export default function NotesView({
 function ToolbarButton({
   children,
   onClick,
-  title
+  title,
+  className
 }: {
   children: React.ReactNode
   onClick: () => void
   title: string
+  className?: string
 }): React.ReactElement {
   return (
     <button
       onClick={onClick}
       title={title}
+      className={className}
       style={{
         padding: '6px',
         background: 'transparent',

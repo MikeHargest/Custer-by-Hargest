@@ -52,6 +52,7 @@ export interface BoardsViewProps {
   theme?: UITheme
   setTheme?: (theme: UITheme) => void
   isSidebarOpen?: boolean
+  boardId: string
   boardDir: string
   boardFileName: string
 }

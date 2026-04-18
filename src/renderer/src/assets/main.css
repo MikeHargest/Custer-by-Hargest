@@ -12,8 +12,8 @@
   --timeline-task-bg: #2a2a2a;
   --timer-bg: #171717;
 
-  --radius-lg: 10px;
-  --radius-md: 10px;
+  --radius-lg: 8px;
+  --radius-md: 8px;
   --radius-sm: 4px;
 
   color-scheme: dark;
@@ -97,7 +97,7 @@ body {
   background-color: var(--bg-color);
   overflow: hidden;
   border-radius: 0;
-  padding: 5px;
+  padding: 4px;
   gap: 4px;
 }
 
@@ -129,7 +129,7 @@ body {
   -webkit-app-region: drag;
   z-index: 100;
   background-color: var(--card-bg);
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
@@ -204,7 +204,7 @@ body {
 
 .views-wrapper {
   background-color: var(--card-bg);
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   flex: 1;
   display: flex;
@@ -235,6 +235,16 @@ body {
   transform: translateY(-1px);
 }
 
+.view-toggle {
+  display: flex;
+  align-items: center;
+  background: #1b1b1b;
+  border: none;
+  padding: 2px;
+  border-radius: 10px;
+  gap: 2px;
+}
+
 .view-tab {
   background: transparent;
   border: 1px solid transparent;
@@ -245,13 +255,12 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: 7px;
   cursor: pointer;
   font-size: 12px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   font-weight: 500;
   opacity: 0.7;
-  margin: 2px 3px;
 }
 
 .view-tab:hover {
@@ -261,12 +270,13 @@ body {
 }
 
 .view-tab.active {
-  background: transparent;
+  background: var(--card-bg);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
   font-weight: 600;
   opacity: 1;
-  box-shadow: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  border-radius: 7px;
 }
 
 .pin-btn:active {
@@ -277,7 +287,7 @@ body {
   background: var(--accent);
   color: white;
   border-color: var(--accent);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
 }
 
 .header-title-wrapper {
@@ -327,7 +337,7 @@ body {
 
 /* Timer Card Styles */
 .timer-card {
-  background-color: var(--timer-bg);
+  background-color: rgba(255, 255, 255, 0.03);
   border-radius: var(--radius-lg);
   padding: 20px;
   display: flex;
@@ -342,6 +352,8 @@ body {
     box-shadow 0.2s ease;
   position: relative;
   overflow: hidden;
+  height: 300px;
+  max-width: 450px;
   /* For progress bar clipping */
 }
 
@@ -359,31 +371,31 @@ body {
 .timer-card.drag-over-timer {
   outline: 2px solid var(--accent, #71717a);
   outline-offset: -2px;
-  box-shadow: 0 0 16px var(--accent, #71717a);
+  box-shadow: none;
 }
 
 .timeline-add-btn.drag-over-btn {
   background: rgba(255, 255, 255, 0.1) !important;
-  box-shadow: inset 0 0 0 2px var(--accent);
+  box-shadow: none;
 }
 
 .timeline-add-btn.drag-over-invalid {
   background: rgba(255, 0, 0, 0.1) !important;
-  box-shadow: inset 0 0 0 2px rgba(239, 68, 68, 0.8) !important;
+  box-shadow: none;
   cursor: not-allowed !important;
 }
 
 @keyframes pulse-border {
   0% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    box-shadow: none;
   }
 
   70% {
-    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    box-shadow: none;
   }
 
   100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    box-shadow: none;
   }
 }
 
@@ -407,15 +419,17 @@ body {
 @keyframes pulse {
   0% {
     transform: scale(1);
-    filter: drop-shadow(0 0 0px var(--accent));
+    filter: none;
   }
+
   50% {
     transform: scale(1.1);
-    filter: drop-shadow(0 0 5px var(--accent));
+    filter: none;
   }
+
   100% {
     transform: scale(1);
-    filter: drop-shadow(0 0 0px var(--accent));
+    filter: none;
   }
 }
 
@@ -424,6 +438,7 @@ body {
     opacity: 0;
     transform: translateY(-10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -508,24 +523,24 @@ body {
   color: white !important;
   border: none !important;
   font-weight: 600 !important;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+  box-shadow: none;
   animation: stop-btn-pulse 1.5s infinite;
 }
 
 @keyframes stop-btn-pulse {
   0% {
     transform: scale(1);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    box-shadow: none;
   }
 
   50% {
     transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(239, 68, 68, 0.5);
+    box-shadow: none;
   }
 
   100% {
     transform: scale(1);
-    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    box-shadow: none;
   }
 }
 
@@ -605,7 +620,6 @@ body {
 .btn-play {
   background-color: var(--success);
   color: #1b1b1b;
-  box-shadow: 0 4px 10px rgba(229, 229, 229, 0.3);
 }
 
 .btn-play:hover {
@@ -615,7 +629,6 @@ body {
 
 .btn-stopwatch {
   background-color: var(--accent);
-  box-shadow: 0 4px 10px rgba(113, 113, 122, 0.3);
 }
 
 .btn-stopwatch:hover {
@@ -625,7 +638,7 @@ body {
 
 .btn-pause {
   background-color: #f59e0b;
-  box-shadow: 0 4px 10px rgba(245, 158, 11, 0.3);
+  box-shadow: none;
 }
 
 .btn-pause:hover {
@@ -694,7 +707,7 @@ body {
 
 .empty-state svg {
   color: var(--card-bg);
-  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+  filter: none;
 }
 
 /* Sidebar Styles */
@@ -726,7 +739,7 @@ body {
 
 .sidebar-block {
   background-color: var(--card-bg);
-  border-radius: 10px;
+  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
@@ -783,7 +796,7 @@ body {
 .sidebar-resizer.is-resizable:hover::after,
 .sidebar-resizer.is-resizing::after {
   background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
+  box-shadow: none;
   height: 2px;
   opacity: 1;
   transition: none !important;
@@ -999,7 +1012,7 @@ body {
   background: var(--card-bg);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
   padding: 4px;
   display: flex;
   flex-direction: column;
@@ -1038,7 +1051,7 @@ body {
 .premium-task-card.drag-over-nest,
 .premium-subtask-item.drag-over-nest {
   background: rgba(var(--accent-rgb), 0.15) !important;
-  box-shadow: inset 0 0 0 2px var(--accent) !important;
+  box-shadow: none;
 }
 
 .premium-project-item {
@@ -1120,7 +1133,7 @@ body {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   /* Visible border */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: none;
 }
 
 .task-group-header {
@@ -1501,7 +1514,7 @@ body {
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   position: relative;
 }
@@ -1530,7 +1543,7 @@ body {
   flex-direction: column;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 10px;
+  border-radius: 8px;
   position: relative;
   margin-bottom: 6px;
   overflow: hidden;
@@ -1548,7 +1561,7 @@ body {
 .premium-subtask-item {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
+  border-radius: 8px;
   margin-bottom: 4px;
 }
 
@@ -1612,7 +1625,7 @@ body {
 
 .task-input-modern:focus {
   border-color: var(--accent) !important;
-  box-shadow: 0 0 0 2px rgba(113, 113, 122, 0.2) !important;
+  box-shadow: none;
 }
 
 .add-task-btn-premium {
@@ -1643,7 +1656,7 @@ body {
 .premium-task-card.drag-over-nest {
   border-color: var(--accent) !important;
   background: rgba(113, 113, 122, 0.12) !important;
-  box-shadow: 0 0 0 2px rgba(113, 113, 122, 0.25);
+  box-shadow: none;
   transform: scale(1.02);
 }
 
@@ -1656,7 +1669,7 @@ body {
   background: var(--card-bg);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: none;
   padding: 6px;
   display: flex;
   flex-direction: column;
@@ -1807,7 +1820,7 @@ body {
   background: var(--card-bg);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--radius-md);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: none;
   z-index: 11000;
   padding: 4px;
   animation: dropdown-appear 0.15s ease;
@@ -1891,7 +1904,7 @@ body {
   border-radius: var(--radius-sm);
   background: var(--accent);
   cursor: pointer;
-  box-shadow: 0 0 10px var(--accent);
+  box-shadow: none;
 }
 
 /* Progress Slider in Project Overview */
@@ -2165,4 +2178,116 @@ body {
 
 .archiving-out {
   animation: archiveOut 0.9s ease-in forwards;
+}
+
+/* Alarm Card Specific Styles */
+.alarm-card.disabled {
+  opacity: 0.6;
+  filter: grayscale(0.3);
+}
+
+.alarm-card.notified {
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: none;
+}
+
+.alarm-inputs {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.alarm-inputs .time-input {
+  background: rgba(0, 0, 0, 0.3) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  color: var(--text-primary) !important;
+  font-size: 13px !important;
+  width: 100% !important;
+  padding: 8px 12px 8px 32px !important;
+  text-align: left !important;
+  cursor: pointer;
+  height: 38px !important;
+  font-family: inherit !important;
+}
+
+.alarm-inputs .time-input:hover {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+}
+
+.alarm-inputs .time-input:focus {
+  border-color: var(--accent) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Hide default date/time icons in some browsers to use ours */
+.alarm-inputs input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  background: transparent !important;
+  color: transparent !important;
+  appearance: none !important;
+  filter: invert(0.8);
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.alarm-inputs input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
+/* Switch Toggle Premium */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  -webkit-app-region: no-drag;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.05);
+  transition: .3s;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #EAEAEA;
+  transition: .3s;
+  border-radius: 50%;
+}
+
+input:checked+.slider {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+
+input:checked+.slider:before {
+  transform: translateX(20px);
+  background-color: #ffffff;
 }

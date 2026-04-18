@@ -34,14 +34,11 @@ export const useBoardTools = ({
 }: UseBoardToolsProps) => {
   const [activePath, setActivePath] = useState<{ x: number; y: number; width?: number }[] | null>(null)
   const [activeRect, setActiveRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
-  const activePathRef = useRef(activePath)
-  const activeRectRef = useRef(activeRect)
+  const activePathRef = useRef<{ x: number; y: number; width?: number }[] | null>(null)
+  const activeRectRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null)
   const snappingAnchor = useRef<{ x: number; y: number } | null>(null)
   const lastPathPoint = useRef<{ x: number; y: number } | null>(null)
   const isErasing = useRef(false)
-
-  useEffect(() => { activePathRef.current = activePath }, [activePath])
-  useEffect(() => { activeRectRef.current = activeRect }, [activeRect])
 
   const onPointerDown = useCallback((e: React.MouseEvent) => {
     if (e.button !== 0) return
@@ -54,17 +51,23 @@ export const useBoardTools = ({
     if (mode === 'pen') {
       if (e.shiftKey && lastPathPoint.current) {
         const start = lastPathPoint.current
-        setActivePath([
+        const next = [
           { x: start.x, y: start.y, width: penSize },
           { x: worldX, y: worldY, width: penSize }
-        ])
+        ]
+        setActivePath(next)
+        activePathRef.current = next
         snappingAnchor.current = start
       } else {
-        setActivePath([{ x: worldX, y: worldY, width: penSize }])
+        const next = [{ x: worldX, y: worldY, width: penSize }]
+        setActivePath(next)
+        activePathRef.current = next
         snappingAnchor.current = null
       }
     } else if (mode === 'rect') {
-      setActiveRect({ x: worldX, y: worldY, w: 0, h: 0 })
+      const next = { x: worldX, y: worldY, w: 0, h: 0 }
+      setActiveRect(next)
+      activeRectRef.current = next
     } else if (mode === 'eraser') {
       pushToHistory()
       isErasing.current = true
@@ -80,7 +83,7 @@ export const useBoardTools = ({
     const worldX = (e.clientX - rect.left - viewport.x) / viewport.scale
     const worldY = (e.clientY - rect.top - viewport.y) / viewport.scale
 
-    if (mode === 'pen' && activePath) {
+    if (mode === 'pen' && activePathRef.current) {
       setActivePath((prev) => {
         if (!prev) return null
         if (e.shiftKey) {
@@ -92,16 +95,25 @@ export const useBoardTools = ({
           const snapped = dx > dy ? { x: worldX, y: anchor.y, width: penSize } : { x: anchor.x, y: worldY, width: penSize }
           
           const isLastAnchor = prev[prev.length - 1].x === anchor.x && prev[prev.length - 1].y === anchor.y
-          return isLastAnchor ? [...prev, snapped] : [...prev.slice(0, -1), snapped]
+          const next = isLastAnchor ? [...prev, snapped] : [...prev.slice(0, -1), snapped]
+          activePathRef.current = next
+          return next
         } else {
           snappingAnchor.current = null
           const last = prev[prev.length - 1]
           if (Math.sqrt(Math.pow(worldX - last.x, 2) + Math.pow(worldY - last.y, 2)) < 3) return prev
-          return [...prev, { x: worldX, y: worldY, width: penSize }]
+          const next = [...prev, { x: worldX, y: worldY, width: penSize }]
+          activePathRef.current = next
+          return next
         }
       })
-    } else if (mode === 'rect' && activeRect) {
-      setActiveRect(prev => prev ? { ...prev, w: worldX - prev.x, h: worldY - prev.y } : null)
+    } else if (mode === 'rect' && activeRectRef.current) {
+      setActiveRect(prev => {
+        if (!prev) return null
+        const next = { ...prev, w: worldX - prev.x, h: worldY - prev.y }
+        activeRectRef.current = next
+        return next
+      })
     } else if (mode === 'eraser' && (e.buttons & 1)) {
         const radius = eraserSize / 2 / viewport.scale
         const eraserCenter = { x: worldX, y: worldY }
@@ -225,6 +237,8 @@ export const useBoardTools = ({
       }])
     }
     setActiveRect(null)
+    activePathRef.current = null
+    activeRectRef.current = null
   }, [pushToHistory, setElements, penColor, penSize])
 
   const handleTextCreation = useCallback((x: number, y: number) => {

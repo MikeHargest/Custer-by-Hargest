@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer } from 'lucide-react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText } from 'lucide-react'
 import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'
@@ -18,6 +18,8 @@ interface SettingsModalProps {
   setShowTaskCounts: (show: boolean) => void
   timerVolume: number
   setTimerVolume: (volume: number) => void
+  backupIntervalMinutes: number
+  setBackupIntervalMinutes: (val: number) => void
 }
 
 export default function SettingsModal({
@@ -33,11 +35,13 @@ export default function SettingsModal({
   showTaskCounts,
   setShowTaskCounts,
   timerVolume,
-  setTimerVolume
+  setTimerVolume,
+  backupIntervalMinutes,
+  setBackupIntervalMinutes
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes'>(
     'general'
   )
 
@@ -154,6 +158,7 @@ export default function SettingsModal({
             {[
               { id: 'general', label: 'General', icon: <Settings size={16} /> },
               { id: 'projects', label: 'Projects', icon: <Layout size={16} /> },
+              { id: 'notes', label: 'Notes', icon: <FileText size={16} /> },
               { id: 'timers', label: 'Timers', icon: <Timer size={16} /> },
               { id: 'canvas', label: 'Canvas', icon: <Compass size={16} /> },
               { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> }
@@ -206,7 +211,7 @@ export default function SettingsModal({
                     Configure visual themes and core preferences.
                   </p>
 
-                  <div
+                   <div
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -669,6 +674,68 @@ export default function SettingsModal({
                         </code>
                       </div>
                     ))}
+                  </div>
+                </motion.div>
+              )}
+               {activeTab === 'notes' && (
+                <motion.div
+                  key="notes"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
+                    Notes Settings
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0 0 24px 0',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Configure note-taking behavior and data safety.
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ 
+                      background: 'rgba(255,255,255,0.02)', 
+                      padding: '16px', 
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Data Protection & Backups
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontSize: '13px', fontWeight: 500 }}>Auto-Backup Interval</div>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Automatically save snapshots of active notes to avoid data loss.</div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input 
+                              type="number"
+                              min="1"
+                              max="60"
+                              value={backupIntervalMinutes}
+                              onChange={(e) => setBackupIntervalMinutes(Math.max(1, parseInt(e.target.value) || 10))}
+                              style={{
+                                width: '50px',
+                                background: 'rgba(0,0,0,0.2)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                color: 'var(--text-primary)',
+                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                fontSize: '13px'
+                              }}
+                            />
+                            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>min</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </motion.div>
               )}

@@ -21,6 +21,7 @@ export interface ElementItemProps {
   ) => void
   onRotate: (id: string, rotation: number) => void
   onInteractionStart: () => void
+  onDragStart?: (id: string, e?: PIXI.FederatedPointerEvent) => void
   onDoubleClick?: (id: string) => void
   isEditing?: boolean
   renderable?: boolean
@@ -82,13 +83,12 @@ const SelectionUI = React.memo(({
   accentColor: number
   handleResizeStart: (e: PIXI.FederatedPointerEvent, handle: string) => void
 }) => {
-  if (!isSelected) return null
+  if (!isSelected || isMultiSelection) return null
 
   const baseHandleSize = 8
   const handleSize = baseHandleSize / zoomScale
   const hitAreaSize = handleSize * 3
-  const lineWidth = 1 / zoomScale
-  const selectionLineWidth = 2 / zoomScale
+  const lineWidth = 2 / zoomScale
   const halfW = (element.width || 0) / 2
   const halfH = (element.height || 0) / 2
 
@@ -111,43 +111,33 @@ const SelectionUI = React.memo(({
           g.rect(-halfW, -halfH, element.width || 0, element.height || 0)
           g.fill({ color: 0, alpha: 0 })
           // @ts-ignore - PIXI v8 stroke API
-          g.stroke({ width: lineWidth, color: accentColor, alpha: 0.8 })
+          g.stroke({ width: lineWidth, color: accentColor, alpha: 1 })
         }}
       />
 
-      {!isMultiSelection && (
-        <Container>
+      <Container>
+        {handles.map((h) => (
           <Graphics
+            key={h.id}
+            // @ts-ignore
+            eventMode="static"
+            cursor={h.cursor}
+            onPointerDown={(ev: PIXI.FederatedPointerEvent): void => handleResizeStart(ev, h.id)}
             draw={(g: PIXI.Graphics): void => {
               g.clear()
-              g.rect(-halfW, -halfH, element.width || 0, element.height || 0)
+              g.rect(-hitAreaSize / 2, -hitAreaSize / 2, hitAreaSize, hitAreaSize)
               g.fill({ color: 0, alpha: 0 })
-              // @ts-ignore - PIXI v8 stroke API
-              g.stroke({ width: selectionLineWidth, color: accentColor, alpha: 1 })
-            }}
-          />
-          {handles.map((h) => (
-            <Graphics
-              key={h.id}
-              // @ts-ignore
-              eventMode="static"
-              cursor={h.cursor}
-              onPointerDown={(ev: PIXI.FederatedPointerEvent): void => handleResizeStart(ev, h.id)}
-              draw={(g: PIXI.Graphics): void => {
-                g.clear()
-                g.rect(-hitAreaSize / 2, -hitAreaSize / 2, hitAreaSize, hitAreaSize)
-                g.fill({ color: 0, alpha: 0 })
 
-                let hw = handleSize,
-                  hh = handleSize
-                if (h.id === 'top' || h.id === 'bottom') {
-                  hw = handleSize * 2.5
-                  hh = handleSize * 0.6
-                } else if (h.id === 'left' || h.id === 'right') {
+              let hw = handleSize
+              let hh = handleSize
+              if (h.id === 'top' || h.id === 'bottom') {
+                hw = handleSize * 2.5
+                hh = handleSize * 0.6
+              } else if (h.id === 'left' || h.id === 'right') {
                   hh = handleSize * 2.5
                   hw = handleSize * 0.6
                 }
-                g.roundRect(-hw / 2, -hh / 2, hw, hh, Math.min(2, 2 / zoomScale))
+                g.roundRect(-hw / 2, -hh / 2, hw, hh, 2 / zoomScale)
                 g.fill({ color: accentColor })
               }}
               x={h.x}
@@ -179,8 +169,7 @@ const SelectionUI = React.memo(({
               />
             )
           })}
-        </Container>
-      )}
+      </Container>
     </Container>
   )
 })
@@ -196,6 +185,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
     onResize,
     onRotate,
     onInteractionStart,
+    onDragStart,
     onDoubleClick,
     isEditing = false,
     renderable = true,
@@ -225,29 +215,53 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
     useEffect(() => { onResizeRef.current = onResize }, [onResize])
 
     const [lodTextures, setLodTextures] = useState<any>(null)
+    const [renderedLevel, setRenderedLevel] = useState<'high'|'mid'|'low'>(activeLevelProp || 'low')
 
-    // Determine the active level once per Prop change, not on every frame if stable.
-    const activeLevel = useMemo(() => {
+    // Determine the target level based on zoom
+    const targetLevel = useMemo(() => {
       if (activeLevelProp) return activeLevelProp
       if (zoomScale > 0.6) return 'high'
       if (zoomScale > 0.25) return 'mid'
       return 'low'
     }, [zoomScale, activeLevelProp])
 
-    // Cap text resolution at 4x to save memory and performance.
+    // Staggered LOD switching to prevent GPU stall
+    useEffect(() => {
+      if (targetLevel !== renderedLevel) {
+        // Downgrading is fast (textures already in VRAM), do it immediately for snappy zoom
+        if (
+          (renderedLevel === 'high' && targetLevel !== 'high') ||
+          (renderedLevel === 'mid' && targetLevel === 'low')
+        ) {
+          setRenderedLevel(targetLevel)
+          return undefined
+        }
+
+        // Upgrading requires massive GPU uploads for uninitialized textures.
+        // Spread it over multiple frames to avoid complete UI freeze
+        const delay = Math.random() * 400 + 100
+        const timer = setTimeout(() => {
+          setRenderedLevel(targetLevel)
+        }, delay)
+        return () => clearTimeout(timer)
+      }
+      return undefined
+    }, [targetLevel, renderedLevel])
+
+    // Cap text resolution at 4x to save memory and performance, but assure it redraws sharply based on zoom.
     const textResolution = useMemo(() => {
-      const target = (window.devicePixelRatio || 1) * (isSelected ? zoomScale : 1)
-      return target > 4 ? 4 : target > 2 ? 4 : target > 1 ? 2 : target > 0.5 ? 1 : 0.5
-    }, [isSelected, zoomScale])
+      const target = (window.devicePixelRatio || 1) * zoomScale
+      return target > 4 ? 4 : target > 2 ? 2 : target > 1 ? 1.5 : target > 0.5 ? 1 : 0.5
+    }, [zoomScale])
 
     const activeTexture = useMemo(() => {
       if (!lodTextures) return null
-      const tex = lodTextures[activeLevel] || lodTextures.high
+      const tex = lodTextures[renderedLevel] || lodTextures.high
       // Validate texture is not destroyed and has a valid source for PIXI GL rendering
       if (!tex || tex.destroyed) return null
       try { if (!tex.source || tex.source.destroyed) return null } catch { return null }
       return tex
-    }, [lodTextures, activeLevel])
+    }, [lodTextures, renderedLevel])
 
     const [loadError, setLoadError] = useState(false)
 
@@ -282,9 +296,18 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       if (!isDragging && !activeHandle) return
       const onPointerMove = (e: PointerEvent): void => {
         if (!resizeStartData.current) return
-        const dx = (e.clientX - resizeStartData.current.mx) / zoomScale
-        const dy = (e.clientY - resizeStartData.current.my) / zoomScale
+        let dx = (e.clientX - resizeStartData.current.mx) / zoomScale
+        let dy = (e.clientY - resizeStartData.current.my) / zoomScale
+        if (e.shiftKey) {
+          if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0;
+        }
         if (isDragging) {
+          if (!resizeStartData.current.dragStarted) {
+            const screenDx = e.clientX - resizeStartData.current.mx
+            const screenDy = e.clientY - resizeStartData.current.my
+            if (screenDx * screenDx + screenDy * screenDy < 25) return
+            resizeStartData.current.dragStarted = true
+          }
           const moveX = resizeStartData.current.x + dx, moveY = resizeStartData.current.y + dy
           const distSqr = dx * zoomScale * dx * zoomScale + dy * zoomScale * dy * zoomScale
           if (distSqr < 30) {
@@ -319,6 +342,28 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
           else if (h.includes('left')) { nW = Math.max(20, resizeStartData.current.w - dx); nX = resizeStartData.current.x - (nW - resizeStartData.current.w) / 2 }
           if (h.includes('bottom')) { nH = Math.max(20, resizeStartData.current.h + dy); nY = resizeStartData.current.y + (nH - resizeStartData.current.h) / 2 }
           else if (h.includes('top')) { nH = Math.max(20, resizeStartData.current.h - dy); nY = resizeStartData.current.y - (nH - resizeStartData.current.h) / 2 }
+
+          if (element.type === 'image' || element.type === 'video') {
+            const scaleX = nW / resizeStartData.current.w
+            const scaleY = nH / resizeStartData.current.h
+            let targetScale = 1
+            if (h.includes('right') || h.includes('left')) {
+              targetScale = (h.includes('bottom') || h.includes('top')) ? (Math.abs(scaleX - 1) > Math.abs(scaleY - 1) ? scaleX : scaleY) : scaleX
+            } else {
+              targetScale = scaleY
+            }
+
+            nW = Math.max(20, resizeStartData.current.w * targetScale)
+            nH = Math.max(20, resizeStartData.current.h * targetScale)
+
+            nX = resizeStartData.current.x
+            nY = resizeStartData.current.y
+            if (h.includes('right')) nX += (nW - resizeStartData.current.w) / 2
+            else if (h.includes('left')) nX -= (nW - resizeStartData.current.w) / 2
+            if (h.includes('bottom')) nY += (nH - resizeStartData.current.h) / 2
+            else if (h.includes('top')) nY -= (nH - resizeStartData.current.h) / 2
+          }
+
           onResize(element.id, nW, nH, nX, nY, h)
         } else if (activeHandle?.startsWith('rotate-')) {
           const nAngle = Math.atan2(e.clientY - resizeStartData.current.elementScreenCenterY, e.clientX - resizeStartData.current.elementScreenCenterX)
@@ -330,7 +375,9 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       const onPointerUp = (e: PointerEvent): void => {
         if (!resizeStartData.current) return
         if (!activeHandle?.startsWith('rotate-') && !activeHandle) {
-          onMove(element.id, resizeStartData.current.x + (e.clientX - resizeStartData.current.mx) / zoomScale + currentSnapDX.current, resizeStartData.current.y + (e.clientY - resizeStartData.current.my) / zoomScale + currentSnapDY.current)
+          if (resizeStartData.current.dragStarted) {
+            onMove(element.id, resizeStartData.current.x + (e.clientX - resizeStartData.current.mx) / zoomScale + currentSnapDX.current, resizeStartData.current.y + (e.clientY - resizeStartData.current.my) / zoomScale + currentSnapDY.current)
+          }
         }
         setIsDragging(false); setActiveHandle(null); resizeStartData.current = null
         if (guidesRef.current) (guidesRef as any).current = []
@@ -349,12 +396,26 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
     }, [isDragging, activeHandle, zoomScale, element.id, onMove, onResize, onRotate, guidesRef, (element.width || 0), (element.height || 0), dragContextRef])
 
     const handlePointerDown = (e: PIXI.FederatedPointerEvent): void => {
-      if (e.ctrlKey || e.button === 1 || isNavigatingRef?.current) return
+      if (e.button === 1 || isNavigatingRef?.current) return
+
+      if (e.ctrlKey && !isSelected) {
+        e.stopPropagation()
+        return
+      }
+
       onInteractionStart()
       if (e.button === 0) {
         const now = Date.now()
         if (onDoubleClick && now - lastClickTime.current < 500) { onDoubleClick(element.id); lastClickTime.current = 0; return }
-        lastClickTime.current = now; onSelect(element.id, e.shiftKey)
+        lastClickTime.current = now; 
+
+        if (e.ctrlKey && isSelected) {
+          onSelect(element.id, true)
+          e.stopPropagation()
+          return
+        }
+
+        onSelect(element.id, e.shiftKey || e.metaKey)
         const mouseEvent = e.nativeEvent as MouseEvent
         const center = e.currentTarget.toGlobal(new PIXI.Point(0, 0))
         if (mouseEvent.altKey) {
@@ -362,7 +423,13 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
           resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: Math.atan2(mouseEvent.clientY - center.y, mouseEvent.clientX - center.x), elementScreenCenterX: center.x, elementScreenCenterY: center.y }
           document.body.style.cursor = 'crosshair'
         } else {
-          setIsDragging(true); resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: 0, elementScreenCenterX: 0, elementScreenCenterY: 0 }
+          if (element.groupId || isMultiSelection) {
+            if (onDragStart) onDragStart(element.id, e)
+            e.stopPropagation()
+            return
+          }
+          setIsDragging(true); resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: 0, elementScreenCenterX: 0, elementScreenCenterY: 0, dragStarted: false }
+          if (onDragStart) onDragStart(element.id)
         }
         e.stopPropagation()
       }
@@ -408,7 +475,8 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
               const pts = element.points as any[], color = parseColor(element.color), size = element.size || 2
               const sx = (element.width || 0) / (element.baseWidth || element.width || 1), sy = (element.height || 0) / (element.baseHeight || element.height || 1)
               const render = () => { if (pts.length > 1) { g.moveTo(pts[0].x * sx, pts[0].y * sy); for (let i = 1; i < pts.length - 1; i++) { const xc = (pts[i].x * sx + pts[i + 1].x * sx) / 2, yc = (pts[i].y * sy + pts[i + 1].y * sy) / 2; g.quadraticCurveTo(pts[i].x * sx, pts[i].y * sy, xc, yc) } g.lineTo(pts[pts.length - 1].x * sx, pts[pts.length - 1].y * sy) } }
-              render(); g.stroke({ width: Math.max(24, size + 10), color, alpha: 0 }); render(); g.stroke({ width: size, color, alpha: 1 })
+              const scaledSize = Math.max(size * zoomScale, 1.5) / zoomScale;
+              render(); g.stroke({ width: Math.max(24 / zoomScale, scaledSize + 10 / zoomScale), color, alpha: 0 }); render(); g.stroke({ width: scaledSize, color, alpha: 1 })
             }} />
           ) : element.type === 'rect' ? (
             <Graphics
@@ -420,8 +488,9 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
                   alpha: element.color === 'transparent' ? 0 : 1
                 })
                 if ((element.strokeWidth || 0) > 0) {
+                  const scaledStroke = Math.max((element.strokeWidth || 1) * zoomScale, 0.5) / zoomScale
                   // @ts-ignore - stroke API
-                  g.stroke({ width: element.strokeWidth, color: parseColor(element.strokeColor) })
+                  g.stroke({ width: scaledStroke, color: parseColor(element.strokeColor) })
                 }
                 g.hitArea = new PIXI.Rectangle(
                   -(element.width || 0) / 2,
@@ -443,7 +512,9 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
             <Graphics
               draw={(g: PIXI.Graphics) => {
                 g.clear()
-                g.rect(-(element.width || 0) / 2, -(element.height || 0) / 2, (element.width || 0), (element.height || 0))
+                const ew = element.width || 0
+                const eh = element.height || 0
+                g.rect(-ew / 2, -eh / 2, ew, eh)
                 g.fill({
                   color: element.isProcessing ? 0x1a1a1a : loadError ? 0x222222 : 0x333333
                 })

@@ -1,4 +1,4 @@
-import React, { useRef, useState, useLayoutEffect, useMemo } from 'react'
+import React, { useRef, useState, useLayoutEffect, useMemo, useEffect } from 'react'
 import {
   AlignLeft,
   AlignCenter,
@@ -82,6 +82,16 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({
       }
     }
   }, [position, adjustedPos.x, adjustedPos.y])
+
+  useEffect(() => {
+    const el = menuRef.current
+    if (!el) return
+    const handleWheel = (e: WheelEvent): void => {
+      e.stopPropagation()
+    }
+    el.addEventListener('wheel', handleWheel, { passive: false })
+    return () => el.removeEventListener('wheel', handleWheel)
+  }, [])
 
   const menuIconStyle: React.CSSProperties = {
     background: 'transparent',
@@ -177,7 +187,7 @@ const SelectionMenu: React.FC<SelectionMenuProps> = ({
       data-context-menu="true"
       onClick={(e) => e.stopPropagation()}
       style={{
-        position: 'fixed',
+        position: 'absolute',
         top: adjustedPos.y,
         left: adjustedPos.x,
         background: 'var(--card-bg)',

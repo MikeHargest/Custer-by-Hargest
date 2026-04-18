@@ -7,7 +7,12 @@ import {
   MoreVertical,
   RefreshCw,
   Square,
-  Check
+  Check,
+  Calendar,
+  Layout,
+  Info,
+  PanelRight,
+  PanelLeft
 } from 'lucide-react'
 import { Project, PipelineStage, PipelineItem, PipelineData } from '../types'
 import ColorPicker from './ColorPicker'
@@ -72,9 +77,16 @@ const TinyButton = ({
 interface PipelineViewProps {
   project: Project
   onUpdate: (id: string, updates: Partial<Project>) => void
+  isSidebarOpen: boolean
+  onToggleSidebar: () => void
 }
 
-export default function PipelineView({ project, onUpdate }: PipelineViewProps): React.ReactElement {
+export default function PipelineView({
+  project,
+  onUpdate,
+  isSidebarOpen,
+  onToggleSidebar
+}: PipelineViewProps): React.ReactElement {
   // --- Migration and Initialization ---
   useEffect(() => {
     if (project.pipeline && (!project.pipelines || project.pipelines.length === 0)) {
@@ -103,11 +115,27 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
   const [editingPipelineId, setEditingPipelineId] = useState<string | null>(null)
   const [pipelineNameValue, setPipelineNameValue] = useState('')
   const [activeStageDropdown, setActiveStageDropdown] = useState<string | null>(null)
+  const [showSidebar, setShowSidebar] = useState(true)
   const [hoveredPipelineId, setHoveredPipelineId] = useState<string | null>(null)
   const [stageColorPickerAnchor, setStageColorPickerAnchor] = useState<{
     stageId: string
     rect: DOMRect
   } | null>(null)
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
+
+  // --- AUTO-RESIZE TEXTAREAS ON MOUNT/CHANGE ---
+  useEffect(() => {
+    const adjustAllHeights = () => {
+      const textareas = document.querySelectorAll('.pipeline-item-textarea') as NodeListOf<HTMLTextAreaElement>
+      textareas.forEach((ta) => {
+        ta.style.height = 'auto'
+        ta.style.height = `${ta.scrollHeight}px`
+      })
+    }
+    adjustAllHeights()
+    const timer = setTimeout(adjustAllHeights, 50)
+    return () => clearTimeout(timer)
+  }, [activePipelineId, pipelines, activePipeline])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent): void => {
@@ -197,6 +225,7 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
       p.id === activePipelineId ? { ...p, stages: [...p.stages, newStage] } : p
     )
     onUpdate(project.id, { pipelines: newPipelines })
+    setSelectedStageId(newStage.id)
   }
 
   const handleUpdateStage = (stageId: string, name: string): void => {
@@ -215,6 +244,7 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
       p.id === activePipelineId ? { ...p, stages: p.stages.filter((s) => s.id !== stageId) } : p
     )
     onUpdate(project.id, { pipelines: newPipelines })
+    if (stageId === selectedStageId) setSelectedStageId(null)
   }
 
   // --- ITEM CRUD ---
@@ -228,11 +258,11 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId
         ? {
-            ...p,
-            stages: p.stages.map((s) =>
-              s.id === stageId ? { ...s, items: [...s.items, newItem] } : s
-            )
-          }
+          ...p,
+          stages: p.stages.map((s) =>
+            s.id === stageId ? { ...s, items: [...s.items, newItem] } : s
+          )
+        }
         : p
     )
     onUpdate(project.id, { pipelines: newPipelines })
@@ -247,13 +277,13 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId
         ? {
-            ...p,
-            stages: p.stages.map((s) =>
-              s.id === stageId
-                ? { ...s, items: s.items.map((i) => (i.id === itemId ? { ...i, ...updates } : i)) }
-                : s
-            )
-          }
+          ...p,
+          stages: p.stages.map((s) =>
+            s.id === stageId
+              ? { ...s, items: s.items.map((i) => (i.id === itemId ? { ...i, ...updates } : i)) }
+              : s
+          )
+        }
         : p
     )
     onUpdate(project.id, { pipelines: newPipelines })
@@ -264,11 +294,11 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId
         ? {
-            ...p,
-            stages: p.stages.map((s) =>
-              s.id === stageId ? { ...s, items: s.items.filter((i) => i.id !== itemId) } : s
-            )
-          }
+          ...p,
+          stages: p.stages.map((s) =>
+            s.id === stageId ? { ...s, items: s.items.filter((i) => i.id !== itemId) } : s
+          )
+        }
         : p
     )
     onUpdate(project.id, { pipelines: newPipelines })
@@ -397,10 +427,10 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
     const handleMouseUp = (): void => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(document.body.style as any).cursor = ''
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(document.body.style as any).userSelect = ''
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ; (document.body.style as any).cursor = ''
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ; (document.body.style as any).userSelect = ''
 
       const source = stageDragDataRef.current
       const target = stageDropTargetRef.current
@@ -417,11 +447,50 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    ;(document.body.style as any).cursor = 'grabbing'
-    ;(document.body.style as any).userSelect = 'none'
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      ; (document.body.style as any).cursor = 'grabbing'
+      ; (document.body.style as any).userSelect = 'none'
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
+
+  // --- PROGRESS CALCULATIONS ---
+  const { selectedStageProgress, overallProgress } = useMemo(() => {
+    if (!activePipeline) return { selectedStageProgress: 0, overallProgress: 0 }
+
+    const selectedStage = activePipeline.stages.find(s => s.id === selectedStageId)
+    const stageItems = selectedStage?.items || []
+    const stageTotal = stageItems.length
+    const stageCompleted = stageItems.filter(i => i.completed).length
+    const selectedStageProgress = stageTotal > 0 ? Math.round((stageCompleted / stageTotal) * 100) : 0
+
+    let totalItems = 0
+    let totalCompleted = 0
+    activePipeline.stages.forEach(s => {
+      s.items.forEach(i => {
+        totalItems++
+        if (i.completed) totalCompleted++
+      })
+    })
+    const overallProgress = totalItems > 0 ? Math.round((totalCompleted / totalItems) * 100) : 0
+
+    return { selectedStageProgress, overallProgress }
+  }, [activePipeline, selectedStageId])
+
+  const selectedStage = useMemo(() =>
+    activePipeline?.stages.find(s => s.id === selectedStageId),
+    [activePipeline, selectedStageId]
+  )
+
+  const handleUpdateStageDetails = (stageId: string, updates: Partial<PipelineStage>) => {
+    if (!activePipeline) return
+    const newPipelines = pipelines.map(p =>
+      p.id === activePipelineId
+        ? { ...p, stages: p.stages.map(s => s.id === stageId ? { ...s, ...updates } : s) }
+        : p
+    )
+    onUpdate(project.id, { pipelines: newPipelines })
+  }
+
 
   const startDraggingItem = (e: React.MouseEvent, itemId: string, stageId: string): void => {
     if (e.button !== 0) return
@@ -479,10 +548,10 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
     const handleMouseUp = (): void => {
       document.removeEventListener('mousemove', handleMouseMove)
       document.removeEventListener('mouseup', handleMouseUp)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(document.body.style as any).cursor = ''
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ;(document.body.style as any).userSelect = ''
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ; (document.body.style as any).cursor = ''
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ; (document.body.style as any).userSelect = ''
 
       const source = dragDataRef.current
       const target = dropTargetRef.current
@@ -499,9 +568,9 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
 
     document.addEventListener('mousemove', handleMouseMove)
     document.addEventListener('mouseup', handleMouseUp)
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    ;(document.body.style as any).cursor = 'grabbing'
-    ;(document.body.style as any).userSelect = 'none'
+      /* eslint-disable @typescript-eslint/no-explicit-any */
+      ; (document.body.style as any).cursor = 'grabbing'
+      ; (document.body.style as any).userSelect = 'none'
     /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 
@@ -521,561 +590,799 @@ export default function PipelineView({ project, onUpdate }: PipelineViewProps): 
         style={{
           flex: 1,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'row',
           overflow: 'hidden',
           background: 'var(--card-bg)',
           borderRadius: 0,
           minHeight: 0
         }}
       >
-        {/* Header bar */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            padding: '0 16px',
-            height: '45px',
-            boxSizing: 'border-box',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-            flexShrink: 0
-          }}
-        >
-          {/* Pipeline tabs */}
+        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          {/* Header bar */}
           <div
             style={{
-              flex: 1,
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              overflowX: 'auto',
-              scrollbarWidth: 'none'
+              justifyContent: 'space-between',
+              gap: '16px',
+              padding: '0 10px',
+              height: '45px',
+              boxSizing: 'border-box',
+              borderBottom: '1px solid rgba(255,255,255,0.05)',
+              flexShrink: 0
             }}
           >
-            {pipelines.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => onUpdate(project.id, { activePipelineId: p.id })}
-                onMouseEnter={() => setHoveredPipelineId(p.id)}
-                onMouseLeave={() => setHoveredPipelineId(null)}
-                style={{
-                  padding: '4px 10px',
-                  borderRadius: '6px',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  background: p.id === activePipelineId ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  border: 'none',
-                  color:
-                    p.id === activePipelineId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                }}
-              >
-                {editingPipelineId === p.id ? (
-                  <input
-                    autoFocus
-                    value={pipelineNameValue}
-                    onChange={(e) => setPipelineNameValue(e.target.value)}
-                    onBlur={savePipelineName}
-                    onKeyDown={(e) => e.key === 'Enter' && savePipelineName()}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: 'inherit',
-                      fontSize: 'inherit',
-                      fontWeight: 'inherit',
-                      padding: 0,
-                      width: '100px',
-                      outline: 'none'
-                    }}
-                  />
-                ) : (
-                  <>
-                    <span onDoubleClick={(e) => startEditingPipeline(e, p)}>{p.name}</span>
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '4px',
-                        opacity: (p.id === activePipelineId && hoveredPipelineId === p.id) ? 1 : 0,
-                        pointerEvents: (p.id === activePipelineId && hoveredPipelineId === p.id) ? 'auto' : 'none',
-                        transition: 'opacity 0.2s'
-                      }}
-                    >
-                      <button
-                        onClick={(e) => handleDeletePipeline(e, p.id)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          padding: 0,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: 'var(--text-secondary)'
-                        }}
-                        onMouseEnter={(e) =>
-                          (e.currentTarget.style.color = 'var(--danger)')
-                        }
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.color = 'var(--text-secondary)')
-                        }
-                        title="Delete"
-                      >
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
             <button
-              onClick={handleAddPipeline}
-              style={{ ...editBtnStyle, padding: '4px 6px' }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                e.currentTarget.style.color = 'var(--text-primary)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = 'var(--text-secondary)'
-              }}
-              title="Add Page"
-            >
-              <Plus size={16} />
-            </button>
-          </div>
-
-          {/* Add stage button */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-            <button
-              onClick={handleAddStage}
-              disabled={!activePipeline}
+              onClick={onToggleSidebar}
+              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
               style={{
-                ...editBtnStyle,
-                padding: '4px 10px',
-                opacity: !activePipeline ? 0.3 : 1,
-                pointerEvents: !activePipeline ? 'none' : 'auto'
+                background: 'transparent',
+                border: 'none',
+                color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                padding: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: isSidebarOpen ? 0.6 : 0.4,
+                transition: 'opacity 0.2s',
+                width: '30px',
+                height: '30px',
+                marginRight: '8px'
               }}
-              onMouseEnter={(e) => {
-                if (!activePipeline) return
-                e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                e.currentTarget.style.color = 'var(--text-primary)'
-              }}
-              onMouseLeave={(e) => {
-                if (!activePipeline) return
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = 'var(--text-secondary)'
-              }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
+              }
             >
-              <PlusCircle size={14} style={{ marginRight: '4px' }} /> Add Stage
+              <PanelLeft size={18} />
             </button>
-          </div>
-        </div>
-
-        {/* Stages area */}
-        <div
-          className="pipeline-stages custom-scrollbar"
-          style={{
-            display: 'flex',
-            gap: '16px',
-            overflowX: 'auto',
-            overflowY: 'auto',
-            flex: 1,
-            padding: '24px',
-            scrollbarWidth: 'thin',
-            scrollbarColor: 'rgba(255,255,255,0.1) transparent',
-            position: 'relative',
-            alignItems: 'flex-start'
-          }}
-        >
-          {!activePipeline || activePipeline.stages.length === 0 ? (
+            {/* Pipeline tabs */}
             <div
               style={{
                 flex: 1,
                 display: 'flex',
-                flexDirection: 'column',
                 alignItems: 'center',
-                justifyContent: 'center',
-                padding: '40px',
-                color: 'rgba(255, 255, 255, 0.25)'
+                gap: '8px',
+                overflowX: 'auto',
+                scrollbarWidth: 'none'
               }}
             >
-              <p style={{ margin: 0, fontSize: '13px' }}>
-                {!activePipeline
-                  ? 'Create a pipeline to get started.'
-                  : 'No stages in this pipeline. Click "Add Stage" above.'}
-              </p>
-            </div>
-          ) : (
-            activePipeline.stages.map((stage) => (
-              <React.Fragment key={stage.id}>
+              {pipelines.map((p) => (
                 <div
-                  data-pipeline-stage-id={stage.id}
+                  key={p.id}
+                  onClick={() => onUpdate(project.id, { activePipelineId: p.id })}
+                  onMouseEnter={() => setHoveredPipelineId(p.id)}
+                  onMouseLeave={() => setHoveredPipelineId(null)}
                   style={{
-                    minWidth: '300px',
-                    width: '300px',
-                    background: stage.color
-                      ? `${stage.color}${Math.round((stage.colorOpacity ?? 0.1) * 255)
-                          .toString(16)
-                          .padStart(2, '0')}`
-                      : 'rgba(255,255,255,0.03)',
-                    borderRadius: '10px',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap',
                     display: 'flex',
-                    flexDirection: 'column',
-                    border: `1px solid ${
-                      stage.color
-                        ? `${stage.color}${Math.round((stage.colorOpacity ?? 0.1) * 2 * 255)
-                            .toString(16)
-                            .padStart(2, '0')}`
-                        : 'rgba(255,255,255,0.05)'
-                    }`,
-                    transition: 'opacity 0.2s',
-                    position: 'relative',
-                    height: 'fit-content',
-                    maxHeight: 'none'
+                    alignItems: 'center',
+                    gap: '8px',
+                    background: p.id === activePipelineId ? 'rgba(255,255,255,0.08)' : 'transparent',
+                    border: 'none',
+                    color:
+                      p.id === activePipelineId ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                   }}
                 >
-                  {/* Stage drop indicators */}
-                  {stageDropIndicator?.id === stage.id &&
-                    stageDropIndicator?.position === 'before' && (
+                  {editingPipelineId === p.id ? (
+                    <input
+                      autoFocus
+                      value={pipelineNameValue}
+                      onChange={(e) => setPipelineNameValue(e.target.value)}
+                      onBlur={savePipelineName}
+                      onKeyDown={(e) => e.key === 'Enter' && savePipelineName()}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'inherit',
+                        fontSize: 'inherit',
+                        fontWeight: 'inherit',
+                        padding: 0,
+                        width: '100px',
+                        outline: 'none'
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <span onDoubleClick={(e) => startEditingPipeline(e, p)}>{p.name}</span>
                       <div
                         style={{
-                          position: 'absolute',
-                          left: '-9px',
-                          top: '0',
-                          bottom: '0',
-                          width: '3px',
-                          background: 'rgba(255, 255, 255, 0.4)',
-                          borderRadius: '1.5px',
-                          zIndex: 10,
-                          pointerEvents: 'none'
+                          display: 'flex',
+                          gap: '4px',
+                          opacity: (p.id === activePipelineId && hoveredPipelineId === p.id) ? 1 : 0,
+                          pointerEvents: (p.id === activePipelineId && hoveredPipelineId === p.id) ? 'auto' : 'none',
+                          transition: 'opacity 0.2s'
                         }}
-                      />
-                    )}
-                  {stageDropIndicator?.id === stage.id &&
-                    stageDropIndicator?.position === 'after' && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          right: '-9px',
-                          top: '0',
-                          bottom: '0',
-                          width: '3px',
-                          background: 'rgba(255, 255, 255, 0.4)',
-                          borderRadius: '1.5px',
-                          zIndex: 10,
-                          pointerEvents: 'none'
-                        }}
-                      />
-                    )}
-
-                  {/* Stage header */}
-                  <div
-                    data-stage-header-id={stage.id}
-                    onMouseDown={(e) => startDraggingStage(e, stage.id)}
-                    style={{
-                      padding: '12px',
-                      borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: '8px',
-                      cursor: 'grab'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                      <input
-                        value={stage.name}
-                        onChange={(e) => handleUpdateStage(stage.id, e.target.value)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-primary)',
-                          fontWeight: 600,
-                          fontSize: '13px',
-                          width: '100%',
-                          outline: 'none'
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px', position: 'relative' }}>
-                      <button
-                        className={`task-edit-btn ${activeStageDropdown === stage.id ? 'active' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setActiveStageDropdown(
-                            activeStageDropdown === stage.id ? null : stage.id
-                          )
-                        }}
-                        style={{ padding: '2px', color: 'var(--text-secondary)', opacity: 1 }}
                       >
-                        <MoreVertical size={14} />
-                      </button>
-                      {activeStageDropdown === stage.id && (
-                        <div
-                          className="project-dropdown"
-                          style={{ right: 0, left: 'auto', zIndex: 9999 }}
-                          onClick={(e) => e.stopPropagation()}
-                          onMouseDown={(e) => e.stopPropagation()}
+                        <button
+                          onClick={(e) => handleDeletePipeline(e, p.id)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            padding: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: 'var(--text-secondary)'
+                          }}
+                          onMouseEnter={(e) =>
+                            (e.currentTarget.style.color = 'var(--danger)')
+                          }
+                          onMouseLeave={(e) =>
+                            (e.currentTarget.style.color = 'var(--text-secondary)')
+                          }
+                          title="Delete"
                         >
-                          <button
-                            className="project-dropdown-item"
-                            onClick={(e) => {
-                              const rect = e.currentTarget.getBoundingClientRect()
-                              setActiveStageDropdown(null)
-                              setStageColorPickerAnchor({ stageId: stage.id, rect })
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: '14px',
-                                height: '14px',
-                                borderRadius: '50%',
-                                background: stage.color || 'var(--accent)',
-                                border: '1px solid rgba(255,255,255,0.2)'
-                              }}
-                            />
-                            <span>Choose Color</span>
-                          </button>
-                          <button
-                            className="project-dropdown-item"
-                            onClick={() => {
-                              setActiveStageDropdown(null)
-                              const newStages = activePipeline.stages.map((s) =>
-                                s.id === stage.id
-                                  ? { ...s, color: undefined, colorOpacity: undefined }
-                                  : s
-                              )
-                              const newPipelines = pipelines.map((p) =>
-                                p.id === activePipelineId ? { ...p, stages: newStages } : p
-                              )
-                              onUpdate(project.id, { pipelines: newPipelines })
-                            }}
-                          >
-                            <RefreshCw size={14} />
-                            <span>Reset Color</span>
-                          </button>
-                          <div
-                            style={{
-                              height: '1px',
-                              background: 'rgba(255,255,255,0.1)',
-                              margin: '2px 0'
-                            }}
-                          />
-                          <button
-                            className="project-dropdown-item danger"
-                            onClick={() => {
-                              setActiveStageDropdown(null)
-                              handleDeleteStage(stage.id)
-                            }}
-                          >
-                            <Trash2 size={14} />
-                            <span>Delete Stage</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+              <button
+                onClick={handleAddPipeline}
+                style={{ ...editBtnStyle, padding: '4px 6px' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.color = 'var(--text-secondary)'
+                }}
+                title="Add Page"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
 
-                  {/* Items list */}
+            {/* Add stage button */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <button
+                onClick={handleAddStage}
+                disabled={!activePipeline}
+                style={{
+                  ...editBtnStyle,
+                  padding: '4px 10px',
+                  opacity: !activePipeline ? 0.3 : 1,
+                  pointerEvents: !activePipeline ? 'none' : 'auto'
+                }}
+                onMouseEnter={(e) => {
+                  if (!activePipeline) return
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                  e.currentTarget.style.color = 'var(--text-primary)'
+                }}
+                onMouseLeave={(e) => {
+                  if (!activePipeline) return
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.color = 'var(--text-secondary)'
+                }}
+              >
+                <PlusCircle size={14} style={{ marginRight: '4px' }} /> Add Stage
+              </button>
+              <button
+                onClick={() => setShowSidebar(!showSidebar)}
+                title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
+                style={{
+                  ...editBtnStyle,
+                  padding: '4px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  opacity: showSidebar ? 0.6 : 0.3,
+                  flexShrink: 0,
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  marginLeft: '4px'
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = '1'
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.3'
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                <PanelRight size={18} />
+              </button>
+            </div>
+          </div>
+
+          {/* Stages area */}
+          <div
+            className="pipeline-stages custom-scrollbar"
+            onClick={() => setSelectedStageId(null)}
+            style={{
+              display: 'flex',
+              gap: '10px',
+              overflowX: 'auto',
+              overflowY: 'auto',
+              flex: 1,
+              padding: '10px',
+              scrollbarWidth: 'thin',
+              scrollbarColor: 'rgba(255,255,255,0.1) transparent',
+              position: 'relative',
+              alignItems: 'flex-start'
+            }}
+          >
+            {!activePipeline || activePipeline.stages.length === 0 ? (
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '40px',
+                  color: 'rgba(255, 255, 255, 0.25)'
+                }}
+              >
+                <p style={{ margin: 0, fontSize: '13px' }}>
+                  {!activePipeline
+                    ? 'Create a pipeline to get started.'
+                    : 'No stages in this pipeline. Click "Add Stage" above.'}
+                </p>
+              </div>
+            ) : (
+              activePipeline.stages.map((stage) => (
+                <React.Fragment key={stage.id}>
                   <div
+                    data-pipeline-stage-id={stage.id}
                     style={{
-                      flex: 1,
-                      padding: '10px',
+                      minWidth: '280px',
+                      width: '280px',
+                      background: stage.color
+                        ? `${stage.color}${Math.round((stage.colorOpacity ?? 0.1) * 255)
+                          .toString(16)
+                          .padStart(2, '0')}`
+                        : 'rgba(255,255,255,0.03)',
+                      borderRadius: '10px',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: '8px',
+                      border: `1px solid ${stage.color
+                          ? `${stage.color}${Math.round((stage.colorOpacity ?? 0.1) * 2 * 255)
+                            .toString(16)
+                            .padStart(2, '0')}`
+                          : 'rgba(255,255,255,0.05)'
+                        }`,
                       position: 'relative',
-                      background:
-                        dropIndicator?.stageId === stage.id &&
-                        dropIndicator?.position === 'inside'
-                          ? 'rgba(255,255,255,0.02)'
-                          : 'transparent'
+                      height: 'fit-content',
+                      maxHeight: 'none',
+                      transition: 'all 0.2s ease',
+                      outline: selectedStageId === stage.id ? '2px solid var(--accent)' : 'none',
+                      outlineOffset: '-1px'
+                    }}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setSelectedStageId(stage.id)
                     }}
                   >
-                    {stage.items.map((item, idx) => (
-                      <React.Fragment key={item.id}>
-                        {idx > 0 && (
+                    <div style={{ pointerEvents: selectedStageId === stage.id ? 'all' : 'none', display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      {/* Stage drop indicators */}
+                      {stageDropIndicator?.id === stage.id &&
+                        stageDropIndicator?.position === 'before' && (
                           <div
                             style={{
-                              height: '1px',
-                              background: 'rgba(255,255,255,0.05)',
-                              margin: '2px 10px'
+                              position: 'absolute',
+                              left: '-9px',
+                              top: '0',
+                              bottom: '0',
+                              width: '3px',
+                              background: 'rgba(255, 255, 255, 0.4)',
+                              borderRadius: '1.5px',
+                              zIndex: 10,
+                              pointerEvents: 'none'
                             }}
                           />
                         )}
-                        {dropIndicator?.id === item.id &&
-                          dropIndicator?.position === 'before' && (
-                            <div
-                              style={{
-                                height: '2px',
-                                background: 'rgba(255, 255, 255, 0.4)',
-                                borderRadius: '1px',
-                                margin: '2px 0'
-                              }}
-                            />
-                          )}
-                        <div
-                          data-pipeline-item-id={item.id}
-                          data-stage-id={stage.id}
-                          onMouseDown={(e) => startDraggingItem(e, item.id, stage.id)}
-                          style={{
-                            background: 'transparent',
-                            padding: '10px',
-                            borderRadius: '10px',
-                            border: 'none',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                            transition: 'all 0.2s',
-                            opacity: draggingItem?.itemId === item.id ? 0.4 : 1
-                          }}
-                        >
+                      {stageDropIndicator?.id === stage.id &&
+                        stageDropIndicator?.position === 'after' && (
                           <div
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '8px'
+                              position: 'absolute',
+                              right: '-9px',
+                              top: '0',
+                              bottom: '0',
+                              width: '3px',
+                              background: 'rgba(255, 255, 255, 0.4)',
+                              borderRadius: '1.5px',
+                              zIndex: 10,
+                              pointerEvents: 'none'
                             }}
+                          />
+                        )}
+
+                      {/* Stage header */}
+                      <div
+                        data-stage-header-id={stage.id}
+                        onMouseDown={(e) => startDraggingStage(e, stage.id)}
+                        style={{
+                          padding: '12px',
+                          borderBottom: '1px solid rgba(255,255,255,0.05)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: '8px',
+                          cursor: 'grab'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
+                          <input
+                            value={stage.name}
+                            onChange={(e) => handleUpdateStage(stage.id, e.target.value)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-primary)',
+                              fontWeight: 600,
+                              fontSize: '13px',
+                              width: '100%',
+                              outline: 'none'
+                            }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: '4px', position: 'relative' }}>
+                          <button
+                            className={`task-edit-btn ${activeStageDropdown === stage.id ? 'active' : ''}`}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setActiveStageDropdown(
+                                activeStageDropdown === stage.id ? null : stage.id
+                              )
+                            }}
+                            style={{ padding: '2px', color: 'var(--text-secondary)', opacity: 1 }}
                           >
-                            <GripVertical
-                              className="drag-handle"
-                              size={14}
-                              style={{ opacity: 0.3, cursor: 'grab', flexShrink: 0 }}
-                            />
-                            <button
-                              onClick={() =>
-                                handleUpdateItem(stage.id, item.id, {
-                                  completed: !item.completed
-                                })
-                              }
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                padding: 0,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                cursor: 'pointer',
-                                flexShrink: 0,
-                                color: '#ffffff'
-                              }}
+                            <MoreVertical size={14} />
+                          </button>
+                          {activeStageDropdown === stage.id && (
+                            <div
+                              className="project-dropdown"
+                              style={{ right: 0, left: 'auto', zIndex: 9999 }}
+                              onClick={(e) => e.stopPropagation()}
+                              onMouseDown={(e) => e.stopPropagation()}
                             >
-                              {item.completed ? (
-                                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                  <Square size={16} fill={project.color || '#ffffff'} stroke={project.color || '#ffffff'} />
-                                  <Check size={12} color="#000000" style={{ position: 'absolute' }} strokeWidth={3} />
-                                </div>
-                              ) : (
-                                <Square size={16} style={{ opacity: 0.3 }} color={project.color || '#ffffff'} strokeWidth={1} />
+                              <button
+                                className="project-dropdown-item"
+                                onClick={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect()
+                                  setActiveStageDropdown(null)
+                                  setStageColorPickerAnchor({ stageId: stage.id, rect })
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    width: '14px',
+                                    height: '14px',
+                                    borderRadius: '50%',
+                                    background: stage.color || 'var(--accent)',
+                                    border: '1px solid rgba(255,255,255,0.2)'
+                                  }}
+                                />
+                                <span>Choose Color</span>
+                              </button>
+                              <button
+                                className="project-dropdown-item"
+                                onClick={() => {
+                                  setActiveStageDropdown(null)
+                                  const newStages = activePipeline.stages.map((s) =>
+                                    s.id === stage.id
+                                      ? { ...s, color: undefined, colorOpacity: undefined }
+                                      : s
+                                  )
+                                  const newPipelines = pipelines.map((p) =>
+                                    p.id === activePipelineId ? { ...p, stages: newStages } : p
+                                  )
+                                  onUpdate(project.id, { pipelines: newPipelines })
+                                }}
+                              >
+                                <RefreshCw size={14} />
+                                <span>Reset Color</span>
+                              </button>
+                              <div
+                                style={{
+                                  height: '1px',
+                                  background: 'rgba(255,255,255,0.1)',
+                                  margin: '2px 0'
+                                }}
+                              />
+                              <button
+                                className="project-dropdown-item danger"
+                                onClick={() => {
+                                  setActiveStageDropdown(null)
+                                  handleDeleteStage(stage.id)
+                                }}
+                              >
+                                <Trash2 size={14} />
+                                <span>Delete Stage</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Items list */}
+                      <div
+                        style={{
+                          flex: 1,
+                          padding: '10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          position: 'relative',
+                          background:
+                            dropIndicator?.stageId === stage.id &&
+                              dropIndicator?.position === 'inside'
+                              ? 'rgba(255,255,255,0.02)'
+                              : 'transparent'
+                        }}
+                      >
+                        {stage.items.map((item, idx) => (
+                          <React.Fragment key={item.id}>
+                            {idx > 0 && (
+                              <div
+                                style={{
+                                  height: '1px',
+                                  background: 'rgba(255,255,255,0.05)',
+                                  margin: '2px 10px'
+                                }}
+                              />
+                            )}
+                            {dropIndicator?.id === item.id &&
+                              dropIndicator?.position === 'before' && (
+                                <div
+                                  style={{
+                                    height: '2px',
+                                    background: 'rgba(255, 255, 255, 0.4)',
+                                    borderRadius: '1px',
+                                    margin: '2px 0'
+                                  }}
+                                />
                               )}
-                            </button>
-                            <input
-                              value={item.text}
-                              onChange={(e) =>
-                                handleUpdateItem(stage.id, item.id, { text: e.target.value })
-                              }
+                            <div
+                              data-pipeline-item-id={item.id}
+                              data-stage-id={stage.id}
+                              onMouseDown={(e) => startDraggingItem(e, item.id, stage.id)}
                               style={{
                                 background: 'transparent',
+                                padding: '10px',
+                                borderRadius: '10px',
                                 border: 'none',
-                                color: item.completed
-                                  ? 'var(--text-secondary)'
-                                  : 'var(--text-primary)',
-                                textDecoration: item.completed ? 'line-through' : 'none',
-                                fontSize: '12px',
-                                width: '100%',
-                                outline: 'none'
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: '8px',
+                                transition: 'all 0.2s',
+                                opacity: draggingItem?.itemId === item.id ? 0.4 : 1
                               }}
-                            />
-                          </div>
-                          <div
-                            style={{
-                              display: 'flex',
-                              justifyContent: 'flex-end',
-                              gap: '4px',
-                              opacity: 0.6
-                            }}
-                          >
-                            <TinyButton onClick={() => handleDeleteItem(stage.id, item.id)}>
-                              <Trash2 size={12} color="var(--danger)" />
-                            </TinyButton>
-                          </div>
-                        </div>
-                        {dropIndicator?.id === item.id &&
-                          dropIndicator?.position === 'after' && (
-                            <div
-                              style={{
-                                height: '2px',
-                                background: 'rgba(255, 255, 255, 0.4)',
-                                borderRadius: '1px',
-                                margin: '2px 0'
-                              }}
-                            />
-                          )}
-                      </React.Fragment>
-                    ))}
-                    <button
-                      onClick={() => handleAddItem(stage.id)}
-                      style={{
-                        background: 'rgba(255,255,255,0.04)',
-                        border: '1px dashed rgba(255,255,255,0.1)',
-                        borderRadius: '10px',
-                        padding: '8px',
-                        color: 'var(--text-secondary)',
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Plus size={10} /> Add Item
-                    </button>
+                            >
+                              <div
+                                onMouseEnter={(e) => {
+                                  const actions = e.currentTarget.querySelector('.item-actions') as HTMLElement
+                                  if (actions) actions.style.opacity = '0.6'
+                                }}
+                                onMouseLeave={(e) => {
+                                  const actions = e.currentTarget.querySelector('.item-actions') as HTMLElement
+                                  if (actions) actions.style.opacity = '0'
+                                }}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: '8px'
+                                }}
+                              >
+                                <GripVertical
+                                  className="drag-handle"
+                                  size={14}
+                                  style={{ opacity: 0.3, cursor: 'grab', flexShrink: 0, marginTop: '2px' }}
+                                />
+                                <button
+                                  onClick={() =>
+                                    handleUpdateItem(stage.id, item.id, {
+                                      completed: !item.completed
+                                    })
+                                  }
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    padding: 0,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    color: '#ffffff',
+                                    marginTop: '1px'
+                                  }}
+                                >
+                                  {item.completed ? (
+                                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Square size={16} fill={project.color || '#ffffff'} stroke={project.color || '#ffffff'} />
+                                      <Check size={12} color="#000000" style={{ position: 'absolute' }} strokeWidth={3} />
+                                    </div>
+                                  ) : (
+                                    <Square size={16} style={{ opacity: 0.3 }} color={project.color || '#ffffff'} strokeWidth={1} />
+                                  )}
+                                </button>
+                                <textarea
+                                  className="pipeline-item-textarea"
+                                  value={item.text}
+                                  rows={1}
+                                  onChange={(e) => {
+                                    handleUpdateItem(stage.id, item.id, { text: e.target.value })
+                                    e.target.style.height = 'auto'
+                                    e.target.style.height = `${e.target.scrollHeight}px`
+                                  }}
+                                  onFocus={(e) => {
+                                    e.target.style.height = 'auto'
+                                    e.target.style.height = `${e.target.scrollHeight}px`
+                                  }}
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    color: item.completed
+                                      ? 'var(--text-secondary)'
+                                      : 'var(--text-primary)',
+                                    textDecoration: item.completed ? 'line-through' : 'none',
+                                    fontSize: '12px',
+                                    fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+                                    WebkitFontSmoothing: 'antialiased',
+                                    flex: 1,
+                                    outline: 'none',
+                                    resize: 'none',
+                                    overflow: 'hidden',
+                                    padding: 0,
+                                    margin: 0,
+                                    lineHeight: '1.5',
+                                    display: 'block'
+                                  }}
+                                />
+                                <div className="item-actions" style={{ opacity: 0, transition: 'opacity 0.2s' }}>
+                                  <TinyButton onClick={() => handleDeleteItem(stage.id, item.id)}>
+                                    <Trash2 size={12} color="var(--danger)" />
+                                  </TinyButton>
+                                </div>
+                              </div>
+                            </div>
+                            {dropIndicator?.id === item.id &&
+                              dropIndicator?.position === 'after' && (
+                                <div
+                                  style={{
+                                    height: '2px',
+                                    background: 'rgba(255, 255, 255, 0.4)',
+                                    borderRadius: '1px',
+                                    margin: '2px 0'
+                                  }}
+                                />
+                              )}
+                          </React.Fragment>
+                        ))}
+                        <button
+                          onClick={() => handleAddItem(stage.id)}
+                          style={{
+                            background: 'rgba(255,255,255,0.04)',
+                            border: '1px dashed rgba(255,255,255,0.1)',
+                            borderRadius: '10px',
+                            padding: '8px',
+                            color: 'var(--text-secondary)',
+                            fontSize: '11px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <Plus size={10} /> Add Item
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </React.Fragment>
+              ))
+            )}
+
+            {/* Color picker portal */}
+            {stageColorPickerAnchor && activePipeline && (
+              <ColorPicker
+                color={
+                  activePipeline.stages.find((s) => s.id === stageColorPickerAnchor.stageId)
+                    ?.color || '#FF3E6C'
+                }
+                anchorRect={stageColorPickerAnchor.rect}
+                opacity={
+                  activePipeline.stages.find((s) => s.id === stageColorPickerAnchor.stageId)
+                    ?.colorOpacity ?? 0.1
+                }
+                onOpacityChange={(opacity) => {
+                  const newStages = activePipeline.stages.map((s) =>
+                    s.id === stageColorPickerAnchor.stageId ? { ...s, colorOpacity: opacity } : s
+                  )
+                  const newPipelines = pipelines.map((p) =>
+                    p.id === activePipelineId ? { ...p, stages: newStages } : p
+                  )
+                  onUpdate(project.id, { pipelines: newPipelines })
+                }}
+                onChange={(color) => {
+                  const newStages = activePipeline.stages.map((s) =>
+                    s.id === stageColorPickerAnchor.stageId ? { ...s, color } : s
+                  )
+                  const newPipelines = pipelines.map((p) =>
+                    p.id === activePipelineId ? { ...p, stages: newStages } : p
+                  )
+                  onUpdate(project.id, { pipelines: newPipelines })
+                }}
+                onClose={() => setStageColorPickerAnchor(null)}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* RIGHT SIDEBAR */}
+        <div
+          style={{
+            width: showSidebar ? '280px' : '0px',
+            minWidth: showSidebar ? '280px' : '0px',
+            borderLeft: showSidebar ? '1px solid rgba(255,255,255,0.06)' : 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            background: 'var(--card-bg)',
+            overflow: 'hidden',
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            position: 'relative'
+          }}
+        >
+          <div
+            style={{
+              width: '280px',
+              minWidth: '280px',
+              display: 'flex',
+              flexDirection: 'column',
+              height: '100%',
+              padding: '20px',
+              boxSizing: 'border-box',
+              overflowY: 'auto'
+            }}
+          >
+            {selectedStage ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <div style={{ width: '12px', height: '12px', borderRadius: '4px', background: selectedStage.color || 'var(--accent)' }} />
+                    <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      {selectedStage.name}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => handleDeleteStage(selectedStage.id)}
+                    style={{
+                      padding: '6px',
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid transparent',
+                      borderRadius: 'var(--radius-sm)',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = 'var(--danger)'
+                      e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'
+                      e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)'
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = 'var(--text-secondary)'
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+                      e.currentTarget.style.borderColor = 'transparent'
+                    }}
+                    title="Delete Stage"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '8px' }}>
+                    Description
+                  </div>
+                  <textarea
+                    value={selectedStage.description || ''}
+                    onChange={(e) => handleUpdateStageDetails(selectedStage.id, { description: e.target.value })}
+                    placeholder="Add a description for this stage..."
+                    style={{
+                      width: '100%',
+                      minHeight: '120px',
+                      background: 'rgba(0,0,0,0.2)',
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      color: 'var(--text-primary)',
+                      fontSize: '13px',
+                      resize: 'vertical',
+                      outline: 'none',
+                      lineHeight: '1.5'
+                    }}
+                  />
+                </div>
+
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', marginBottom: '24px' }} />
+
+                <div style={{ marginBottom: '24px' }}>
+                  <div style={{ fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginBottom: '12px' }}>
+                    Dates
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        <Calendar size={14} /> Start
+                      </div>
+                      <input
+                        type="date"
+                        value={selectedStage.startDate || ''}
+                        onChange={(e) => handleUpdateStageDetails(selectedStage.id, { startDate: e.target.value })}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', colorScheme: 'dark', fontSize: '13px', outline: 'none' }}
+                      />
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        <Calendar size={14} /> End
+                      </div>
+                      <input
+                        type="date"
+                        value={selectedStage.endDate || ''}
+                        onChange={(e) => handleUpdateStageDetails(selectedStage.id, { endDate: e.target.value })}
+                        style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', colorScheme: 'dark', fontSize: '13px', outline: 'none' }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </React.Fragment>
-            ))
-          )}
 
-          {/* Color picker portal */}
-          {stageColorPickerAnchor && activePipeline && (
-            <ColorPicker
-              color={
-                activePipeline.stages.find((s) => s.id === stageColorPickerAnchor.stageId)
-                  ?.color || '#FF3E6C'
-              }
-              anchorRect={stageColorPickerAnchor.rect}
-              opacity={
-                activePipeline.stages.find((s) => s.id === stageColorPickerAnchor.stageId)
-                  ?.colorOpacity ?? 0.1
-              }
-              onOpacityChange={(opacity) => {
-                const newStages = activePipeline.stages.map((s) =>
-                  s.id === stageColorPickerAnchor.stageId ? { ...s, colorOpacity: opacity } : s
-                )
-                const newPipelines = pipelines.map((p) =>
-                  p.id === activePipelineId ? { ...p, stages: newStages } : p
-                )
-                onUpdate(project.id, { pipelines: newPipelines })
-              }}
-              onChange={(color) => {
-                const newStages = activePipeline.stages.map((s) =>
-                  s.id === stageColorPickerAnchor.stageId ? { ...s, color } : s
-                )
-                const newPipelines = pipelines.map((p) =>
-                  p.id === activePipelineId ? { ...p, stages: newStages } : p
-                )
-                onUpdate(project.id, { pipelines: newPipelines })
-              }}
-              onClose={() => setStageColorPickerAnchor(null)}
-            />
-          )}
+                <div style={{ height: '1px', background: 'rgba(255,255,255,0.05)', marginBottom: '24px' }} />
+
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+                      <Layout size={12} /> Stage Progress
+                    </div>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--accent)' }}>{selectedStageProgress}%</span>
+                  </div>
+                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.03)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${selectedStageProgress}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.3s ease' }} />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700 }}>
+                      <Layout size={12} /> Overall Progress
+                    </div>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-secondary)' }}>{overallProgress}%</span>
+                  </div>
+                  <div style={{ height: '6px', background: 'rgba(255,255,255,0.03)', borderRadius: '3px', overflow: 'hidden' }}>
+                    <div style={{ width: `${overallProgress}%`, height: '100%', background: 'var(--text-secondary)', opacity: 0.5, transition: 'width 0.3s ease' }} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.3 }}>
+                <Info size={40} style={{ marginBottom: '16px' }} />
+                <div style={{ fontSize: '13px', textAlign: 'center' }}>Select a stage to view details</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
