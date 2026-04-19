@@ -152,6 +152,11 @@ export interface AppEvent {
     minutesBefore: number // 0, 5, 15, 30, 60, etc.
     isNotified?: boolean
   }
+  // Sync Fields
+  externalId?: string // Link to external calendar event ID (e.g., Google Calendar)
+  etag?: string // Server revision tracking
+  syncStatus?: 'synced' | 'pending_push' | 'pending_delete' | 'conflict'
+  updatedAt?: number // Timestamp of last local change
 }
 
 export interface AppNotification {

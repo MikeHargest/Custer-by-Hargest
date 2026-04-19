@@ -141,6 +141,12 @@ const api = {
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
   openPath: (path: string) => ipcRenderer.invoke('app:openPath', path),
 
+  // Google Auth
+  googleAuth: () => ipcRenderer.invoke('google:auth'),
+  checkGoogleAuth: () => ipcRenderer.invoke('google:checkAuth'),
+  disconnectGoogleAuth: () => ipcRenderer.invoke('google:disconnect'),
+  syncProjectEvents: (projectId: string, events: any[]) => ipcRenderer.invoke('google:sync:project', projectId, events),
+
   // Custom resize (for transparent frameless window)
   windowResizeStart: (direction: string) => ipcRenderer.send('window:resizeStart', direction),
   windowResizeEnd: () => ipcRenderer.send('window:resizeEnd')

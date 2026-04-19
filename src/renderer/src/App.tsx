@@ -137,6 +137,7 @@ function App() {
   const [useGPU, setUseGPU] = useState(true)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true)
+  const [isSyncingCalendar, setIsSyncingCalendar] = useState(false)
   const [timerVolume, setTimerVolume] = useState<number>(0.5)
   const [previousWorkspacePath, setPreviousWorkspacePath] = useState<string | null>(null)
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
@@ -190,6 +191,44 @@ function App() {
       return newHistory
     })
   }, [])
+
+  const handleSyncWorkspaceEvents = async () => {
+    if (isSyncingCalendar) return
+    setIsSyncingCalendar(true)
+    
+    // Check if auth is valid
+    const authStatus = await (window as any).api.checkGoogleAuth()
+    if (!authStatus) {
+      alert('Please connect your Google Account in Settings -> Sync & Integrations first.')
+      setIsSyncingCalendar(false)
+      return
+    }
+
+    // Sync all un-archived projects
+    let currentProjects = JSON.parse(JSON.stringify(projectsRef.current))
+    
+    const syncRecursive = async (projs: any[]) => {
+      for (const project of projs) {
+         if (project.events && project.events.length > 0) {
+            try {
+               const resolvedEvents = await (window as any).api.syncProjectEvents(project.id, project.events)
+               project.events = resolvedEvents
+            } catch(e) {
+               console.error(`Failed to sync calendar events for project ${project.id}`, e)
+            }
+         }
+         if (project.subprojects && project.subprojects.length > 0) {
+            await syncRecursive(project.subprojects)
+         }
+      }
+    }
+    
+    await syncRecursive(currentProjects)
+    
+    // Update state to trigger JSON save automatically if we hooked it to projects
+    setProjects(currentProjects)
+    setIsSyncingCalendar(false)
+  }
 
   // Click outside notifications to close
   useEffect(() => {
@@ -586,7 +625,9 @@ function App() {
                     originalEventId: baseId,
                     originalDate: originalDate,
                     recurrence: undefined,
-                    exceptions: undefined
+                    exceptions: undefined,
+                    syncStatus: 'pending_push' as any,
+                    updatedAt: Date.now()
                   }
                   return {
                     ...p,
@@ -595,6 +636,8 @@ function App() {
                         ev.id === baseId
                           ? {
                             ...ev,
+                            syncStatus: 'pending_push' as const,
+                            updatedAt: Date.now(),
                             exceptions: {
                               ...(ev.exceptions || {}),
                               [originalDate]: { deleted: true, editedEventId: newExceptionId }
@@ -609,7 +652,7 @@ function App() {
               } else {
                 return {
                   ...p,
-                  events: p.events.map((ev) => (ev.id === eventId ? { ...ev, date: newDate } : ev))
+                  events: p.events.map((ev) => (ev.id === eventId ? { ...ev, date: newDate, syncStatus: 'pending_push' as const, updatedAt: Date.now() } : ev))
                 }
               }
             }
@@ -653,7 +696,9 @@ function App() {
               if (choice === 'series') {
                 return {
                   ...p,
-                  events: p.events.filter(ev => ev.id !== realEventId)
+                  events: p.events.map(ev => 
+                    ev.id === realEventId ? { ...ev, syncStatus: 'pending_delete', updatedAt: Date.now() } : ev
+                  ).filter(ev => ev.syncStatus === 'pending_delete' ? !!ev.externalId : true)
                 }
               } else {
                 // Instance only
@@ -664,6 +709,8 @@ function App() {
                     ev.id === realEventId
                       ? {
                         ...ev,
+                        syncStatus: 'pending_push',
+                        updatedAt: Date.now(),
                         exceptions: {
                           ...(ev.exceptions || {}),
                           [originalDate]: { deleted: true }
@@ -1389,6 +1436,8 @@ function App() {
                 setHiddenProjectIds={setHiddenTimelineProjectIds}
                 isSidebarOpen={isSidebarOpen}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                onSyncWorkspaceEvents={handleSyncWorkspaceEvents}
+                isSyncing={isSyncingCalendar}
               />
             </div>
             <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>

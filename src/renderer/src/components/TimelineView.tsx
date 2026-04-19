@@ -8,11 +8,12 @@ import {
   X,
   CheckSquare,
   CalendarDays,
-  AlignLeft,
   Plus,
   EyeOff,
   SlidersHorizontal,
   RotateCcw,
+  RefreshCcw,
+  AlignLeft,
   ChevronUp,
   ChevronDown,
   PanelLeft
@@ -55,6 +56,8 @@ interface TimelineViewProps {
   setHiddenProjectIds: (ids: string[]) => void
   isSidebarOpen: boolean
   onToggleSidebar: () => void
+  onSyncWorkspaceEvents?: () => void
+  isSyncing?: boolean
 }
 
 export default function TimelineView({
@@ -65,7 +68,9 @@ export default function TimelineView({
   hiddenProjectIds,
   setHiddenProjectIds,
   isSidebarOpen,
-  onToggleSidebar
+  onToggleSidebar,
+  onSyncWorkspaceEvents,
+  isSyncing
 }: TimelineViewProps): React.ReactElement {
   const PAST_DAYS = 14
   const minCellWidth = 150
@@ -602,7 +607,8 @@ export default function TimelineView({
               alignItems: 'center',
               width: 'max-content',
               minWidth: '100%',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              gap: '6px'
             }}
           >
             <button
@@ -707,6 +713,30 @@ export default function TimelineView({
               >
                 Today
               </button>
+              {onSyncWorkspaceEvents && (
+                <button
+                  onClick={onSyncWorkspaceEvents}
+                  disabled={isSyncing}
+                  title="Sync Events with Google Calendar"
+                  style={{
+                    background: 'rgba(255,255,255,0.05)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    color: isSyncing ? 'var(--accent)' : 'var(--text-secondary)',
+                    padding: '3px 10px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: isSyncing ? 'default' : 'pointer',
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  <RefreshCcw size={12} className={isSyncing ? 'spin-anim' : ''} />
+                  {isSyncing ? 'Syncing...' : 'GCal Sync'}
+                </button>
+              )}
             </div>
           </div>
 

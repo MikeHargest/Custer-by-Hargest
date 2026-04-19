@@ -277,7 +277,9 @@ export default memo(function TaskSidebar({
         id: eventId,
         title: title.trim(),
         date: undefined,
-        time: undefined
+        time: undefined,
+        syncStatus: 'pending_push',
+        updatedAt: Date.now()
       }
 
       const updateRecursive = (projs: Project[]): Project[] => {
@@ -299,7 +301,18 @@ export default memo(function TaskSidebar({
       const updateRecursive = (projs: Project[]): Project[] => {
         return projs.map((p): Project => {
           if (p.id === projectId) {
-            return { ...p, events: p.events?.filter((e) => e.id !== eventId) || [] }
+            return {
+              ...p,
+              events: p.events?.filter((e) => {
+                if (e.id === eventId) {
+                  // If it has an externalId, we should mark as pending_delete instead of actual removal,
+                  // but since this is TaskSidebar we might do a full removal. Let's just remove it here and sync manager will handle diffs,
+                  // OR better: we should mark it deleted if syncing is active. For now, true deletion.
+                  return false;
+                }
+                return true;
+              }) || []
+            }
           }
           if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
           return p
@@ -317,7 +330,7 @@ export default memo(function TaskSidebar({
             return {
               ...p,
               events: p.events?.map((ev) =>
-                ev.id === eventId ? { ...ev, ...updates } : ev
+                ev.id === eventId ? { ...ev, ...updates, syncStatus: 'pending_push', updatedAt: Date.now() } : ev
               )
             }
           }

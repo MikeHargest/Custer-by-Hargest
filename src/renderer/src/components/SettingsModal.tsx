@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText } from 'lucide-react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, Cloud } from 'lucide-react'
 import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'
@@ -41,7 +41,7 @@ export default function SettingsModal({
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'sync'>(
     'general'
   )
 
@@ -161,6 +161,7 @@ export default function SettingsModal({
               { id: 'notes', label: 'Notes', icon: <FileText size={16} /> },
               { id: 'timers', label: 'Timers', icon: <Timer size={16} /> },
               { id: 'canvas', label: 'Canvas', icon: <Compass size={16} /> },
+              { id: 'sync', label: 'Integrations', icon: <Cloud size={16} /> },
               { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> }
             ].map((tab) => (
               <button
@@ -734,6 +735,67 @@ export default function SettingsModal({
                             <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>min</span>
                           </div>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'sync' && (
+                <motion.div
+                  key="sync"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
+                    Sync & Integrations
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0 0 24px 0',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Connect Cluster to external services.
+                  </p>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{ 
+                      background: 'rgba(255,255,255,0.02)', 
+                      padding: '16px', 
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <div>
+                            <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              Google Calendar
+                            </h4>
+                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Bidirectional sync for tasks & events</div>
+                         </div>
+                         <button
+                           onClick={async () => {
+                             // @ts-ignore
+                             await window.api.googleAuth();
+                             alert('Check your browser to complete Google Auth!');
+                           }}
+                           style={{
+                              padding: '6px 12px',
+                              borderRadius: '6px',
+                              background: 'rgba(255,255,255,0.1)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: 500,
+                              transition: 'all 0.2s'
+                           }}
+                         >
+                           Connect Account
+                         </button>
                       </div>
                     </div>
                   </div>
