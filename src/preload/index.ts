@@ -145,7 +145,7 @@ const api = {
   googleAuth: () => ipcRenderer.invoke('google:auth'),
   checkGoogleAuth: () => ipcRenderer.invoke('google:checkAuth'),
   disconnectGoogleAuth: () => ipcRenderer.invoke('google:disconnect'),
-  syncProjectEvents: (projectId: string, events: any[]) => ipcRenderer.invoke('google:sync:project', projectId, events),
+  syncProjectEvents: (projectId: string, projectName: string, events: any[]) => ipcRenderer.invoke('google:sync:project', projectId, projectName, events),
 
   // Custom resize (for transparent frameless window)
   windowResizeStart: (direction: string) => ipcRenderer.send('window:resizeStart', direction),

@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react'
 import * as PIXI from 'pixi.js'
-import { BoardElement, CachedSnapTarget } from '../types'
+import { BoardElement, CachedSnapTarget, Viewport } from '../types'
 import { getSharedTexture, releaseSharedTexture, parseColor } from '../utils'
 import { UITheme } from '../../../types'
 
 export interface ElementItemProps {
   element: BoardElement
   isSelected: boolean
-  zoomScale: number
+  viewport: Viewport
   activeLevel?: 'high' | 'mid' | 'low'
   onSelect: (id: string, multi: boolean) => void
   onMove: (id: string, x: number, y: number) => void
@@ -17,7 +17,8 @@ export interface ElementItemProps {
     height: number,
     x?: number,
     y?: number,
-    handle?: string
+    handle?: string,
+    fontSize?: number
   ) => void
   onRotate: (id: string, rotation: number) => void
   onInteractionStart: () => void
@@ -74,21 +75,21 @@ const ROT_CURSORS = (() => {
  * Separated to avoid re-drawing the main element content during zoom/pan.
  */
 const SelectionUI = React.memo(({
-  element, isSelected, isMultiSelection, zoomScale, accentColor, handleResizeStart
+  element, isSelected, isMultiSelection, viewport, accentColor, handleResizeStart
 }: {
   element: BoardElement
   isSelected: boolean
   isMultiSelection: boolean
-  zoomScale: number
+  viewport: Viewport
   accentColor: number
   handleResizeStart: (e: PIXI.FederatedPointerEvent, handle: string) => void
 }) => {
   if (!isSelected || isMultiSelection) return null
 
   const baseHandleSize = 8
-  const handleSize = baseHandleSize / zoomScale
+  const handleSize = baseHandleSize / viewport.scale
   const hitAreaSize = handleSize * 3
-  const lineWidth = 2 / zoomScale
+  const lineWidth = 2 / viewport.scale
   const halfW = (element.width || 0) / 2
   const halfH = (element.height || 0) / 2
 
@@ -134,41 +135,41 @@ const SelectionUI = React.memo(({
                 hw = handleSize * 2.5
                 hh = handleSize * 0.6
               } else if (h.id === 'left' || h.id === 'right') {
-                  hh = handleSize * 2.5
-                  hw = handleSize * 0.6
-                }
-                g.roundRect(-hw / 2, -hh / 2, hw, hh, 2 / zoomScale)
-                g.fill({ color: accentColor })
+                hh = handleSize * 2.5
+                hw = handleSize * 0.6
+              }
+              g.roundRect(-hw / 2, -hh / 2, hw, hh, 2 / viewport.scale)
+              g.fill({ color: accentColor })
+            }}
+            x={h.x}
+            y={h.y}
+          />
+        ))}
+        {[
+          { id: 'rotate-top-left', hx: -halfW, hy: -halfH, rot: 0 },
+          { id: 'rotate-top-right', hx: halfW, hy: -halfH, rot: 90 },
+          { id: 'rotate-bottom-right', hx: halfW, hy: halfH, rot: 180 },
+          { id: 'rotate-bottom-left', hx: -halfW, hy: halfH, rot: 270 }
+        ].map((rh) => {
+          const scrOffset = 16 / viewport.scale
+          return (
+            <Graphics
+              key={rh.id}
+              // @ts-ignore
+              eventMode="static"
+              cursor={ROT_CURSORS[rh.rot as keyof typeof ROT_CURSORS]}
+              onPointerDown={(ev: PIXI.FederatedPointerEvent): void => handleResizeStart(ev, rh.id)}
+              draw={(g: PIXI.Graphics): void => {
+                g.clear()
+                const size = 14 / viewport.scale
+                g.circle(0, 0, size)
+                g.fill({ color: 0xffffff, alpha: 0.001 })
               }}
-              x={h.x}
-              y={h.y}
+              x={rh.hx + (rh.hx > 0 ? scrOffset : -scrOffset)}
+              y={rh.hy + (rh.hy > 0 ? scrOffset : -scrOffset)}
             />
-          ))}
-          {[
-            { id: 'rotate-top-left', hx: -halfW, hy: -halfH, rot: 0 },
-            { id: 'rotate-top-right', hx: halfW, hy: -halfH, rot: 90 },
-            { id: 'rotate-bottom-right', hx: halfW, hy: halfH, rot: 180 },
-            { id: 'rotate-bottom-left', hx: -halfW, hy: halfH, rot: 270 }
-          ].map((rh) => {
-            const scrOffset = 16 / zoomScale
-            return (
-              <Graphics
-                key={rh.id}
-                // @ts-ignore
-                eventMode="static"
-                cursor={ROT_CURSORS[rh.rot as keyof typeof ROT_CURSORS]}
-                onPointerDown={(ev: PIXI.FederatedPointerEvent): void => handleResizeStart(ev, rh.id)}
-                draw={(g: PIXI.Graphics): void => {
-                  g.clear()
-                  const size = 14 / zoomScale
-                  g.circle(0, 0, size)
-                  g.fill({ color: 0xffffff, alpha: 0.001 })
-                }}
-                x={rh.hx + (rh.hx > 0 ? scrOffset : -scrOffset)}
-                y={rh.hy + (rh.hy > 0 ? scrOffset : -scrOffset)}
-              />
-            )
-          })}
+          )
+        })}
       </Container>
     </Container>
   )
@@ -178,7 +179,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
   ({
     element,
     isSelected,
-    zoomScale,
+    viewport,
     activeLevel: activeLevelProp,
     onSelect,
     onMove,
@@ -204,6 +205,8 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
     const containerRef = useRef<PIXI.Container | null>(null)
     const currentSnapDX = useRef(0)
     const currentSnapDY = useRef(0)
+    const textRef = useRef<any>(null)
+    const borderRef = useRef<PIXI.Graphics | null>(null)
 
     useEffect(() => {
       if (onRegisterPixi) onRegisterPixi(element.id, containerRef.current)
@@ -214,16 +217,32 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
     const onResizeRef = useRef(onResize)
     useEffect(() => { onResizeRef.current = onResize }, [onResize])
 
+    // Imperatively redraw the border whenever size or scale changes
+    useEffect(() => {
+      const g = borderRef.current
+      if (!g || g.destroyed || element.groupId) {
+        if (g && !g.destroyed) g.clear()
+        return
+      }
+      g.clear()
+      const ew = element.width || 0
+      const eh = element.height || 0
+      g.rect(-ew / 2, -eh / 2, ew, eh)
+      g.fill({ color: 0, alpha: 0 })
+      // @ts-ignore
+      g.stroke({ width: 1 / viewport.scale, color: 0xffffff, alpha: 0.3 })
+    }, [element.width, element.height, viewport.scale, element.groupId, isSelected])
+
     const [lodTextures, setLodTextures] = useState<any>(null)
-    const [renderedLevel, setRenderedLevel] = useState<'high'|'mid'|'low'>(activeLevelProp || 'low')
+    const [renderedLevel, setRenderedLevel] = useState<'high' | 'mid' | 'low'>(activeLevelProp || 'low')
 
     // Determine the target level based on zoom
     const targetLevel = useMemo(() => {
       if (activeLevelProp) return activeLevelProp
-      if (zoomScale > 0.6) return 'high'
-      if (zoomScale > 0.25) return 'mid'
+      if (viewport.scale > 0.6) return 'high'
+      if (viewport.scale > 0.25) return 'mid'
       return 'low'
-    }, [zoomScale, activeLevelProp])
+    }, [viewport.scale, activeLevelProp])
 
     // Staggered LOD switching to prevent GPU stall
     useEffect(() => {
@@ -248,11 +267,29 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       return undefined
     }, [targetLevel, renderedLevel])
 
+    // Auto-resize text elements downwards
+    useEffect(() => {
+      if (element.type === 'text' && textRef.current && !isDragging && !activeHandle) {
+        const tf = requestAnimationFrame(() => {
+          if (!textRef.current || textRef.current.destroyed) return
+          const P = (element.fontSize || 24) * 0.25 // Text padding proportionally scales
+          const actualHeight = textRef.current.height
+          const targetElementHeight = actualHeight + P * 2
+          if (Math.abs((element.height || 0) - targetElementHeight) > 2) {
+            const dy = (targetElementHeight - (element.height || 0)) / 2
+            onResizeRef.current(element.id, element.width || 0, targetElementHeight, element.x, element.y + dy, 'text-auto-resize')
+          }
+        })
+        return () => cancelAnimationFrame(tf)
+      }
+      return undefined
+    }, [element.text, element.fontSize, element.fontWeight, element.width, element.type, element.id, element.height, element.x, element.y, isDragging, activeHandle])
+
     // Cap text resolution at 4x to save memory and performance, but assure it redraws sharply based on zoom.
     const textResolution = useMemo(() => {
-      const target = (window.devicePixelRatio || 1) * zoomScale
+      const target = (window.devicePixelRatio || 1) * viewport.scale
       return target > 4 ? 4 : target > 2 ? 2 : target > 1 ? 1.5 : target > 0.5 ? 1 : 0.5
-    }, [zoomScale])
+    }, [viewport.scale])
 
     const activeTexture = useMemo(() => {
       if (!lodTextures) return null
@@ -296,8 +333,19 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       if (!isDragging && !activeHandle) return
       const onPointerMove = (e: PointerEvent): void => {
         if (!resizeStartData.current) return
-        let dx = (e.clientX - resizeStartData.current.mx) / zoomScale
-        let dy = (e.clientY - resizeStartData.current.my) / zoomScale
+
+        let dx = 0, dy = 0
+        if (resizeStartData.current.startWorldX !== undefined) {
+          const currentWorldX = (e.clientX - viewport.x) / viewport.scale
+          const currentWorldY = (e.clientY - viewport.y) / viewport.scale
+          dx = currentWorldX - resizeStartData.current.startWorldX
+          dy = currentWorldY - resizeStartData.current.startWorldY
+        } else {
+          // Fallback for resizing which doesn't use startWorldX
+          dx = (e.clientX - resizeStartData.current.mx) / viewport.scale
+          dy = (e.clientY - resizeStartData.current.my) / viewport.scale
+        }
+
         if (e.shiftKey) {
           if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0;
         }
@@ -309,7 +357,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
             resizeStartData.current.dragStarted = true
           }
           const moveX = resizeStartData.current.x + dx, moveY = resizeStartData.current.y + dy
-          const distSqr = dx * zoomScale * dx * zoomScale + dy * zoomScale * dy * zoomScale
+          const distSqr = dx * viewport.scale * dx * viewport.scale + dy * viewport.scale * dy * viewport.scale
           if (distSqr < 30) {
             if (guidesRef.current?.length) (guidesRef as any).current = []
             if (containerRef.current) { containerRef.current.x = moveX; containerRef.current.y = moveY }
@@ -317,7 +365,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
             return
           }
           let snapDX = 0, snapDY = 0
-          const SNAP_THRESHOLD = 5 / zoomScale
+          const SNAP_THRESHOLD = 5 / viewport.scale
           const ctx = dragContextRef.current
           if (ctx && ctx.targets.length > 0) {
             const w = element.width || 0
@@ -343,7 +391,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
           if (h.includes('bottom')) { nH = Math.max(20, resizeStartData.current.h + dy); nY = resizeStartData.current.y + (nH - resizeStartData.current.h) / 2 }
           else if (h.includes('top')) { nH = Math.max(20, resizeStartData.current.h - dy); nY = resizeStartData.current.y - (nH - resizeStartData.current.h) / 2 }
 
-          if (element.type === 'image' || element.type === 'video') {
+          if (element.type === 'image' || element.type === 'video' || (element.type === 'text' && h.includes('-'))) {
             const scaleX = nW / resizeStartData.current.w
             const scaleY = nH / resizeStartData.current.h
             let targetScale = 1
@@ -351,6 +399,11 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
               targetScale = (h.includes('bottom') || h.includes('top')) ? (Math.abs(scaleX - 1) > Math.abs(scaleY - 1) ? scaleX : scaleY) : scaleX
             } else {
               targetScale = scaleY
+            }
+
+            if (element.type === 'text' && resizeStartData.current.fontSize) {
+              const minTextScale = 8 / resizeStartData.current.fontSize
+              targetScale = Math.max(targetScale, minTextScale)
             }
 
             nW = Math.max(20, resizeStartData.current.w * targetScale)
@@ -362,6 +415,11 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
             else if (h.includes('left')) nX -= (nW - resizeStartData.current.w) / 2
             if (h.includes('bottom')) nY += (nH - resizeStartData.current.h) / 2
             else if (h.includes('top')) nY -= (nH - resizeStartData.current.h) / 2
+
+            if (element.type === 'text') {
+              onResize(element.id, nW, nH, nX, nY, h, resizeStartData.current.fontSize ? resizeStartData.current.fontSize * targetScale : undefined)
+              return
+            }
           }
 
           onResize(element.id, nW, nH, nX, nY, h)
@@ -376,7 +434,11 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
         if (!resizeStartData.current) return
         if (!activeHandle?.startsWith('rotate-') && !activeHandle) {
           if (resizeStartData.current.dragStarted) {
-            onMove(element.id, resizeStartData.current.x + (e.clientX - resizeStartData.current.mx) / zoomScale + currentSnapDX.current, resizeStartData.current.y + (e.clientY - resizeStartData.current.my) / zoomScale + currentSnapDY.current)
+            const finalWorldX = (e.clientX - viewport.x) / viewport.scale
+            const finalWorldY = (e.clientY - viewport.y) / viewport.scale
+            const fdx = finalWorldX - resizeStartData.current.startWorldX
+            const fdy = finalWorldY - resizeStartData.current.startWorldY
+            onMove(element.id, resizeStartData.current.x + fdx + currentSnapDX.current, resizeStartData.current.y + fdy + currentSnapDY.current)
           }
         }
         setIsDragging(false); setActiveHandle(null); resizeStartData.current = null
@@ -393,7 +455,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       }
       window.addEventListener('cancel-element-drag', onCancel)
       return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); window.removeEventListener('cancel-element-drag', onCancel) }
-    }, [isDragging, activeHandle, zoomScale, element.id, onMove, onResize, onRotate, guidesRef, (element.width || 0), (element.height || 0), dragContextRef])
+    }, [isDragging, activeHandle, viewport, element.id, onMove, onResize, onRotate, guidesRef, (element.width || 0), (element.height || 0), dragContextRef])
 
     const handlePointerDown = (e: PIXI.FederatedPointerEvent): void => {
       if (e.button === 1 || isNavigatingRef?.current) return
@@ -407,7 +469,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       if (e.button === 0) {
         const now = Date.now()
         if (onDoubleClick && now - lastClickTime.current < 500) { onDoubleClick(element.id); lastClickTime.current = 0; return }
-        lastClickTime.current = now; 
+        lastClickTime.current = now;
 
         if (e.ctrlKey && isSelected) {
           onSelect(element.id, true)
@@ -428,7 +490,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
             e.stopPropagation()
             return
           }
-          setIsDragging(true); resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: 0, elementScreenCenterX: 0, elementScreenCenterY: 0, dragStarted: false }
+          setIsDragging(true); resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startWorldX: (mouseEvent.clientX - viewport.x) / viewport.scale, startWorldY: (mouseEvent.clientY - viewport.y) / viewport.scale, startRotation: element.rotation || 0, startAngle: 0, elementScreenCenterX: 0, elementScreenCenterY: 0, dragStarted: false, fontSize: element.fontSize }
           if (onDragStart) onDragStart(element.id)
         }
         e.stopPropagation()
@@ -443,10 +505,10 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       let hx = 0, hy = 0
       if (handle.includes('left')) hx = -halfW; else if (handle.includes('right')) hx = halfW
       if (handle.includes('top')) hy = -halfH; else if (handle.includes('bottom')) hy = halfH
-      const rX = (hx * cos - hy * sin) * zoomScale, rY = (hx * sin + hy * cos) * zoomScale
+      const rX = (hx * cos - hy * sin) * viewport.scale, rY = (hx * sin + hy * cos) * viewport.scale
       const factor = handle.startsWith('rotate-') ? 1.08 : 1
       const cx = mouseEvent.clientX - rX * factor, cy = mouseEvent.clientY - rY * factor
-      resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: Math.atan2(mouseEvent.clientY - cy, mouseEvent.clientX - cx), elementScreenCenterX: cx, elementScreenCenterY: cy }
+      resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: Math.atan2(mouseEvent.clientY - cy, mouseEvent.clientX - cx), elementScreenCenterX: cx, elementScreenCenterY: cy, fontSize: element.fontSize }
     }
 
     const accentColor = useMemo(() => theme?.boardAccent ? parseInt(theme.boardAccent.replace('#', ''), 16) : 0x007aff, [theme])
@@ -475,8 +537,8 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
               const pts = element.points as any[], color = parseColor(element.color), size = element.size || 2
               const sx = (element.width || 0) / (element.baseWidth || element.width || 1), sy = (element.height || 0) / (element.baseHeight || element.height || 1)
               const render = () => { if (pts.length > 1) { g.moveTo(pts[0].x * sx, pts[0].y * sy); for (let i = 1; i < pts.length - 1; i++) { const xc = (pts[i].x * sx + pts[i + 1].x * sx) / 2, yc = (pts[i].y * sy + pts[i + 1].y * sy) / 2; g.quadraticCurveTo(pts[i].x * sx, pts[i].y * sy, xc, yc) } g.lineTo(pts[pts.length - 1].x * sx, pts[pts.length - 1].y * sy) } }
-              const scaledSize = Math.max(size * zoomScale, 1.5) / zoomScale;
-              render(); g.stroke({ width: Math.max(24 / zoomScale, scaledSize + 10 / zoomScale), color, alpha: 0 }); render(); g.stroke({ width: scaledSize, color, alpha: 1 })
+              const scaledSize = Math.max(size * viewport.scale, 1.5) / viewport.scale;
+              render(); g.stroke({ width: Math.max(24 / viewport.scale, scaledSize + 10 / viewport.scale), color, alpha: 0 }); render(); g.stroke({ width: scaledSize, color, alpha: 1 })
             }} />
           ) : element.type === 'rect' ? (
             <Graphics
@@ -488,7 +550,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
                   alpha: element.color === 'transparent' ? 0 : 1
                 })
                 if ((element.strokeWidth || 0) > 0) {
-                  const scaledStroke = Math.max((element.strokeWidth || 1) * zoomScale, 0.5) / zoomScale
+                  const scaledStroke = Math.max((element.strokeWidth || 1) * viewport.scale, 0.5) / viewport.scale
                   // @ts-ignore - stroke API
                   g.stroke({ width: scaledStroke, color: parseColor(element.strokeColor) })
                 }
@@ -502,9 +564,17 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
             />
           ) : element.type === 'text' ? (
             <Container>
-              {!isEditing && (
-                <Text text={element.text || ''} x={element.textAlign === 'center' ? 0 : element.textAlign === 'right' ? (element.width || 0) / 2 : -(element.width || 0) / 2} y={-(element.height || 0) / 2} resolution={textResolution} anchor={{ x: element.textAlign === 'center' ? 0.5 : element.textAlign === 'right' ? 1 : 0, y: 0 }} style={new PIXI.TextStyle({ fill: element.color || '#ffffff', fontSize: element.fontSize || 24, fontWeight: String(element.fontWeight || 400) as any, fontFamily: 'Inter, sans-serif', wordWrap: true, wordWrapWidth: (element.width || 0), lineHeight: (element.fontSize || 24) * 1.4 })} />
-              )}
+              <Text
+                ref={textRef}
+                alpha={isEditing ? 0 : 1}
+                text={(element.text || '') + '\u200B'}
+                x={element.textAlign === 'center' ? 0 : element.textAlign === 'right' ? ((element.width || 0) / 2 - ((element.fontSize || 24) * 0.25)) : (-(element.width || 0) / 2 + ((element.fontSize || 24) * 0.25))}
+                y={-(element.height || 0) / 2 + ((element.fontSize || 24) * 0.25)}
+                resolution={textResolution}
+                anchor={{ x: element.textAlign === 'center' ? 0.5 : element.textAlign === 'right' ? 1 : 0, y: 0 }}
+                // Add +5 pixels to wordWrapWidth to absorb tiny float-point font hinting differentials, preventing jumps.
+                style={new PIXI.TextStyle({ fill: element.color || '#ffffff', fontSize: element.fontSize || 24, fontWeight: String(element.fontWeight || 400) as any, fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif", wordWrap: true, wordWrapWidth: Math.max(0, (element.width || 0) - ((element.fontSize || 24) * 0.25) * 2 + 5), lineHeight: (element.fontSize || 24) * 1.4 })}
+              />
             </Container>
           ) : activeTexture ? (
             <Sprite texture={activeTexture} width={(element.width || 0)} height={(element.height || 0)} anchor={0.5} roundPixels={true} />
@@ -523,11 +593,15 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
           )}
         </Container>
 
+        {/* Thin border overlay for non-grouped elements - rendered on top of content */}
+        {!element.groupId && (
+          <pixiGraphics ref={borderRef as any} />
+        )}
         <SelectionUI
           element={element}
           isSelected={isSelected}
           isMultiSelection={isMultiSelection}
-          zoomScale={zoomScale}
+          viewport={viewport}
           accentColor={accentColor}
           handleResizeStart={handleResizeStart}
         />

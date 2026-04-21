@@ -58,6 +58,7 @@ interface TimelineViewProps {
   onToggleSidebar: () => void
   onSyncWorkspaceEvents?: () => void
   isSyncing?: boolean
+  selectedProjectId?: string | null
 }
 
 export default function TimelineView({
@@ -70,7 +71,8 @@ export default function TimelineView({
   isSidebarOpen,
   onToggleSidebar,
   onSyncWorkspaceEvents,
-  isSyncing
+  isSyncing,
+  selectedProjectId
 }: TimelineViewProps): React.ReactElement {
   const PAST_DAYS = 14
   const minCellWidth = 150
@@ -1120,6 +1122,7 @@ export default function TimelineView({
                                 }
                               }}
                               style={{
+                                position: 'relative',
                                 width: `${minCellWidth}px`,
                                 minWidth: `${minCellWidth}px`,
                                 padding: '8px',
@@ -1146,6 +1149,57 @@ export default function TimelineView({
                                 pointerEvents: d.isDummy ? 'none' : 'auto'
                               }}
                             >
+                              {/* Project Boundary Bracket Lines */}
+                              {project.startDate && project.endDate && d.dateString >= project.startDate && d.dateString <= project.endDate && (
+                                <div 
+                                  style={{
+                                    position: 'absolute',
+                                    top: 0,
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 0,
+                                    pointerEvents: 'none',
+                                    zIndex: 1
+                                  }}
+                                >
+                                  {/* Horizontal Top Line - Subtle */}
+                                  <div style={{
+                                    position: 'absolute',
+                                    top: '-1px',
+                                    left: 0,
+                                    right: 0,
+                                    height: '1px',
+                                    background: project.color || 'var(--accent)',
+                                    opacity: 0.25
+                                  }} />
+
+                                  {/* Vertical Start Line - Half height */}
+                                  {project.startDate === d.dateString && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      left: 0,
+                                      width: '2px',
+                                      height: '50%',
+                                      background: project.color || 'var(--accent)',
+                                      opacity: 0.6
+                                    }} />
+                                  )}
+
+                                  {/* Vertical End Line - Half height */}
+                                  {project.endDate === d.dateString && (
+                                    <div style={{
+                                      position: 'absolute',
+                                      top: 0,
+                                      right: 0,
+                                      width: '2px',
+                                      height: '50%',
+                                      background: project.color || 'var(--accent)',
+                                      opacity: 0.6
+                                    }} />
+                                  )}
+                                </div>
+                              )}
                               <div
                                 className="timeline-cell"
                                 style={{

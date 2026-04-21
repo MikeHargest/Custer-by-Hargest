@@ -1637,7 +1637,8 @@ const GOOGLE_CLIENT_ID = '502882586830-q6ijqftc1pjr8erajlmsbm28b4oomj2n.apps.goo
 const GOOGLE_CLIENT_SECRET = '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'
 const REDIRECT_URI = 'http://localhost:8081/oauth2callback'
 
-const oauth2Client = new google.auth.OAuth2(
+// Create a temporary oauth2Client for the auth flow only
+const authFlowClient = new google.auth.OAuth2(
   GOOGLE_CLIENT_ID,
   GOOGLE_CLIENT_SECRET,
   REDIRECT_URI
@@ -1645,9 +1646,12 @@ const oauth2Client = new google.auth.OAuth2(
 
 ipcMain.handle('google:auth', async () => {
   return new Promise((resolve) => {
-    const scopes = ['https://www.googleapis.com/auth/calendar.events']
+    const scopes = [
+      'https://www.googleapis.com/auth/calendar.events',
+      'https://www.googleapis.com/auth/calendar.readonly'
+    ]
     
-    const authUrl = oauth2Client.generateAuthUrl({
+    const authUrl = authFlowClient.generateAuthUrl({
       access_type: 'offline',
       scope: scopes,
       prompt: 'consent'
@@ -1662,15 +1666,18 @@ ipcMain.handle('google:auth', async () => {
           const code = qs.get('code')
           
           if (code) {
-             const { tokens } = await oauth2Client.getToken(code)
-             oauth2Client.setCredentials(tokens)
+             const { tokens } = await authFlowClient.getToken(code)
              
+             // Save tokens to store
              if (safeStorage.isEncryptionAvailable()) {
                const encrypted = safeStorage.encryptString(JSON.stringify(tokens))
                store.set('google-auth-tokens', encrypted.toString('base64'))
              } else {
                store.set('google-auth-tokens', JSON.stringify(tokens))
              }
+             
+             // Immediately pass tokens to syncManager
+             syncManager.setCredentials(tokens)
              
              res.end('Authentication successful! You can close this tab and return to Cluster.')
              server.close()
@@ -1691,20 +1698,8 @@ ipcMain.handle('google:auth', async () => {
 })
 
 ipcMain.handle('google:checkAuth', () => {
-   const saved = store.get('google-auth-tokens')
-   if (!saved) return false
-   try {
-     let tokens
-     if (safeStorage.isEncryptionAvailable()) {
-        tokens = JSON.parse(safeStorage.decryptString(Buffer.from(saved as string, 'base64')))
-     } else {
-        tokens = JSON.parse(saved as string)
-     }
-     oauth2Client.setCredentials(tokens)
-     return true
-   } catch(e) {
-     return false
-   }
+   // Delegate to syncManager which handles decryption robustly
+   return syncManager.initializeAuth()
 })
 
 ipcMain.handle('google:disconnect', () => {
@@ -1712,8 +1707,8 @@ ipcMain.handle('google:disconnect', () => {
     return true
 })
 
-ipcMain.handle('google:sync:project', async (_, projectId: string, events: any[]) => {
-   return await syncManager.syncProject(projectId, events)
+ipcMain.handle('google:sync:project', async (_, projectId: string, projectName: string, events: any[]) => {
+   return await syncManager.syncProject(projectId, projectName, events)
 })
 
 // In this file you can include the rest of your app"s specific main process

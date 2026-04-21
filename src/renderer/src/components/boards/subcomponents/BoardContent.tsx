@@ -65,21 +65,21 @@ const SnappingGuidesRenderer: React.FC<{
   useEffect(() => {
     let lastGuidesStr = ''
     const ticker = PIXI.Ticker.shared
-    
+
     const updateGuides = () => {
       const g = gRef.current
       if (!g || !guidesRef.current) return
-      
+
       const guidesStr = JSON.stringify(guidesRef.current)
       if (guidesStr !== lastGuidesStr) {
         lastGuidesStr = guidesStr
         g.clear()
         if (guidesRef.current.length === 0) return
-        
+
         const accentColor = theme?.boardAccent
           ? parseInt(theme.boardAccent.replace('#', ''), 16)
           : 0x007aff
-        
+
         guidesRef.current.forEach((guide) => {
           if (guide.x !== undefined) {
             g.moveTo(guide.x, -100000)
@@ -94,7 +94,7 @@ const SnappingGuidesRenderer: React.FC<{
         g.stroke({ width: 1 / Math.max(0.001, scale), color: accentColor, alpha: 0.5 })
       }
     }
-    
+
     ticker.add(updateGuides)
     return () => {
       ticker.remove(updateGuides)
@@ -102,7 +102,7 @@ const SnappingGuidesRenderer: React.FC<{
     }
   }, [scale, theme, guidesRef])
 
-  return <pixiGraphics ref={gRef} draw={() => {}} />
+  return <pixiGraphics ref={gRef} draw={() => { }} />
 }
 
 /** Legacy Graphics support for PIXI v8 with @pixi/react */
@@ -167,6 +167,27 @@ const BoardContent = React.memo(
     const lastMultiClickTime = useRef<number>(0)
     // Ref to the bounding box PIXI container so we can move it during drag
     const selectionBBoxRef = useRef<PIXI.Container | null>(null)
+    // Ref to the thin white border graphics for the group selection
+    const groupBorderRef = useRef<PIXI.Graphics | null>(null)
+
+    // Imperatively redraw the group selection white border
+    useEffect(() => {
+      const g = groupBorderRef.current
+      if (!g || g.destroyed) return
+      g.clear()
+      if (selectedIds.length <= 1) return
+      const selectedElements = elements.filter(el => selectedIds.includes(el.id))
+      if (selectedElements.length === 0) return
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+      selectedElements.forEach(el => {
+        const ew = el.width || 0, eh = el.height || 0
+        minX = Math.min(minX, el.x - ew / 2); minY = Math.min(minY, el.y - eh / 2)
+        maxX = Math.max(maxX, el.x + ew / 2); maxY = Math.max(maxY, el.y + eh / 2)
+      })
+      g.rect(minX, minY, maxX - minX, maxY - minY)
+      // @ts-ignore
+      g.stroke({ width: 1 / viewport.scale, color: 0xffffff, alpha: 1 })
+    }, [selectedIds, elements, viewport.scale])
 
     useEffect(() => {
       if (!isDraggingSelection) return
@@ -205,11 +226,15 @@ const BoardContent = React.memo(
           const screenDx = e.clientX - dragStartData.current.mx
           const screenDy = e.clientY - dragStartData.current.my
           if (screenDx * screenDx + screenDy * screenDy < 25) return // 5px threshold
-          ;(dragStartData.current as any).dragStarted = true
+            ; (dragStartData.current as any).dragStarted = true
         }
 
-        let dx = (e.clientX - dragStartData.current.mx) / viewport.scale
-        let dy = (e.clientY - dragStartData.current.my) / viewport.scale
+        const dragData = dragStartData.current as any
+        const currentWorldX = (e.clientX - viewport.x) / viewport.scale
+        const currentWorldY = (e.clientY - viewport.y) / viewport.scale
+
+        let dx = currentWorldX - dragData.startWorldX
+        let dy = currentWorldY - dragData.startWorldY
 
         if (e.shiftKey) {
           if (Math.abs(dx) > Math.abs(dy)) dy = 0; else dx = 0;
@@ -328,8 +353,12 @@ const BoardContent = React.memo(
         if (!dragStartData.current) return
 
         if ((dragStartData.current as any).dragStarted) {
-          const dx = (e.clientX - dragStartData.current.mx) / viewport.scale
-          const dy = (e.clientY - dragStartData.current.my) / viewport.scale
+          const dragData = dragStartData.current as any
+          const currentWorldX = (e.clientX - viewport.x) / viewport.scale
+          const currentWorldY = (e.clientY - viewport.y) / viewport.scale
+
+          const dx = currentWorldX - dragData.startWorldX
+          const dy = currentWorldY - dragData.startWorldY
 
           // Call onMove with snapped position to commit to state
           onMove(
@@ -525,7 +554,7 @@ const BoardContent = React.memo(
                 key={el.id}
                 element={el}
                 isSelected={isSelected}
-                zoomScale={viewport.scale}
+                viewport={viewport}
                 activeLevel={activeLevel}
                 onSelect={onElementSelect}
                 onMove={onMove}
@@ -547,6 +576,8 @@ const BoardContent = React.memo(
                       y: clickedEl.y,
                       mx: ev.nativeEvent.clientX,
                       my: ev.nativeEvent.clientY,
+                      startWorldX: (ev.nativeEvent.clientX - viewport.x) / viewport.scale,
+                      startWorldY: (ev.nativeEvent.clientY - viewport.y) / viewport.scale,
                       dragStarted: false
                     } as any
                     document.body.style.cursor = 'move'
@@ -554,14 +585,14 @@ const BoardContent = React.memo(
 
                   if (dragContextRef) {
                     const ctxTargets: CachedSnapTarget[] = []
-                    for(let j = 0; j < elements.length; j++) {
+                    for (let j = 0; j < elements.length; j++) {
                       if (elements[j].id === id) continue
-                      
+
                       const ew = elements[j].width || 0
                       const eh = elements[j].height || 0
                       const ex = elements[j].x
                       const ey = elements[j].y
-                      
+
                       // CULLING: Only include snap targets that are roughly within the visible viewport 
                       // to massively optimize O(N) tracking during pointer movement
                       if (
@@ -574,8 +605,8 @@ const BoardContent = React.memo(
                       }
 
                       ctxTargets.push({
-                        l: ex - ew/2, r: ex + ew/2,
-                        t: ey - eh/2, b: ey + eh/2,
+                        l: ex - ew / 2, r: ex + ew / 2,
+                        t: ey - eh / 2, b: ey + eh / 2,
                         cx: ex, cy: ey
                       })
                     }
@@ -696,14 +727,14 @@ const BoardContent = React.memo(
 
                       if (dragContextRef) {
                         const ctxTargets: CachedSnapTarget[] = []
-                        for(let j = 0; j < elements.length; j++) {
+                        for (let j = 0; j < elements.length; j++) {
                           if (selectedIdsSet.has(elements[j].id)) continue
-                          
+
                           const ew = elements[j].width || 0
                           const eh = elements[j].height || 0
                           const ex = elements[j].x
                           const ey = elements[j].y
-                          
+
                           if (
                             ex + ew / 2 < worldX - CULL_MARGIN ||
                             ex - ew / 2 > worldX + screenW + CULL_MARGIN ||
@@ -714,8 +745,8 @@ const BoardContent = React.memo(
                           }
 
                           ctxTargets.push({
-                            l: ex - ew/2, r: ex + ew/2,
-                            t: ey - eh/2, b: ey + eh/2,
+                            l: ex - ew / 2, r: ex + ew / 2,
+                            t: ey - eh / 2, b: ey + eh / 2,
                             cx: ex, cy: ey
                           })
                         }
@@ -734,14 +765,17 @@ const BoardContent = React.memo(
                           y: mainTarget.y,
                           mx: e.nativeEvent.clientX,
                           my: e.nativeEvent.clientY,
+                          startWorldX: (e.nativeEvent.clientX - viewport.x) / viewport.scale,
+                          startWorldY: (e.nativeEvent.clientY - viewport.y) / viewport.scale,
                           dragStarted: false
                         } as any
                         document.body.style.cursor = 'move'
                       }
                     }}
+                    key={`group-border-${selectedIds.sort().join(',')}-${Math.round(viewport.scale * 100)}`}
                     draw={(g: PIXI.Graphics): void => {
                       g.clear()
-                      
+
                       // Невидимая заливка только по площади самих элементов, 
                       // чтобы пустое пространство внутри рамки было прозрачным для кликов (прокликивалось насквозь)
                       selectedElements.forEach(el => {
@@ -751,10 +785,10 @@ const BoardContent = React.memo(
                       })
                       g.fill({ color: 0xffffff, alpha: 0.001 })
 
-                      // Визуальный контур группового выделения
+                      // Тонкая белая рамка вокруг всей группы
                       g.rect(minX, minY, w, h)
                       // @ts-ignore - PIXI v8 stroke API
-                      g.stroke({ width: lineWidth, color: accentColor, alpha: 1 })
+                      g.stroke({ width: 1 / viewport.scale, color: 0xffffff, alpha: 1 })
                     }}
                   />
                   {handles.map((hd) => {
@@ -823,32 +857,32 @@ const BoardContent = React.memo(
                     }
 
                     return (
-                    <Graphics
-                      key={hd.id}
-                      x={hd.x}
-                      y={hd.y}
-                      // @ts-ignore - PIXI v8 stroke API
-                      eventMode="static"
-                      cursor={hd.cursor}
-                      onPointerDown={handleMultiResizeStart}
-                      draw={(g: PIXI.Graphics): void => {
-                        g.clear()
-                        const hitArea = handleSize * 3
-                        g.rect(-hitArea / 2, -hitArea / 2, hitArea, hitArea)
-                        g.fill({ color: 0, alpha: 0 })
-                        let hw = handleSize
-                        let hh = handleSize
-                        if (hd.id === 'top' || hd.id === 'bottom') {
-                          hw = handleSize * 2.5
-                          hh = handleSize * 0.6
-                        } else if (hd.id === 'left' || hd.id === 'right') {
-                          hh = handleSize * 2.5
-                          hw = handleSize * 0.6
-                        }
-                        g.roundRect(-hw / 2, -hh / 2, hw, hh, 2 / viewport.scale)
-                        g.fill({ color: accentColor })
-                      }}
-                    />
+                      <Graphics
+                        key={hd.id}
+                        x={hd.x}
+                        y={hd.y}
+                        // @ts-ignore - PIXI v8 stroke API
+                        eventMode="static"
+                        cursor={hd.cursor}
+                        onPointerDown={handleMultiResizeStart}
+                        draw={(g: PIXI.Graphics): void => {
+                          g.clear()
+                          const hitArea = handleSize * 3
+                          g.rect(-hitArea / 2, -hitArea / 2, hitArea, hitArea)
+                          g.fill({ color: 0, alpha: 0 })
+                          let hw = handleSize
+                          let hh = handleSize
+                          if (hd.id === 'top' || hd.id === 'bottom') {
+                            hw = handleSize * 2.5
+                            hh = handleSize * 0.6
+                          } else if (hd.id === 'left' || hd.id === 'right') {
+                            hh = handleSize * 2.5
+                            hw = handleSize * 0.6
+                          }
+                          g.roundRect(-hw / 2, -hh / 2, hw, hh, 2 / viewport.scale)
+                          g.fill({ color: accentColor })
+                        }}
+                      />
                     )
                   })}
                 </Container>
@@ -856,6 +890,8 @@ const BoardContent = React.memo(
             })()}
           </Container>
         )}
+        {/* Group selection border - always mounted, drawn imperatively via useEffect */}
+        <pixiGraphics ref={groupBorderRef as any} />
         <SnappingGuidesRenderer guidesRef={guidesRef} scale={viewport.scale} theme={theme} />
       </Container>
     )

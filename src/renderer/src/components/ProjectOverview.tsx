@@ -413,6 +413,7 @@ interface ProjectOverviewProps {
   onUpdate: (id: string, updates: Partial<Project>) => void
   notes: AppNote[]
   onNoteClick?: (noteId: string) => void
+  onProjectClick?: (projectId: string) => void
   isSidebarOpen: boolean
   onToggleSidebar: () => void
 }
@@ -541,6 +542,7 @@ export default function ProjectOverview({
   onUpdate,
   notes,
   onNoteClick,
+  onProjectClick,
   isSidebarOpen,
   onToggleSidebar
 }: ProjectOverviewProps): React.ReactElement | null {
@@ -611,6 +613,9 @@ export default function ProjectOverview({
     return { total, completed }
   }, [project])
 
+  const parentProject = useMemo(() => {
+    return allProjects.find((p) => p.subprojects?.some((sub) => sub.id === project.id))
+  }, [allProjects, project.id])
 
   const progressPercent = useMemo(() => {
     if (project.progressMode === 'manual') return project.manualProgress || 0
@@ -990,63 +995,62 @@ export default function ProjectOverview({
           <div style={{ display: 'flex', flexShrink: 0, minHeight: 'min-content' }}>
             {/* --- SIDEBAR (METADATA) --- */}
             <aside style={{ ...sidebarStyle, flexShrink: 0 }}>
-              <div className="progress-module" style={{ height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1 }}>
-                  <button
-                    onClick={() => onUpdate(project.id, { progressMode: 'tasks' })}
-                    style={{
-                      ...toggleBtnStyle(project.progressMode === 'tasks' || !project.progressMode),
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      height: '24px',
-                      textAlign: 'left',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: (project.progressMode === 'tasks' || !project.progressMode) ? (project.color || 'var(--accent)') : 'transparent' }} />
-                    Tasks
-                  </button>
-                  <button
-                    onClick={() => onUpdate(project.id, { progressMode: 'manual' })}
-                    style={{
-                      ...toggleBtnStyle(project.progressMode === 'manual'),
-                      padding: '4px 8px',
-                      fontSize: '11px',
-                      height: '24px',
-                      textAlign: 'left',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px'
-                    }}
-                  >
-                    <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: project.progressMode === 'manual' ? (project.color || 'var(--accent)') : 'transparent' }} />
-                    Manual
-                  </button>
-                </div>
-
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'flex-end',
-                    justifyContent: 'center'
-                  }}
-                >
+              <div className="progress-module" style={{ height: '64px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '2px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <SectionLabel>Progress</SectionLabel>
                   <span
                     style={{
                       fontWeight: 900,
-                      fontSize: '32px',
+                      fontSize: '24px',
                       lineHeight: '1',
-                      color: project.color || 'var(--danger)',
+                      color: project.color || 'var(--accent)',
                       letterSpacing: '-0.04em'
                     }}
                   >
-                    {progressPercent}
-                    <span style={{ fontSize: '14px', opacity: 0.5, marginLeft: '2px', fontWeight: 600 }}>%</span>
+                    {project.manualProgress || 0}
+                    <span style={{ fontSize: '12px', opacity: 0.5, marginLeft: '2px', fontWeight: 600 }}>%</span>
                   </span>
                 </div>
+
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={project.manualProgress || 0}
+                  onChange={(e) => onUpdate(project.id, { manualProgress: parseInt(e.target.value), progressMode: 'manual' })}
+                  style={{
+                    width: '100%',
+                    height: '14px',
+                    appearance: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    margin: 0
+                  }}
+                  className="progress-slider"
+                />
+                <style>{`
+                  .progress-slider::-webkit-slider-runnable-track {
+                    background: linear-gradient(to right, 
+                      ${project.color || 'var(--accent)'} 0%, 
+                      ${project.color || 'var(--accent)'} ${project.manualProgress || 0}%, 
+                      rgba(255,255,255,0.08) ${project.manualProgress || 0}%, 
+                      rgba(255,255,255,0.08) 100%);
+                    height: 4px;
+                    border-radius: 2px;
+                  }
+                  .progress-slider::-webkit-slider-thumb {
+                    appearance: none;
+                    height: 14px;
+                    width: 14px;
+                    border-radius: 50%;
+                    background: ${project.color || 'var(--accent)'};
+                    cursor: pointer;
+                    margin-top: -5px;
+                    box-shadow: 0 0 10px rgba(0,0,0,0.5);
+                    border: 2px solid #1a1a1a;
+                  }
+                `}</style>
               </div>
               <hr style={{ ...sidebarDividerStyle, marginTop: '16px', marginBottom: '16px' }} />
               <MetaField icon={<CheckCircle2 size={14} color={project.color} />} label="Status">
@@ -1494,29 +1498,64 @@ export default function ProjectOverview({
             }}
           >
             {/* --- SUBPROJECTS SECTION --- */}
-            {project.subprojects && project.subprojects.length > 0 && (
+            {((project.subprojects && project.subprojects.length > 0) || parentProject) && (
               <section style={{ padding: '0 0 24px 0' }}>
                 <hr style={{ ...mainDividerStyle, marginTop: '0', marginBottom: '24px' }} />
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
-                    marginBottom: '8px'
+                    justifyContent: 'space-between',
+                    marginBottom: '8px',
+                    width: '100%'
                   }}
                 >
-                  <SectionLabel>Subprojects</SectionLabel>
-                  <span
-                    style={{
-                      fontSize: '10px',
-                      color: 'var(--text-secondary)',
-                      background: 'rgba(255,255,255,0.05)',
-                      padding: '2px 6px',
-                      borderRadius: '10px'
-                    }}
-                  >
-                    {project.subprojects.length}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <SectionLabel>Subprojects</SectionLabel>
+                    {parentProject && (
+                      <button
+                        onClick={() => onProjectClick?.(parentProject.id)}
+                        title={`Up to ${parentProject.name}`}
+                        style={{
+                          background: 'rgba(255,255,255,0.05)',
+                          border: 'none',
+                          borderRadius: '6px',
+                          width: '24px',
+                          height: '24px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: 'var(--text-secondary)',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.1)'
+                          e.currentTarget.style.color = 'var(--text-primary)'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                          e.currentTarget.style.color = 'var(--text-secondary)'
+                        }}
+                      >
+                        <LucideIcons.ArrowUpToLine size={14} />
+                      </button>
+                    )}
+                  </div>
+
+                  {project.subprojects && project.subprojects.length > 0 && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        color: 'var(--text-secondary)',
+                        background: 'rgba(255,255,255,0.05)',
+                        padding: '2px 6px',
+                        borderRadius: '10px'
+                      }}
+                    >
+                      {project.subprojects.length}
+                    </span>
+                  )}
                 </div>
                 <div
                   style={{
@@ -1530,8 +1569,10 @@ export default function ProjectOverview({
                       key={sub.id}
                       style={{
                         ...noteCardStyle,
+                        cursor: onProjectClick ? 'pointer' : 'default',
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                       }}
+                      onClick={() => onProjectClick?.(sub.id)}
                       onMouseEnter={(e) => {
                         e.currentTarget.style.transform = 'translateY(-2px)'
                         e.currentTarget.style.borderColor = (sub.color || 'var(--accent)') + '44'

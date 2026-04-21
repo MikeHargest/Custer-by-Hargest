@@ -93,20 +93,42 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
         const el = elements.find((e) => e.id === editingTextId)
         if (!el || el.type !== 'text') return null
 
-        const screenX = (el.x - el.width / 2) * viewport.scale + viewport.x
-        const screenY = (el.y - el.height / 2) * viewport.scale + viewport.y
-        const screenW = el.width * viewport.scale
-        const screenH = el.height * viewport.scale
+        const P = (el.fontSize || 24) * 0.25
+        // Add +5 pixels to innerW to match PIXI's wordWrapWidth leniency buffer and prevent wrap flickering
+        const innerW = Math.max(0, el.width - P * 2 + 5)
+        const innerH = Math.max(0, el.height - P * 2)
+
+        const align = el.textAlign || 'left'
+        let localX = -innerW / 2
+        if (align === 'left') localX = -(el.width || 0) / 2 + P
+        else if (align === 'right') localX = (el.width || 0) / 2 - P - innerW
+        
+        const screenX = (el.x + localX) * viewport.scale + viewport.x
+        // Apply a -2px baseline alignment offset proportional to the zoom scale to sync DOM and WebGL
+        const screenY = (el.y - innerH / 2) * viewport.scale + viewport.y - (2 * viewport.scale)
+        const screenW = innerW * viewport.scale
+        const screenH = innerH * viewport.scale
 
         return (
           <textarea
             ref={(node) => {
               if (node) {
-                setTimeout(() => {
-                  node.focus()
-                  node.selectionStart = node.value.length
-                  node.selectionEnd = node.value.length
-                }, 10)
+                if (!node.dataset.initFocused) {
+                  node.dataset.initFocused = 'true'
+                  setTimeout(() => {
+                    node.focus()
+                    node.selectionStart = node.value.length
+                    node.selectionEnd = node.value.length
+                  }, 10)
+                }
+                // Pre-emptively match the height to the text content before browser paint
+                // to prevent the browser from scrolling the internal textarea when wrapping 
+                // or creating new lines (which causes the text to visually jump upwards).
+                if (node.value) {
+                  node.style.height = '0px' // Temporarily collapse to read accurate scrollHeight
+                  const actualScroll = node.scrollHeight
+                  node.style.height = `${Math.max(screenH, actualScroll)}px`
+                }
               }
             }}
             value={el.text || ''}
@@ -153,15 +175,15 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
               height: screenH,
               minHeight: `${(el.fontSize || 24) * 1.5 * viewport.scale}px`,
               background: 'transparent',
-              border: '1px dashed rgba(255,255,255,0.5)',
+              border: 'none',
+              outline: 'none',
               color: el.color || '#ffffff',
               fontSize: `${(el.fontSize || 24) * viewport.scale}px`,
               fontWeight: el.fontWeight || 400,
-              fontFamily: 'Inter, system-ui, -apple-system, sans-serif',
+              fontFamily: "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
               textAlign: el.textAlign || 'left',
               lineHeight: 1.4,
               resize: 'none',
-              outline: 'none',
               padding: 0,
               margin: 0,
               overflow: 'hidden',

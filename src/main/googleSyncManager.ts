@@ -3,9 +3,14 @@ import { AppEvent } from '../renderer/src/types'
 import { googleToClusterEvent, clusterToGoogleEvent } from './googleMapper'
 import StoreModule from 'electron-store'
 import { safeStorage } from 'electron'
+import { OAuth2Client } from 'google-auth-library'
 
 const Store = typeof StoreModule === 'function' ? StoreModule : (StoreModule as any).default
 const store = new Store()
+
+const GOOGLE_CLIENT_ID = '502882586830-q6ijqftc1pjr8erajlmsbm28b4oomj2n.apps.googleusercontent.com'
+const GOOGLE_CLIENT_SECRET = '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'
+const REDIRECT_URI = 'http://localhost:8081/oauth2callback'
 
 /**
  * SyncManager coordinates bidirectional syncing with Google Calendar.
@@ -13,58 +18,132 @@ const store = new Store()
 export class GoogleSyncManager {
   private calendar: calendar_v3.Calendar
   private isAuthorized: boolean = false
+  private oauth2Client: OAuth2Client
 
   constructor() {
+    this.oauth2Client = new google.auth.OAuth2(
+      GOOGLE_CLIENT_ID,
+      GOOGLE_CLIENT_SECRET,
+      REDIRECT_URI
+    )
     this.calendar = google.calendar('v3')
-    this.initializeAuth()
+    // Do NOT call initializeAuth here — safeStorage is not ready before app.whenReady()
   }
 
-  private initializeAuth() {
+  /**
+   * Lazily initialize auth from stored tokens.
+   * Must only be called after app is ready (safeStorage available).
+   */
+  initializeAuth(): boolean {
     const saved = store.get('google-auth-tokens') as string | undefined
-    if (saved) {
-      try {
-        let tokens
-        if (safeStorage.isEncryptionAvailable()) {
-          tokens = JSON.parse(safeStorage.decryptString(Buffer.from(saved as string, 'base64')))
-        } else {
-          tokens = JSON.parse(saved as string)
-        }
-        
-        // Re-construct the oauth2 client from the stored vars in index.ts
-        // For simplicity, we just pass an auth object directly
-        const oauth2Client = new google.auth.OAuth2(
-          '502882586830-q6ijqftc1pjr8erajlmsbm28b4oomj2n.apps.googleusercontent.com',
-          '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',
-          'http://localhost:8081/oauth2callback'
-        )
-        oauth2Client.setCredentials(tokens)
-        this.calendar = google.calendar({ version: 'v3', auth: oauth2Client })
-        this.isAuthorized = true
-      } catch (e) {
-        console.error('Failed to init auth tokens in SyncManager', e)
-        this.isAuthorized = false
-      }
+    if (!saved) {
+      this.isAuthorized = false
+      return false
     }
+
+    try {
+      let tokens: any
+
+      // Try to decrypt with safeStorage first
+      if (safeStorage.isEncryptionAvailable()) {
+        try {
+          const decrypted = safeStorage.decryptString(Buffer.from(saved, 'base64'))
+          tokens = JSON.parse(decrypted)
+        } catch (decryptErr) {
+          // Tokens might have been stored as plain JSON (before encryption was available)
+          // or the format changed — try parsing as plain JSON
+          console.warn('[SyncManager] Failed to decrypt tokens, trying plain JSON...', decryptErr)
+          try {
+            tokens = JSON.parse(saved)
+          } catch {
+            // Neither encrypted nor valid JSON — tokens are corrupted
+            console.error('[SyncManager] Stored tokens are corrupted. Clearing them.')
+            store.delete('google-auth-tokens')
+            this.isAuthorized = false
+            return false
+          }
+        }
+      } else {
+        tokens = JSON.parse(saved)
+      }
+
+      this.oauth2Client.setCredentials(tokens)
+      this.calendar = google.calendar({ version: 'v3', auth: this.oauth2Client })
+      this.isAuthorized = true
+      console.log('[SyncManager] Auth initialized successfully')
+      return true
+    } catch (e) {
+      console.error('[SyncManager] Failed to init auth tokens:', e)
+      this.isAuthorized = false
+      return false
+    }
+  }
+
+  /**
+   * Set oauth2 credentials directly (e.g. after fresh login in index.ts)
+   */
+  setCredentials(tokens: any): void {
+    this.oauth2Client.setCredentials(tokens)
+    this.calendar = google.calendar({ version: 'v3', auth: this.oauth2Client })
+    this.isAuthorized = true
+    console.log('[SyncManager] Credentials set directly')
   }
 
   /**
    * Performs a two-way sync for a specific project.
    * "Last Write Wins" resolution for conflicts.
    */
-  async syncProject(projectId: string, localEvents: AppEvent[]): Promise<AppEvent[]> {
+  async syncProject(projectId: string, projectName: string, localEvents: AppEvent[]): Promise<AppEvent[]> {
     if (!this.isAuthorized) {
        this.initializeAuth()
        if (!this.isAuthorized) return localEvents // Skip sync if still unauthorized
     }
 
     try {
-      console.log(`[Sync] Starting sync for project ${projectId}...`)
+      console.log(`[Sync] Attempting to match project "${projectName}" with Google Calendars...`)
+      let calendars: calendar_v3.Schema$CalendarListEntry[] = []
+      try {
+        const calendarListRes = await this.calendar.calendarList.list()
+        calendars = calendarListRes.data.items || []
+        console.log(`[Sync] Found ${calendars.length} calendars:`)
+        calendars.forEach(c => {
+          console.log(`  - Summary: "${c.summary}", ID: ${c.id}`)
+        })
+      } catch (listErr) {
+        console.error(`[Sync] Failed to fetch calendar list from Google:`, listErr)
+        return localEvents
+      }
+      
+      const matchingCalendar = calendars.find(c => {
+        const calName = (c.summary || '').toLowerCase().trim()
+        const projName = projectName.toLowerCase().trim()
+        return calName === projName
+      })
+
+      if (!matchingCalendar) {
+        console.log(`[Sync] No matching calendar found for project "${projectName}". Skipped.`)
+        return localEvents
+      }
+
+      const calendarId = matchingCalendar.id!
+      console.log(`[Sync] Match found! Project "${projectName}" -> Calendar "${matchingCalendar.summary}" (${calendarId})`)
+
+      // 0. MARK UNTRACKED LOCAL EVENTS AS PENDING_PUSH
+      // Events created before sync was added don't have syncStatus — mark them for upload
+      for (const e of localEvents) {
+        if (!e.syncStatus && !e.externalId) {
+          e.syncStatus = 'pending_push'
+          e.updatedAt = e.updatedAt || Date.now()
+          console.log(`[Sync] Marking untracked event for push: ${e.title}`)
+        }
+      }
+
       // 1. PUSH PENDING DELETES
       const pendingDeletes = localEvents.filter(e => e.syncStatus === 'pending_delete' && e.externalId)
       for (const e of pendingDeletes) {
          try {
             await this.calendar.events.delete({
-              calendarId: 'primary',
+              calendarId: calendarId,
               eventId: e.externalId!
             })
             console.log(`[Sync] Deleted from Google: ${e.title}`)
@@ -79,12 +158,12 @@ export class GoogleSyncManager {
       // 2. PUSH PENDING PUSHES (New or Updated)
       const pendingPushes = currentEvents.filter(e => e.syncStatus === 'pending_push')
       for (const e of pendingPushes) {
-         const gEventPayload = clusterToGoogleEvent(e)
+         const gEventPayload = clusterToGoogleEvent(e, projectId)
          try {
             if (e.externalId) {
               // Update existing
               const res = await this.calendar.events.update({
-                calendarId: 'primary',
+                calendarId: calendarId,
                 eventId: e.externalId,
                 requestBody: gEventPayload
               })
@@ -93,7 +172,7 @@ export class GoogleSyncManager {
             } else {
               // Create new
               const res = await this.calendar.events.insert({
-                calendarId: 'primary',
+                calendarId: calendarId,
                 requestBody: gEventPayload
               })
               e.externalId = res.data.id || undefined
@@ -114,7 +193,7 @@ export class GoogleSyncManager {
       const savedSyncToken = null //store.get(syncTokenKey) as string | undefined
       
       const listParams: any = {
-         calendarId: 'primary',
+         calendarId: calendarId,
          maxResults: 2500,
          showDeleted: true
       }
@@ -127,7 +206,7 @@ export class GoogleSyncManager {
          const timeMin = new Date()
          timeMin.setMonth(timeMin.getMonth() - 2)
          listParams.timeMin = timeMin.toISOString()
-         listParams.singleEvents = false // We need the base recurrence, not instances
+         listParams.singleEvents = true // Always use singleEvents to get individual instances
       }
 
       let remoteEvents: calendar_v3.Schema$Event[] = []

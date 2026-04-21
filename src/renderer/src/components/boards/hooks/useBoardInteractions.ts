@@ -27,7 +27,7 @@ export const useBoardInteractions = ({
     })
   }, [selectedIds, setElements])
 
-  const handleElementResize = useCallback((id: string, width: number, height: number, x?: number, y?: number, handle?: string) => {
+  const handleElementResize = useCallback((id: string, width: number, height: number, x?: number, y?: number, handle?: string, fontSize?: number) => {
     setElements((prev) => {
       const target = prev.find((el) => el.id === id)
       if (!target) return prev
@@ -37,13 +37,13 @@ export const useBoardInteractions = ({
           if (el.id !== id) return el
           const nextEl = { ...el, width, height, x: x ?? el.x, y: y ?? el.y }
           if (el.type === 'text' && handle) {
-            if (handle.includes('top') || handle.includes('bottom')) {
+            if (fontSize !== undefined) {
+               nextEl.fontSize = Math.max(8, fontSize)
+            } else if (handle.includes('top') || handle.includes('bottom')) {
               const scaleW = width / (target.width || 1)
               const scaleH = height / (target.height || 1)
               const scale = Math.abs(scaleW - 1) > Math.abs(scaleH - 1) ? scaleW : scaleH
-              nextEl.fontSize = Math.max(8, Math.round((el.fontSize || 24) * scale))
-              nextEl.width = (target.width || 0) * scale
-              nextEl.height = (target.height || 0) * scale
+              nextEl.fontSize = Math.max(8, (el.fontSize || 24) * scale)
             }
           }
           return nextEl
@@ -86,7 +86,7 @@ export const useBoardInteractions = ({
         }
         if (el.type === 'text') {
            const textScaleX = nextEl.width / (ew || 1)
-           nextEl.fontSize = Math.max(8, Math.round((el.fontSize || 24) * textScaleX))
+           nextEl.fontSize = Math.max(8, (el.fontSize || 24) * textScaleX)
         }
         return nextEl
       })

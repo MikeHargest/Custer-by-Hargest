@@ -209,10 +209,17 @@ function App() {
     
     const syncRecursive = async (projs: any[]) => {
       for (const project of projs) {
-         if (project.events && project.events.length > 0) {
+         // Sync any project that has a name (to match with calendar)
+         // Even if project.events is empty, we want to pull events from Google
+         if (project.id) {
             try {
-               const resolvedEvents = await (window as any).api.syncProjectEvents(project.id, project.events)
-               project.events = resolvedEvents
+               const resolvedEvents = await (window as any).api.syncProjectEvents(project.id, project.name, project.events || [])
+               if (Array.isArray(resolvedEvents)) {
+                 console.log(`[Sync] Project "${project.name}" synced. Events count: ${resolvedEvents.length}`)
+                 project.events = resolvedEvents
+               } else {
+                 console.warn(`[Sync] Project "${project.name}" returned non-array result:`, resolvedEvents)
+               }
             } catch(e) {
                console.error(`Failed to sync calendar events for project ${project.id}`, e)
             }
@@ -1384,6 +1391,7 @@ function App() {
                     setCurrentView('notes')
                     setActiveNoteId(noteId)
                   }}
+                  onProjectClick={(projectId) => setSelectedProjectId(projectId)}
                   isSidebarOpen={isSidebarOpen}
                   onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 />
@@ -1438,6 +1446,7 @@ function App() {
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 onSyncWorkspaceEvents={handleSyncWorkspaceEvents}
                 isSyncing={isSyncingCalendar}
+                selectedProjectId={selectedProjectId}
               />
             </div>
             <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>
