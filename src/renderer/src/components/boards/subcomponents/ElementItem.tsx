@@ -225,6 +225,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
         return
       }
       g.clear()
+      if (!isSelected) return
       const ew = element.width || 0
       const eh = element.height || 0
       g.rect(-ew / 2, -eh / 2, ew, eh)
