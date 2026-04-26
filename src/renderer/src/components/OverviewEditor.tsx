@@ -7,14 +7,18 @@ import Color from '@tiptap/extension-color'
 import Placeholder from '@tiptap/extension-placeholder'
 import Highlight from '@tiptap/extension-highlight'
 import { Markdown } from 'tiptap-markdown'
+import { Edit2, Save } from 'lucide-react'
 
-const MAX_CHARS = 400
+
+const MAX_CHARS = 500
+
 
 interface OverviewEditorProps {
   projectPath: string
   projectColor?: string
-  projectId: string // used to reset editor when project changes
+  projectId: string
 }
+
 
 export default function OverviewEditor({
   projectPath,
@@ -22,17 +26,17 @@ export default function OverviewEditor({
   projectId
 }: OverviewEditorProps): React.ReactElement {
   const [charCount, setCharCount] = useState(0)
-  const [isFocused, setIsFocused] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
   const [isLoaded, setIsLoaded] = useState(false)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const projectIdRef = useRef(projectId)
   const projectPathRef = useRef(projectPath)
 
-  // Keep refs up to date
+
   useEffect(() => {
     projectIdRef.current = projectId
     projectPathRef.current = projectPath
   }, [projectId, projectPath])
+
 
   const saveContent = useCallback(async (content: string) => {
     if (!projectPathRef.current) return
@@ -42,6 +46,7 @@ export default function OverviewEditor({
       console.error('[OverviewEditor] save failed:', e)
     }
   }, [])
+
 
   const editor = useEditor({
     extensions: [
@@ -54,45 +59,36 @@ export default function OverviewEditor({
       Markdown
     ],
     content: '',
+    editable: false,
     editorProps: {
       attributes: { class: 'overview-tiptap' }
     },
-    onFocus: () => setIsFocused(true),
-    onBlur: () => setIsFocused(false),
     onUpdate: ({ editor: e }) => {
       const text = e.getText()
       const len = text.length
 
-      // Enforce char limit — revert last change if over limit
       if (len > MAX_CHARS) {
         e.commands.undo()
         return
       }
 
       setCharCount(len)
-
-      const markdown = (e.storage as any).markdown.getMarkdown()
-
-      // Debounced autosave
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(() => {
-        saveContent(markdown)
-      }, 1200)
     }
   })
 
-  // Load description from file when project changes
+
   useEffect(() => {
     if (!editor || !projectPath) return
 
     setIsLoaded(false)
+    setIsEditing(false)
 
     const load = async () => {
       try {
         const content = await (window as any).api.readOverviewDescription(projectPath)
         if (projectIdRef.current === projectId) {
-          // Only apply if still same project
           editor.commands.setContent(content || '', { emitUpdate: false })
+          editor.setEditable(false)
           const text = editor.getText()
           setCharCount(Math.min(text.length, MAX_CHARS))
           setIsLoaded(true)
@@ -104,21 +100,46 @@ export default function OverviewEditor({
     }
 
     load()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, projectId, projectPath])
 
-  // Flush save on unmount
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) {
-        clearTimeout(saveTimerRef.current)
-      }
-    }
-  }, [])
+
+  const handleEdit = useCallback(() => {
+    if (!editor) return
+    editor.setEditable(true)
+    setIsEditing(true)
+    setTimeout(() => editor.commands.focus('end'), 50)
+  }, [editor])
+
+
+  const handleSave = useCallback(() => {
+    if (!editor) return
+    const markdown = (editor.storage as any).markdown.getMarkdown()
+    saveContent(markdown)
+    editor.setEditable(false)
+    setIsEditing(false)
+  }, [editor, saveContent])
+
 
   const accent = projectColor || 'var(--accent)'
   const isNearLimit = charCount >= MAX_CHARS * 0.85
   const isAtLimit = charCount >= MAX_CHARS
+
+
+  const editBtnStyle: React.CSSProperties = {
+    background: 'transparent',
+    border: 'none',
+    borderRadius: '6px',
+    padding: '6px 12px',
+    color: 'var(--text-secondary)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    fontSize: '12px',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+  }
+
 
   return (
     <div
@@ -130,67 +151,96 @@ export default function OverviewEditor({
         transition: 'opacity 0.2s ease'
       }}
     >
+      {/* Header with label + button */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '4px'
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h3
+            style={{
+              margin: 0,
+              fontSize: '10px',
+              color: 'var(--text-secondary)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.1em',
+              fontWeight: 700
+            }}
+          >
+            Description
+          </h3>
+          {isEditing && (
+            <span
+              style={{
+                fontSize: '11px',
+                color: isAtLimit
+                  ? 'var(--danger, #f87171)'
+                  : isNearLimit
+                    ? '#f59e0b'
+                    : 'rgba(255,255,255,0.2)',
+                fontWeight: isNearLimit ? 600 : 400,
+                fontVariantNumeric: 'tabular-nums',
+                transition: 'color 0.2s ease'
+              }}
+            >
+              {isAtLimit && (
+                <span style={{ marginRight: '4px', opacity: 0.9 }}>Limit reached ·</span>
+              )}
+              {charCount} / {MAX_CHARS}
+            </span>
+          )}
+        </div>
+        <button
+          onClick={isEditing ? handleSave : handleEdit}
+          style={editBtnStyle}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+            e.currentTarget.style.color = 'var(--text-primary)'
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent'
+            e.currentTarget.style.color = 'var(--text-secondary)'
+          }}
+        >
+          {isEditing ? (
+            <>
+              <Save size={12} /> Save
+            </>
+          ) : (
+            <>
+              <Edit2 size={12} /> Edit
+            </>
+          )}
+        </button>
+      </div>
+
       {/* Editor container */}
       <div
         style={{
           position: 'relative',
           borderRadius: '10px',
-          border: `1px solid ${isFocused ? accent + '55' : 'rgba(255,255,255,0.06)'}`,
-          background: 'rgba(0,0,0,0.15)',
-          transition: 'border-color 0.2s ease',
-          minHeight: '100px'
+          border: isEditing ? `1px solid ${accent + '55'}` : 'none',
+          background: isEditing ? 'rgba(0,0,0,0.15)' : 'transparent',
+          transition: 'all 0.2s ease',
+          minHeight: '60px'
         }}
       >
         <EditorContent editor={editor} />
-      </div>
-
-      {/* Character counter */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-          gap: '6px'
-        }}
-      >
-        {isAtLimit && (
-          <span
-            style={{
-              fontSize: '11px',
-              color: 'var(--danger, #f87171)',
-              fontWeight: 500,
-              opacity: 0.9
-            }}
-          >
-            Limit reached
-          </span>
-        )}
-        <span
-          style={{
-            fontSize: '11px',
-            color: isAtLimit
-              ? 'var(--danger, #f87171)'
-              : isNearLimit
-                ? '#f59e0b'
-                : 'rgba(255,255,255,0.2)',
-            fontWeight: isNearLimit ? 600 : 400,
-            fontVariantNumeric: 'tabular-nums',
-            transition: 'color 0.2s ease'
-          }}
-        >
-          {charCount} / {MAX_CHARS}
-        </span>
       </div>
 
       {/* Tiptap editor styles scoped to overview */}
       <style>{`
         .overview-tiptap {
           outline: none;
-          padding: 12px 14px;
+          padding: 4px 0;
           font-size: 13px;
           line-height: 1.7;
           color: var(--text-secondary);
-          min-height: 80px;
+          min-height: 40px;
           max-height: 240px;
           overflow-y: auto;
           scrollbar-width: thin;

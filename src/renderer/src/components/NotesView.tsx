@@ -117,6 +117,8 @@ export default function NotesView({
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const titleEffectRef = useRef<string>(localTitle)
   const [collapsedNotes, setCollapsedNotes] = useState<Set<string>>(new Set())
+  const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null)
+  const [dragTargetId, setDragTargetId] = useState<string | null>(null)
   const notesRef = useRef(notes)
   // Board cache: stores loaded board content per board id
   const [boardContent, setBoardContent] = useState<Record<string, string>>({})
@@ -154,6 +156,57 @@ export default function NotesView({
     activeNoteIdRef.current = activeNoteId
   }, [activeNoteId])
 
+  const getNoteTargetDir = useCallback(
+    (nProjId: string | undefined, nIsTrash: boolean | undefined): string => {
+      const isTrash = nIsTrash || nProjId === 'trash'
+      const pId = nProjId === 'trash' ? 'default' : nProjId || 'default'
+
+      let targetDir = workspacePath + '/notes'
+      if (pId !== 'default') {
+        const project = findProjectRecursive(projects, pId)
+        if (project) {
+          if (project.notesPath) {
+            targetDir = project.notesPath
+          } else if (project.path) {
+            targetDir = `${project.path}/notes`
+          }
+        }
+      }
+
+      if (isTrash) {
+        targetDir = `${targetDir}/trash`
+      }
+      return targetDir
+    },
+    [projects, workspacePath]
+  )
+
+  const getBoardTargetDir = useCallback(
+    (nProjId: string | undefined, nIsTrash: boolean | undefined): string => {
+      const isTrash = nIsTrash || nProjId === 'trash'
+      const pId = nProjId === 'trash' ? 'default' : nProjId || 'default'
+
+      let targetDir = workspacePath + '/boards'
+      if (pId !== 'default') {
+        const project = findProjectRecursive(projects, pId)
+        if (project) {
+          // @ts-ignore
+          if (project.boardsPath) {
+            // @ts-ignore
+            targetDir = project.boardsPath
+          } else if (project.path) {
+            targetDir = `${project.path}/boards`
+          }
+        }
+      }
+
+      if (isTrash) {
+        targetDir = `${targetDir}/trash`
+      }
+      return targetDir
+    },
+    [projects, workspacePath]
+  )
   // FLUSH ON CLOSE: Synchronously save all pending changes when the app quits or window is closed
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -165,19 +218,9 @@ export default function NotesView({
 
         const type = currentNoteVersion.type || 'markdown'
         const isBoard = type === 'board'
-        let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
-
-        const noteProjectId = currentNoteVersion.projectId || 'default'
-        if (noteProjectId !== 'trash') {
-          const project = findProjectRecursive(projects, noteProjectId)
-          if (project) {
-            if (isBoard) {
-              targetDir = (project as any).boardsPath || (project.path ? `${project.path}/boards` : targetDir)
-            } else {
-              targetDir = project.notesPath || (project.path ? `${project.path}/notes` : targetDir)
-            }
-          }
-        }
+        let targetDir = isBoard
+          ? getBoardTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
+          : getNoteTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
 
         const ext = isBoard ? 'board' : 'md'
         const fileName = currentNoteVersion.fileName || getFileName(currentNoteVersion.title, id, ext)
@@ -207,25 +250,9 @@ export default function NotesView({
     
     let targetDir: string
     if (isBoard) {
-      targetDir = workspacePath + '/boards'
-      if (pId !== 'default') {
-        const project = findProjectRecursive(projects, pId)
-        if (project) {
-          // @ts-ignore
-          if (project.boardsPath) targetDir = project.boardsPath
-          else if (project.path) targetDir = `${project.path}/boards`
-        }
-      }
-      if (isTrash) targetDir = `${targetDir}/trash`
+      targetDir = getBoardTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
     } else {
-      targetDir = workspacePath + '/notes'
-      if (pId !== 'default') {
-        const project = findProjectRecursive(projects, pId)
-        if (project) {
-          targetDir = project.notesPath || (project.path ? `${project.path}/notes` : targetDir)
-        }
-      }
-      if (isTrash) targetDir = `${targetDir}/trash`
+      targetDir = getNoteTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
     }
     
     // For markdown notes, check if content changed. For boards, always allow.
@@ -357,22 +384,9 @@ export default function NotesView({
 
             const type = currentNoteVersion.type || 'markdown'
             const isBoard = type === 'board'
-            let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
-
-            const noteProjectId = currentNoteVersion.projectId || 'default'
-            if (noteProjectId !== 'trash') {
-              const project = findProjectRecursive(projects, noteProjectId)
-              if (project) {
-                if (isBoard) {
-                  // @ts-ignore
-                  if (project.boardsPath) targetDir = project.boardsPath
-                  else if (project.path) targetDir = `${project.path}/boards`
-                } else {
-                  if (project.notesPath) targetDir = project.notesPath
-                  else if (project.path) targetDir = `${project.path}/notes`
-                }
-              }
-            }
+            let targetDir = isBoard
+              ? getBoardTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
+              : getNoteTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
 
             if (!targetDir) return
 
@@ -382,8 +396,20 @@ export default function NotesView({
 
             if (isBoard) {
               // Write to cache only (fast, no ZIP repacking)
+              let boardPayload = updates.content || '{}'
+              try {
+                const parsedContent = JSON.parse(boardPayload)
+                boardPayload = JSON.stringify({
+                  ...parsedContent,
+                  id: currentNoteVersion.id,
+                  title: currentNoteVersion.title,
+                  projectId: currentNoteVersion.projectId,
+                  type: 'board'
+                })
+              } catch (e) {}
+
               // @ts-ignore
-              const ok = await window.api.writeBoardJson(id, updates.content)
+              const ok = await window.api.writeBoardJson(id, boardPayload)
               if (ok) {
                 // Pack to .board file
                 // @ts-ignore
@@ -402,7 +428,7 @@ export default function NotesView({
         )
       }
     },
-    [workspacePath, projects, setNotes]
+    [workspacePath, projects, setNotes, getBoardTargetDir, getNoteTargetDir]
   )
 
   const handleManualSave = useCallback(async () => {
@@ -419,22 +445,9 @@ export default function NotesView({
 
     const type = currentNote.type || 'markdown'
     const isBoard = type === 'board'
-    let targetDir = isBoard ? workspacePath + '/boards' : workspacePath + '/notes'
-
-    const noteProjectId = currentNote.projectId || 'default'
-    if (noteProjectId !== 'trash') {
-      const project = findProjectRecursive(projects, noteProjectId)
-      if (project) {
-        if (isBoard) {
-          // @ts-ignore
-          if (project.boardsPath) targetDir = project.boardsPath
-          else if (project.path) targetDir = `${project.path}/boards`
-        } else {
-          if (project.notesPath) targetDir = project.notesPath
-          else if (project.path) targetDir = `${project.path}/notes`
-        }
-      }
-    }
+    let targetDir = isBoard
+      ? getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      : getNoteTargetDir(currentNote.projectId, currentNote.isTrash)
 
     if (!targetDir) {
       setSaveStatus('saved')
@@ -446,8 +459,20 @@ export default function NotesView({
 
     if (isBoard) {
       // Write cache then pack
+      let boardPayload = currentNote.content || '{}'
+      try {
+        const parsedContent = JSON.parse(boardPayload)
+        boardPayload = JSON.stringify({
+          ...parsedContent,
+          id: currentNote.id,
+          title: currentNote.title,
+          projectId: currentNote.projectId,
+          type: 'board'
+        })
+      } catch (e) {}
+
       // @ts-ignore
-      const ok = await window.api.writeBoardJson(activeNoteId, currentNote.content || '{}')
+      const ok = await window.api.writeBoardJson(activeNoteId, boardPayload)
       // @ts-ignore
       if (ok) await window.api.packBoard(activeNoteId, targetDir, fileName)
     } else {
@@ -456,7 +481,7 @@ export default function NotesView({
     }
     
     setSaveStatus('saved')
-  }, [activeNoteId, workspacePath, projects])
+  }, [activeNoteId, getBoardTargetDir, getNoteTargetDir])
 
   const activeNote = notes.find((n) => n.id === activeNoteId)
   const handleUpdateNoteRef = useRef(handleUpdateNote)
@@ -610,57 +635,6 @@ export default function NotesView({
     }
   }), [notes, showTrash, projectScopeIds])
 
-  const getNoteTargetDir = useCallback(
-    (nProjId: string | undefined, nIsTrash: boolean | undefined): string => {
-      const isTrash = nIsTrash || nProjId === 'trash'
-      const pId = nProjId === 'trash' ? 'default' : nProjId || 'default'
-
-      let targetDir = workspacePath + '/notes'
-      if (pId !== 'default') {
-        const project = findProjectRecursive(projects, pId)
-        if (project) {
-          if (project.notesPath) {
-            targetDir = project.notesPath
-          } else if (project.path) {
-            targetDir = `${project.path}/notes`
-          }
-        }
-      }
-
-      if (isTrash) {
-        targetDir = `${targetDir}/trash`
-      }
-      return targetDir
-    },
-    [projects, workspacePath]
-  )
-
-  const getBoardTargetDir = useCallback(
-    (nProjId: string | undefined, nIsTrash: boolean | undefined): string => {
-      const isTrash = nIsTrash || nProjId === 'trash'
-      const pId = nProjId === 'trash' ? 'default' : nProjId || 'default'
-
-      let targetDir = workspacePath + '/boards'
-      if (pId !== 'default') {
-        const project = findProjectRecursive(projects, pId)
-        if (project) {
-          // @ts-ignore
-          if (project.boardsPath) {
-            // @ts-ignore
-            targetDir = project.boardsPath
-          } else if (project.path) {
-            targetDir = `${project.path}/boards`
-          }
-        }
-      }
-
-      if (isTrash) {
-        targetDir = `${targetDir}/trash`
-      }
-      return targetDir
-    },
-    [projects, workspacePath]
-  )
 
 
   // Flush pending saves when switching notes
@@ -692,8 +666,20 @@ export default function NotesView({
         const finalNote = { ...noteToSave, title: currentTitle, fileName: newFileName }
 
         if (isBoard) {
+          let boardPayload = boardContentRef.current[id] || noteToSave.content || '{}'
+          try {
+            const parsed = JSON.parse(boardPayload)
+            boardPayload = JSON.stringify({
+              ...parsed,
+              id: id,
+              title: currentTitle,
+              projectId: noteToSave.projectId,
+              type: 'board'
+            })
+          } catch (e) {}
+
           // @ts-ignore
-          const ok = await window.api.writeBoardJson(id, boardContentRef.current[id] || noteToSave.content || '{}')
+          const ok = await window.api.writeBoardJson(id, boardPayload)
           // @ts-ignore
           if (ok) await window.api.packBoard(id, targetDir, newFileName)
         } else {
@@ -786,7 +772,14 @@ export default function NotesView({
     if (targetDir) {
       if (isBoard) {
         // Initialize empty board in cache and pack to .board ZIP
-        const emptyBoard = JSON.stringify({ elements: [], viewport: { x: 0, y: 0, scale: 1 } })
+        const emptyBoard = JSON.stringify({ 
+          elements: [], 
+          viewport: { x: 0, y: 0, scale: 1 },
+          id: newNote.id,
+          title: newNote.title,
+          projectId: noteProjId,
+          type: 'board'
+        })
         // @ts-ignore
         window.api.writeBoardJson(newNote.id, emptyBoard).then(() => {
           // @ts-ignore
@@ -840,6 +833,84 @@ export default function NotesView({
   }
 
   // Toggle collapse/expand
+    const handleDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedNoteId(id)
+    e.dataTransfer.setData('text/plain', id)
+    e.dataTransfer.effectAllowed = 'move'
+    // Make the drag image slightly transparent
+    if (e.target instanceof HTMLElement) {
+      e.target.style.opacity = '0.5'
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault()
+    if (dragTargetId !== id) {
+      setDragTargetId(id)
+    }
+  }
+  
+  const handleDragLeave = (e: React.DragEvent, id: string) => {
+    if (dragTargetId === id) {
+      setDragTargetId(null)
+    }
+  }
+  
+  const handleDragEnd = (e: React.DragEvent) => {
+    if (e.target instanceof HTMLElement) {
+      e.target.style.opacity = '1'
+    }
+    setDraggedNoteId(null)
+    setDragTargetId(null)
+  }
+
+  const handleDrop = (e: React.DragEvent, dropTargetId: string, itemType: string) => {
+    e.preventDefault()
+    setDragTargetId(null)
+    
+    if (itemType === 'project') return
+    if (!draggedNoteId || draggedNoteId === dropTargetId) {
+      handleDragEnd(e)
+      return
+    }
+    
+    const targetNote = notes.find(n => n.id === dropTargetId)
+    if (!targetNote) return
+
+    const actualParentId = targetNote.parentId
+    const siblings = notes
+      .filter(n => n.parentId === actualParentId && n.projectId === targetNote.projectId && n.id !== draggedNoteId)
+      .sort((a, b) => {
+          const diff = (a.order ?? 0) - (b.order ?? 0);
+          if (diff !== 0) return diff;
+          const aTime = a.createdAt || a.id.charCodeAt(0);
+          const bTime = b.createdAt || b.id.charCodeAt(0);
+          if (aTime !== bTime) return aTime - bTime;
+          return a.id.localeCompare(b.id);
+        })
+      
+    const targetIdx = siblings.findIndex(n => n.id === dropTargetId)
+    siblings.splice(targetIdx + 1, 0, notes.find(n => n.id === draggedNoteId)!)
+    
+    const updatedNotes = siblings.map((sib, index) => ({
+      ...sib,
+      order: index * 10
+    }))
+    
+    const draggedNote = updatedNotes.find(n => n.id === draggedNoteId)
+    if (draggedNote) draggedNote.parentId = actualParentId
+
+    setNotes(prev => prev.map(n => {
+      const up = updatedNotes.find(u => u.id === n.id)
+      return up ? up : n
+    }))
+
+    for (const up of updatedNotes) {
+      handleUpdateNote(up.id, { order: up.order, parentId: up.parentId })
+    }
+    handleDragEnd(e)
+  }
+
   const handleToggleCollapse = (noteId: string, e: React.MouseEvent): void => {
     e.stopPropagation()
     setCollapsedNotes((prev) => {
@@ -1012,6 +1083,20 @@ export default function NotesView({
       setNotes(prev => prev.map(n => n.id === activeNoteId ? { ...n, fileName: newFileName, title: localTitle } : n))
       
       if (isBoard) {
+        let boardPayload = boardContentRef.current[activeNoteId] || activeNote.content || '{}'
+        try {
+          const parsed = JSON.parse(boardPayload)
+          boardPayload = JSON.stringify({
+            ...parsed,
+            id: activeNoteId,
+            title: localTitle,
+            projectId: activeNote.projectId,
+            type: 'board'
+          })
+        } catch (e) {}
+
+        // @ts-ignore
+        await window.api.writeBoardJson(activeNoteId, boardPayload)
         // @ts-ignore
         await window.api.packBoard(activeNoteId, targetDir, newFileName)
       } else {
@@ -1083,7 +1168,14 @@ export default function NotesView({
     const renderNoteTree = (parentId: string | undefined, level: number, project?: Project): void => {
       const children = filteredNotes
         .filter((n) => (parentId ? n.parentId === parentId : !n.parentId))
-        .sort((a, b) => (b.createdAt || b.lastModified) - (a.createdAt || a.lastModified))
+        .sort((a, b) => {
+          const diff = (a.order ?? 0) - (b.order ?? 0);
+          if (diff !== 0) return diff;
+          const aTime = a.createdAt || a.id.charCodeAt(0);
+          const bTime = b.createdAt || b.id.charCodeAt(0);
+          if (aTime !== bTime) return aTime - bTime;
+          return a.id.localeCompare(b.id);
+        })
 
       for (const note of children) {
         const noteChildren = filteredNotes.filter((n) => n.parentId === note.id)
@@ -1124,7 +1216,14 @@ export default function NotesView({
       // Render root-level notes of this project as a tree
       const rootNotes = projectNotes
         .filter((n) => !n.parentId)
-        .sort((a, b) => (b.createdAt || b.lastModified) - (a.createdAt || a.lastModified))
+        .sort((a, b) => {
+          const diff = (a.order ?? 0) - (b.order ?? 0);
+          if (diff !== 0) return diff;
+          const aTime = a.createdAt || a.id.charCodeAt(0);
+          const bTime = b.createdAt || b.id.charCodeAt(0);
+          if (aTime !== bTime) return aTime - bTime;
+          return a.id.localeCompare(b.id);
+        })
 
       for (const note of rootNotes) {
         const noteChildren = filteredNotes.filter((n) => n.parentId === note.id)
@@ -1384,6 +1483,12 @@ export default function NotesView({
 
                         return (
                           <div
+                            draggable={true}
+                            onDragStart={(e) => handleDragStart(e, note.id)}
+                            onDragOver={(e) => handleDragOver(e, note.id)}
+                            onDragLeave={(e) => handleDragLeave(e, note.id)}
+                            onDragEnd={handleDragEnd}
+                            onDrop={(e) => handleDrop(e, note.id, 'note')}
                             onClick={() => setActiveNoteId(note.id)}
                             onContextMenu={(e) => {
                               e.preventDefault()
@@ -1396,7 +1501,7 @@ export default function NotesView({
                             }}
                             style={{
                               padding: `8px 12px 8px ${12 + renderLevel * 16}px`,
-                              borderBottom: '1px solid rgba(255,255,255,0.03)',
+                              borderBottom: dragTargetId === note.id ? '2px solid var(--accent)' : '1px solid rgba(255,255,255,0.03)',
                               background: isActive ? 'rgba(255,255,255,0.06)' : 'transparent',
                               cursor: 'pointer',
                               display: 'flex',

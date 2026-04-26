@@ -79,13 +79,15 @@ interface PipelineViewProps {
   onUpdate: (id: string, updates: Partial<Project>) => void
   isSidebarOpen: boolean
   onToggleSidebar: () => void
+  isVisible?: boolean
 }
 
 export default function PipelineView({
   project,
   onUpdate,
   isSidebarOpen,
-  onToggleSidebar
+  onToggleSidebar,
+  isVisible
 }: PipelineViewProps): React.ReactElement {
   // --- Migration and Initialization ---
   useEffect(() => {
@@ -121,21 +123,33 @@ export default function PipelineView({
     stageId: string
     rect: DOMRect
   } | null>(null)
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(null)
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(project.activePipelineStageId || null)
+
+  useEffect(() => {
+    setSelectedStageId(project.activePipelineStageId || null)
+  }, [project.activePipelineStageId])
+
 
   // --- AUTO-RESIZE TEXTAREAS ON MOUNT/CHANGE ---
   useEffect(() => {
     const adjustAllHeights = () => {
       const textareas = document.querySelectorAll('.pipeline-item-textarea') as NodeListOf<HTMLTextAreaElement>
       textareas.forEach((ta) => {
-        ta.style.height = 'auto'
-        ta.style.height = `${ta.scrollHeight}px`
+        // Only adjust if the element is actually rendered/visible
+        if (ta.offsetParent !== null) {
+          ta.style.height = 'auto'
+          ta.style.height = `${ta.scrollHeight}px`
+        }
       })
     }
-    adjustAllHeights()
-    const timer = setTimeout(adjustAllHeights, 50)
-    return () => clearTimeout(timer)
-  }, [activePipelineId, pipelines, activePipeline])
+    
+    // Adjust when data or visibility changes
+    if (isVisible !== false) {
+      adjustAllHeights()
+      const timer = setTimeout(adjustAllHeights, 50)
+      return () => clearTimeout(timer)
+    }
+  }, [activePipelineId, pipelines, activePipeline, isVisible])
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent): void => {
@@ -224,8 +238,7 @@ export default function PipelineView({
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId ? { ...p, stages: [...p.stages, newStage] } : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
-    setSelectedStageId(newStage.id)
+    onUpdate(project.id, { pipelines: newPipelines, activePipelineStageId: newStage.id })
   }
 
   const handleUpdateStage = (stageId: string, name: string): void => {
@@ -243,8 +256,10 @@ export default function PipelineView({
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId ? { ...p, stages: p.stages.filter((s) => s.id !== stageId) } : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
-    if (stageId === selectedStageId) setSelectedStageId(null)
+    onUpdate(project.id, { 
+      pipelines: newPipelines, 
+      ...(stageId === selectedStageId ? { activePipelineStageId: undefined } : {}) 
+    })
   }
 
   // --- ITEM CRUD ---
@@ -646,6 +661,11 @@ export default function PipelineView({
                 gap: '8px',
                 overflowX: 'auto',
                 scrollbarWidth: 'none'
+              }}
+              onWheel={(e) => {
+                if (e.deltaY !== 0) {
+                  e.currentTarget.scrollLeft += e.deltaY
+                }
               }}
             >
               {pipelines.map((p) => (

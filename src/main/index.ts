@@ -153,6 +153,7 @@ ipcMain.handle('workspace:initProject', (_, workspacePath: string, projectName: 
       join(projectDir, 'notes'),
       join(projectDir, 'boards'),
       join(projectDir, 'tasks'),
+      join(projectDir, 'overview'),
       join(projectDir, 'attachments')
     ]
     for (const dir of dirs) {
@@ -421,6 +422,7 @@ ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
                   ...parsed,
                   fileName: f,
                   isTrash,
+                  projectId: projectId, // Force projectId to match the physical directory
                   lastModified: fs.statSync(fullPath).mtimeMs
                 })
               } else {
@@ -626,6 +628,35 @@ ipcMain.handle('workspace:getFolderSize', async (_, folderPath: string) => {
     return size
   }
   return getDirSize(folderPath)
+})
+
+// ===== OVERVIEW DESCRIPTION IPC HANDLERS =====
+ipcMain.handle('overview:read', async (_, projectPath: string) => {
+  try {
+    const filePath = join(projectPath, 'overview', 'description.md')
+    if (fs.existsSync(filePath)) {
+      return fs.readFileSync(filePath, 'utf-8')
+    }
+    return ''
+  } catch (error) {
+    console.error('Failed to read overview description:', error)
+    return ''
+  }
+})
+
+ipcMain.handle('overview:save', async (_, projectPath: string, content: string) => {
+  try {
+    const overviewDir = join(projectPath, 'overview')
+    if (!fs.existsSync(overviewDir)) {
+      fs.mkdirSync(overviewDir, { recursive: true })
+    }
+    const filePath = join(overviewDir, 'description.md')
+    await writeWithRetry(filePath, content)
+    return true
+  } catch (error) {
+    console.error('Failed to save overview description:', error)
+    return false
+  }
 })
 
 ipcMain.handle('store:get', (_, key) => {

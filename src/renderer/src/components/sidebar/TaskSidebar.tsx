@@ -463,6 +463,7 @@ export default memo(function TaskSidebar({
 
       let newPath = targetProject.path
       let newNotesPath = targetProject.notesPath
+      let newBoardsPath = targetProject.boardsPath
       let finalName = currentName
 
       if (targetProject.name !== currentName && targetProject.path) {
@@ -472,6 +473,7 @@ export default memo(function TaskSidebar({
           if (renamedPath) {
             newPath = renamedPath
             newNotesPath = renamedPath + '/notes'
+            newBoardsPath = renamedPath + '/boards'
             finalName = renamedPath.split(/[/\\]/).pop() || currentName
           }
         } catch (err) {
@@ -482,7 +484,7 @@ export default memo(function TaskSidebar({
       const updateRecursive = (projs: Project[]): Project[] => {
         return projs.map((p) => {
           if (p.id === projectId)
-            return { ...p, name: finalName, path: newPath, notesPath: newNotesPath }
+            return { ...p, name: finalName, path: newPath, notesPath: newNotesPath, boardsPath: newBoardsPath }
           if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
           return p
         })

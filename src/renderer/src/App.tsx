@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from 'uuid'
 import TimerCard from './components/TimerCard'
 import TaskSidebar from './components/sidebar/TaskSidebar'
 import MiniTimer from './components/MiniTimer'
-import TimelineView from './components/TimelineView'
+import CalendarView from './components/CalendarView'
 import NotesView from './components/NotesView'
 import WelcomeScreen from './components/WelcomeScreen'
 import SettingsModal from './components/SettingsModal'
@@ -1394,6 +1394,7 @@ function App() {
                   onProjectClick={(projectId) => setSelectedProjectId(projectId)}
                   isSidebarOpen={isSidebarOpen}
                   onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                  onNavigateToPipeline={() => setCurrentView('pipeline')}
                 />
               ) : (
                 <div
@@ -1416,6 +1417,7 @@ function App() {
                   onUpdate={updateProject}
                   isSidebarOpen={isSidebarOpen}
                   onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+                  isVisible={currentView === 'pipeline'}
                 />
               ) : (
                 <div
@@ -1432,7 +1434,7 @@ function App() {
               )}
             </div>
             <div style={{ display: currentView === 'timeline' ? 'contents' : 'none' }}>
-              <TimelineView
+              <CalendarView
                 projects={allProjects}
                 timelineTasks={timelineTasks}
                 setTimelineTasks={(action: React.SetStateAction<TimelineTask[]>) => {

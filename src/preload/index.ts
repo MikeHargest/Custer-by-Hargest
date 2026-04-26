@@ -136,6 +136,13 @@ const api = {
   scanAllNotes: (workspacePath: string) =>
     ipcRenderer.invoke('workspace:scanAllNotes', workspacePath),
   getFolderSize: (folderPath: string) => ipcRenderer.invoke('workspace:getFolderSize', folderPath),
+
+  // Overview Description
+  readOverviewDescription: (projectPath: string) =>
+    ipcRenderer.invoke('overview:read', projectPath),
+  saveOverviewDescription: (projectPath: string, content: string) =>
+    ipcRenderer.invoke('overview:save', projectPath, content),
+
   selectFile: () => ipcRenderer.invoke('app:selectFile'),
   selectFolder: () => ipcRenderer.invoke('app:selectFolder'),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),

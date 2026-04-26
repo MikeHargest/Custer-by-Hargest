@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useState, useRef, useEffect } from 'react'
 import { ChevronRight, ChevronDown, Trash2, Calendar, Clock } from 'lucide-react'
 import { AppEvent } from '../../../types'
 
@@ -35,29 +35,148 @@ const EventItem = memo(function EventItem({
   setExpandedEventId,
   projectColor
 }: EventItemProps) {
+  const [activeSelect, setActiveSelect] = useState<string | null>(null) // 'reminder', 'frequency', 'ends'
+  const containerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleClickOutside = () => {
+      // If we are here, it means the click was NOT on a toggle or menu item
+      // (because those stop propagation of mousedown)
+      setActiveSelect(null)
+    }
+    if (activeSelect) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [activeSelect])
+
+  // Reusable Custom Dropdown Component
+  const CustomSelect = ({ 
+    label, 
+    value, 
+    options, 
+    onSelect, 
+    id 
+  }: { 
+    label: string, 
+    value: any, 
+    options: { val: any, label: string }[], 
+    onSelect: (val: any) => void,
+    id: string
+  }) => {
+    const isOpen = activeSelect === id
+    const selectedOption = options.find(o => o.val === value) || options[0]
+
+    return (
+      <div style={{ position: 'relative', flex: 1 }} className="custom-select-container">
+        <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>{label}</label>
+        <button
+          onMouseDown={(e) => {
+            e.stopPropagation() // Prevent document mousedown from firing
+            setActiveSelect(isOpen ? null : id)
+          }}
+          className="inline-edit-input custom-select-toggle"
+          style={{
+            width: '100%',
+            height: '28px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            textAlign: 'left',
+            padding: '0 8px',
+            background: 'rgba(0,0,0,0.2)'
+          }}
+        >
+          <span style={{ fontSize: '12px', color: 'var(--text-primary)' }}>{selectedOption.label}</span>
+          <ChevronDown size={12} style={{ opacity: 0.5, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </button>
+
+        {isOpen && (
+          <div
+            className="custom-select-menu"
+            onMouseDown={(e) => e.stopPropagation()} // Prevent closure when clicking background of menu
+            style={{
+              position: 'absolute',
+              top: 'calc(100% + 4px)',
+              left: 0,
+              right: 0,
+              background: '#2d2d2d',
+              borderRadius: '8px',
+              border: '1px solid rgba(255,255,255,0.1)',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+              zIndex: 100,
+              overflow: 'hidden',
+              padding: '4px'
+            }}
+          >
+            {options.map((opt) => {
+              const isSelected = value === opt.val
+              return (
+                <div
+                  key={opt.val}
+                  onMouseDown={(e) => {
+                    e.stopPropagation()
+                    onSelect(opt.val)
+                    setActiveSelect(null)
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) e.currentTarget.style.background = 'transparent'
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    fontSize: '12px',
+                    color: isSelected ? 'white' : 'var(--text-secondary)',
+                    background: isSelected ? '#3b82f6' : 'transparent',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    fontWeight: isSelected ? 600 : 400
+                  }}
+                >
+                  {opt.label}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       key={event.id}
       className="event-card premium-event-item"
+      ref={containerRef}
       style={{
         position: 'relative',
         background: 'rgba(255,255,255,0.03)',
         borderRadius: '10px',
         border: isExpanded ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
         transition: 'all 0.2s',
-        overflow: 'hidden'
+        overflow: 'visible'
       }}
     >
-      <div
-        style={{
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: '3px',
-          background: projectColor || 'var(--accent)'
-        }}
-      />
+      {/* Clipped background/strip container */}
+      <div style={{ position: 'absolute', inset: 0, borderRadius: '10px', overflow: 'hidden', pointerEvents: 'none' }}>
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            top: 0,
+            bottom: 0,
+            width: '3px',
+            background: projectColor || 'var(--accent)'
+          }}
+        />
+      </div>
       <div
         draggable
         onDragStart={(e) => {
@@ -77,7 +196,10 @@ const EventItem = memo(function EventItem({
           alignItems: 'center',
           cursor: 'pointer'
         }}
-        onClick={() => setExpandedEventId(isExpanded ? null : event.id)}
+        onClick={() => {
+           setActiveSelect(null);
+           setExpandedEventId(isExpanded ? null : event.id);
+        }}
       >
         <div
           style={{
@@ -189,6 +311,14 @@ const EventItem = memo(function EventItem({
             gap: '8px',
             borderTop: '1px solid rgba(255,255,255,0.04)'
           }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => {
+             // Close any open select when clicking inside the content area (not on inputs)
+             if (activeSelect && !(e.target as HTMLElement).closest('.inline-edit-input')) {
+               setActiveSelect(null);
+             }
+             e.stopPropagation();
+          }}
         >
           <div style={{ paddingTop: '8px' }}>
             <label
@@ -208,7 +338,6 @@ const EventItem = memo(function EventItem({
               value={event.title || ''}
               onChange={(e) => updateEvent(selectedProjectId, event.id, { title: e.target.value })}
               style={{ width: '100%' }}
-              onClick={(e) => e.stopPropagation()}
             />
           </div>
           <div style={{ display: 'flex', gap: '8px' }}>
@@ -231,7 +360,6 @@ const EventItem = memo(function EventItem({
                 value={event.date || ''}
                 onChange={(e) => updateEvent(selectedProjectId, event.id, { date: e.target.value })}
                 style={{ width: '100%' }}
-                onClick={(e) => e.stopPropagation()}
               />
             </div>
             <div style={{ flex: 1 }}>
@@ -253,175 +381,169 @@ const EventItem = memo(function EventItem({
                 value={event.time || ''}
                 onChange={(e) => updateEvent(selectedProjectId, event.id, { time: e.target.value })}
                 style={{ width: '100%' }}
-                onClick={(e) => e.stopPropagation()}
               />
             </div>
           </div>
 
           {/* Recurrence Settings */}
           <div style={{ marginTop: '4px', borderTop: '1px solid rgba(255,255,255,0.04)', paddingTop: '12px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <input 
-                  type="checkbox" 
-                  id={`repeat-${event.id}`}
-                  checked={!!event.recurrence}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      updateEvent(selectedProjectId, event.id, {
-                        recurrence: {
-                          frequency: 'daily',
-                          interval: 1,
-                          endType: 'never'
-                        }
-                      })
-                    } else {
-                      updateEvent(selectedProjectId, event.id, { recurrence: undefined })
-                    }
-                  }}
-                />
-                <label htmlFor={`repeat-${event.id}`} style={{ fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
-                  Repeat
-                </label>
-             </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <input
+                type="checkbox"
+                id={`repeat-${event.id}`}
+                checked={!!event.recurrence}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    updateEvent(selectedProjectId, event.id, {
+                      recurrence: {
+                        frequency: 'daily',
+                        interval: 1,
+                        endType: 'never'
+                      }
+                    })
+                  } else {
+                    updateEvent(selectedProjectId, event.id, { recurrence: undefined })
+                  }
+                }}
+              />
+              <label htmlFor={`repeat-${event.id}`} style={{ fontSize: '12px', color: 'var(--text-primary)', cursor: 'pointer' }}>
+                Repeat
+              </label>
+            </div>
 
-             {event.recurrence && (
-               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingLeft: '20px' }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Frequency</label>
-                      <select 
-                        className="inline-edit-input"
-                        value={event.recurrence.frequency}
-                        onChange={(e) => updateEvent(selectedProjectId, event.id, { 
-                          recurrence: { ...event.recurrence!, frequency: e.target.value as any } 
-                        })}
-                        style={{ width: '100%', height: '28px' }}
-                      >
-                        <option value="daily">Daily</option>
-                        <option value="weekly">Weekly</option>
-                        <option value="monthly">Monthly</option>
-                        <option value="yearly">Yearly</option>
-                      </select>
-                    </div>
-                    <div style={{ width: '60px' }}>
-                      <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Every</label>
-                      <input 
-                        type="number"
-                        min="1"
-                        className="inline-edit-input"
-                        value={event.recurrence.interval}
-                        onChange={(e) => updateEvent(selectedProjectId, event.id, { 
-                          recurrence: { ...event.recurrence!, interval: parseInt(e.target.value) || 1 } 
-                        })}
-                        style={{ width: '100%' }}
-                      />
+            {event.recurrence && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingLeft: '20px' }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <CustomSelect
+                    id="frequency"
+                    label="Frequency"
+                    value={event.recurrence.frequency}
+                    onSelect={(val) => updateEvent(selectedProjectId, event.id, {
+                      recurrence: { ...event.recurrence!, frequency: val as any }
+                    })}
+                    options={[
+                      { val: 'daily', label: 'Daily' },
+                      { val: 'weekly', label: 'Weekly' },
+                      { val: 'monthly', label: 'Monthly' },
+                      { val: 'yearly', label: 'Yearly' }
+                    ]}
+                  />
+                  <div style={{ width: '60px' }}>
+                    <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px', textTransform: 'uppercase' }}>Every</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="inline-edit-input"
+                      value={event.recurrence.interval}
+                      onChange={(e) => updateEvent(selectedProjectId, event.id, {
+                        recurrence: { ...event.recurrence!, interval: parseInt(e.target.value) || 1 }
+                      })}
+                      style={{ width: '100%', height: '28px' }}
+                    />
+                  </div>
+                </div>
+
+                {event.recurrence.frequency === 'weekly' && (
+                  <div>
+                    <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>On Days</label>
+                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            const days = event.recurrence!.daysOfWeek || []
+                            const newDays = days.includes(i) ? days.filter(d => d !== i) : [...days, i]
+                            updateEvent(selectedProjectId, event.id, {
+                              recurrence: { ...event.recurrence!, daysOfWeek: newDays }
+                            })
+                          }}
+                          style={{
+                            width: '24px',
+                            height: '24px',
+                            borderRadius: '4px',
+                            border: 'none',
+                            fontSize: '10px',
+                            background: event.recurrence!.daysOfWeek?.includes(i) ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
+                            color: 'white',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          {day}
+                        </button>
+                      ))}
                     </div>
                   </div>
+                )}
 
-                  {event.recurrence.frequency === 'weekly' && (
-                    <div>
-                      <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>On Days</label>
-                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                          <button
-                            key={i}
-                            onClick={() => {
-                              const days = event.recurrence!.daysOfWeek || []
-                              const newDays = days.includes(i) ? days.filter(d => d !== i) : [...days, i]
-                              updateEvent(selectedProjectId, event.id, { 
-                                recurrence: { ...event.recurrence!, daysOfWeek: newDays } 
-                              })
-                            }}
-                            style={{
-                              width: '24px',
-                              height: '24px',
-                              borderRadius: '4px',
-                              border: 'none',
-                              fontSize: '10px',
-                              background: event.recurrence!.daysOfWeek?.includes(i) ? 'var(--accent)' : 'rgba(255,255,255,0.05)',
-                              color: 'white',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {day}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                <CustomSelect
+                  id="ends"
+                  label="Ends"
+                  value={event.recurrence.endType}
+                  onSelect={(val) => updateEvent(selectedProjectId, event.id, {
+                    recurrence: { ...event.recurrence!, endType: val as any }
+                  })}
+                  options={[
+                    { val: 'never', label: 'Never' },
+                    { val: 'until', label: 'On Date' },
+                    { val: 'count', label: 'After occurrences' }
+                  ]}
+                />
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {event.recurrence.endType === 'until' && (
+                    <input
+                      type="date"
+                      className="inline-edit-input"
+                      value={event.recurrence.endDate || ''}
+                      onChange={(e) => updateEvent(selectedProjectId, event.id, {
+                        recurrence: { ...event.recurrence!, endDate: e.target.value }
+                      })}
+                      style={{ width: '100%' }}
+                    />
                   )}
 
-                  <div>
-                    <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Ends</label>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <select 
-                        className="inline-edit-input"
-                        value={event.recurrence.endType}
-                        onChange={(e) => updateEvent(selectedProjectId, event.id, { 
-                          recurrence: { ...event.recurrence!, endType: e.target.value as any } 
-                        })}
-                        style={{ width: '100%', height: '28px' }}
-                      >
-                        <option value="never">Never</option>
-                        <option value="until">On Date</option>
-                        <option value="count">After occurrences</option>
-                      </select>
-                      
-                      {event.recurrence.endType === 'until' && (
-                        <input 
-                          type="date"
-                          className="inline-edit-input"
-                          value={event.recurrence.endDate || ''}
-                          onChange={(e) => updateEvent(selectedProjectId, event.id, { 
-                            recurrence: { ...event.recurrence!, endDate: e.target.value } 
-                          })}
-                          style={{ width: '100%' }}
-                        />
-                      )}
-                      
-                      {event.recurrence.endType === 'count' && (
-                        <input 
-                          type="number"
-                          min="1"
-                          className="inline-edit-input"
-                          value={event.recurrence.count || 1}
-                          onChange={(e) => updateEvent(selectedProjectId, event.id, { 
-                            recurrence: { ...event.recurrence!, count: parseInt(e.target.value) || 1 } 
-                          })}
-                          style={{ width: '100%' }}
-                        />
-                      )}
-                    </div>
-                  </div>
-               </div>
-             )}
+                  {event.recurrence.endType === 'count' && (
+                    <input
+                      type="number"
+                      min="1"
+                      className="inline-edit-input"
+                      value={event.recurrence.count || 1}
+                      onChange={(e) => updateEvent(selectedProjectId, event.id, {
+                        recurrence: { ...event.recurrence!, count: parseInt(e.target.value) || 1 }
+                      })}
+                      style={{ width: '100%' }}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
 
-             {/* Reminder Settings */}
-             <div style={{ marginTop: '12px' }}>
-                <label style={{ fontSize: '10px', color: 'var(--text-secondary)', display: 'block', marginBottom: '4px' }}>Reminder</label>
-                <select
-                  className="inline-edit-input"
-                  value={event.reminder ? event.reminder.minutesBefore : -1}
-                  onChange={(e) => {
-                    const val = parseInt(e.target.value)
-                    if (val === -1) {
-                      updateEvent(selectedProjectId, event.id, { reminder: undefined })
-                    } else {
-                      updateEvent(selectedProjectId, event.id, { 
-                        reminder: { minutesBefore: val, isNotified: false } 
-                      })
-                    }
-                  }}
-                  style={{ width: '100%', height: '28px' }}
-                >
-                  <option value={-1}>None</option>
-                  <option value={0}>At time of event</option>
-                  <option value={5}>5 minutes before</option>
-                  <option value={15}>15 minutes before</option>
-                  <option value={30}>30 minutes before</option>
-                  <option value={60}>1 hour before</option>
-                  <option value={1440}>1 day before</option>
-                </select>
-             </div>
+            {/* Reminder Settings */}
+            <div style={{ marginTop: '12px' }}>
+              <CustomSelect
+                id="reminder"
+                label="Reminder"
+                value={event.reminder ? event.reminder.minutesBefore : -1}
+                onSelect={(val) => {
+                  if (val === -1) {
+                    updateEvent(selectedProjectId, event.id, { reminder: undefined })
+                  } else {
+                    updateEvent(selectedProjectId, event.id, {
+                      reminder: { minutesBefore: val, isNotified: false }
+                    })
+                  }
+                }}
+                options={[
+                  { val: -1, label: 'None' },
+                  { val: 0, label: 'At time of event' },
+                  { val: 5, label: '5 minutes before' },
+                  { val: 15, label: '15 minutes before' },
+                  { val: 30, label: '30 minutes before' },
+                  { val: 60, label: '1 hour before' },
+                  { val: 1440, label: '1 day before' }
+                ]}
+              />
+            </div>
           </div>
           <div
             style={{

@@ -64,6 +64,7 @@ export interface Project {
   pipeline?: PipelineStage[] // Legacy field
   pipelines?: PipelineData[] // New field
   activePipelineId?: string
+  activePipelineStageId?: string
   bannerPosition?: number
 }
 
@@ -113,6 +114,7 @@ export interface AppNote {
   path?: string // Absolute path to the .md file
   fileName?: string
   isTrash?: boolean
+  order?: number
 }
 
 export interface UITheme {
