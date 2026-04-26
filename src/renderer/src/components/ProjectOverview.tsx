@@ -322,7 +322,7 @@ const CustomDateInput = ({
   onChange: (e: React.ChangeEvent<HTMLInputElement>) => void
 }): React.ReactElement => {
   const [isHovered, setIsHovered] = useState(false)
-  
+
   const displayValue = useMemo(() => {
     if (!value) return 'mm/dd/yyyy'
     const parts = value.split('-')
@@ -949,9 +949,8 @@ export default function ProjectOverview({
               {/* PIPELINE TABS & STAGES */}
               {project.pipelines && project.pipelines.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <hr style={{ ...sidebarDividerStyle, marginTop: '8px', marginBottom: '8px' }} />
                   {/* TABS */}
-                  <div 
+                  <div
                     style={{ display: 'flex', gap: '4px', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}
                     onWheel={(e) => {
                       if (e.deltaY !== 0) {
@@ -969,8 +968,8 @@ export default function ProjectOverview({
                           style={{
                             flexShrink: 0,
                             maxWidth: '140px',
-                            background: isActive ? 'rgba(255,255,255,0.08)' : 'transparent',
-                            border: 'none',
+                            background: isActive ? 'rgba(255,255,255,0.1)' : 'transparent',
+                            border: `1px solid ${isActive ? 'rgba(255,255,255,0.1)' : 'transparent'}`,
                             borderRadius: '6px',
                             padding: '6px 12px',
                             color: isActive ? 'var(--text-primary)' : 'var(--text-secondary)',
@@ -1022,11 +1021,11 @@ export default function ProjectOverview({
                             e.currentTarget.style.borderColor = isSelected ? (project.color || 'var(--accent)') : 'rgba(255,255,255,0.08)'
                           }}
                         >
-                          <span 
+                          <span
                             title={stage.name}
-                            style={{ 
-                              fontSize: '13px', 
-                              fontWeight: 600, 
+                            style={{
+                              fontSize: '13px',
+                              fontWeight: 600,
                               color: 'var(--text-primary)',
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
@@ -1076,7 +1075,7 @@ export default function ProjectOverview({
 
             {/* --- MAIN CONTENT --- */}
             <main style={{ ...mainContentStyle, overflowY: 'visible', flex: 1 }}>
-              <header style={{ display: 'flex', alignItems: 'center', gap: '24px', position: 'relative' }}>
+              <header style={{ display: 'flex', alignItems: 'center', gap: '24px', position: 'relative', marginBottom: '8px' }}>
                 <div
                   style={{ ...iconBoxStyle, color: project.color }}
                   onClick={() => setShowIconPicker(!showIconPicker)}
@@ -1123,9 +1122,6 @@ export default function ProjectOverview({
                 </div>
               </header>
 
-              {/* ── ИСПРАВЛЕНИЕ: уменьшенные отступы вокруг строки метаданных ── */}
-              <hr style={{ ...mainDividerStyle, marginTop: '8px', marginBottom: '8px' }} />
-
               {/* PROJECT METADATA */}
               <section style={{ marginBottom: '0', display: 'flex', alignItems: 'center', gap: '8px', padding: '0', flexWrap: 'wrap' }}>
                 <CustomSelect
@@ -1167,7 +1163,7 @@ export default function ProjectOverview({
                 />
               </section>
 
-              <hr style={{ ...mainDividerStyle, marginTop: '8px', marginBottom: '8px' }} />
+              <hr style={{ ...mainDividerStyle, marginTop: '16px', marginBottom: '24px' }} />
               {/* ── конец исправления ── */}
 
               {project.path && (

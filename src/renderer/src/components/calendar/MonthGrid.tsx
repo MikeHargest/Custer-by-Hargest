@@ -28,14 +28,15 @@ const isParentTask = (
 }
 
 interface MonthGridProps {
-  viewDate: Date
-  adjustMonth: (offset: number) => void
   monthGridDays: {
     dateString: string
     dayNumber: number
-    isCurrentMonth: boolean
     isToday: boolean
     isWeekend: boolean
+    isEmpty?: boolean
+    monthNameLong?: string
+    monthNameShort?: string
+    isFirstDayOfMonth?: boolean
   }[]
   timelineTasks: TimelineTask[]
   setTimelineTasks: React.Dispatch<React.SetStateAction<TimelineTask[]>>
@@ -52,8 +53,6 @@ interface MonthGridProps {
 }
 
 export default function MonthGrid({
-  viewDate,
-  adjustMonth,
   monthGridDays,
   timelineTasks,
   setTimelineTasks,
@@ -69,10 +68,77 @@ export default function MonthGrid({
   onAddProjectItem
 }: MonthGridProps) {
   const dropdownRef = React.useRef<HTMLDivElement>(null)
+  const monthGridContainerRef = React.useRef<HTMLDivElement>(null)
+  const initialScrollDone = React.useRef(false)
+  const isPanning = React.useRef(false)
+  const panStartY = React.useRef(0)
+  const panScrollTop = React.useRef(0)
+  const [visibleMonthStr, setVisibleMonthStr] = React.useState(
+    monthGridDays.find((d) => !d.isEmpty)?.monthNameLong || ''
+  )
+
+  React.useEffect(() => {
+    const doScrollToToday = (behavior: ScrollBehavior = 'instant') => {
+      const container = monthGridContainerRef.current
+      if (!container) return
+      const todayCell = container.querySelector('.day-cell-container[data-is-today="true"]') as HTMLElement
+      if (!todayCell) return
+
+      // With position:relative on the grid div, todayCell.offsetTop gives exact
+      // distance from the grid top. The grid starts right after the sticky header,
+      // so scrolling to todayCell.offsetTop places the row flush under the header.
+      container.scrollTo({ top: todayCell.offsetTop, behavior })
+    }
+
+    if (!initialScrollDone.current && monthGridContainerRef.current && monthGridDays.length > 0) {
+      setTimeout(() => {
+        doScrollToToday('instant')
+        initialScrollDone.current = true
+      }, 50)
+    }
+
+    const handleCustomScroll = () => doScrollToToday('smooth')
+    window.addEventListener('scroll-to-today', handleCustomScroll)
+    return () => window.removeEventListener('scroll-to-today', handleCustomScroll)
+  }, [monthGridDays])
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const container = e.currentTarget
+    const rect = container.getBoundingClientRect()
+    // Find an element slightly below the sticky header area
+    const el = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 160)
+    if (!el) return
+    
+    // Look for our specific data attribute
+    const cell = el.closest('.day-cell-container') as HTMLElement
+    if (cell && cell.dataset.monthLong) {
+      if (cell.dataset.monthLong !== visibleMonthStr) {
+        setVisibleMonthStr(cell.dataset.monthLong)
+      }
+    }
+  }
 
   const handleDragOver = (e: React.DragEvent): void => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'copy'
+  }
+
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (e.button !== 2) return
+    isPanning.current = true
+    panStartY.current = e.clientY
+    panScrollTop.current = monthGridContainerRef.current?.scrollTop || 0
+  }
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
+    if (!isPanning.current || !monthGridContainerRef.current) return
+    e.preventDefault()
+    const dy = e.clientY - panStartY.current
+    monthGridContainerRef.current.scrollTop = panScrollTop.current - dy
+  }
+
+  const handleMouseUp = (): void => {
+    isPanning.current = false
   }
 
   const handleInlineAdd = (): void => {
@@ -106,112 +172,100 @@ export default function MonthGrid({
 
   return (
     <div
+      ref={monthGridContainerRef}
       className="month-grid-container"
-      style={{ height: '100%', display: 'flex', flexDirection: 'column' }}
+      onScroll={handleScroll}
+      onMouseDown={handleMouseDown}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+      onContextMenu={(e) => e.preventDefault()}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', cursor: isPanning.current ? 'grabbing' : 'auto' }}
     >
-      {/* Month Header Label */}
+      {/* Combined sticky header: Month name + weekday labels */}
       <div
+        className="month-sticky-header"
         style={{
-          height: '45px',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 16px',
-          gap: '8px',
-          background: 'var(--card-bg)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
           position: 'sticky',
-          top: '45px',
-          zIndex: 42
+          top: 0,
+          zIndex: 42,
+          background: 'var(--card-bg)',
+          borderBottom: '1px solid rgba(255,255,255,0.05)'
         }}
       >
-        <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          {viewDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' }).replace(/^./, (str) => str.toUpperCase())}
+        {/* Month name row */}
+        <div
+          style={{
+            height: '45px',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 16px',
+          }}
+        >
+          <div style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+            {visibleMonthStr}
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '2px' }}>
-          <button
-            onClick={() => adjustMonth(-1)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              padding: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              opacity: 0.7,
-              transition: 'opacity 0.2s'
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
-          >
-            <ChevronUp size={16} />
-          </button>
-          <button
-            onClick={() => adjustMonth(1)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              padding: '4px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              opacity: 0.7,
-              transition: 'opacity 0.2s'
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '0.7')}
-          >
-            <ChevronDown size={16} />
-          </button>
+
+        {/* Weekday labels row */}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            paddingTop: '6px',
+            paddingBottom: '6px'
+          }}
+        >
+          {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+            <div
+              key={day}
+              style={{
+                padding: '4px 8px',
+                fontWeight: 600,
+                fontSize: '12px',
+                color: 'var(--text-secondary)',
+                textAlign: 'center'
+              }}
+            >
+              {day}
+            </div>
+          ))}
         </div>
       </div>
+
 
       <div
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(7, 1fr)',
+          gridAutoRows: 'minmax(150px, auto)',
           gap: '1px',
           background: 'rgba(255,255,255,0.05)',
-          borderBottom: '1px solid rgba(255,255,255,0.05)',
-          position: 'sticky',
-          top: '90px',
-          zIndex: 41
-        }}
-      >
-        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-          <div
-            key={day}
-            style={{
-              background: (day === 'Sat' || day === 'Sun') ? 'rgba(0,0,0,0.3)' : 'var(--card-bg)',
-              padding: '12px 8px',
-              fontWeight: 600,
-              fontSize: '12px',
-              color: 'var(--text-secondary)',
-              textAlign: 'center'
-            }}
-          >
-            {day}
-          </div>
-        ))}
-      </div>
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
-          gridAutoRows: '1fr',
-          gap: '1px',
-          background: 'rgba(255,255,255,0.05)',
-          flex: 1
+          flex: 1,
+          position: 'relative'
         }}
       >
         {monthGridDays.map((d, i) => {
+          if (d.isEmpty) {
+            return (
+              <div
+                key={`empty-${d.dateString}-${i}`}
+                style={{ background: 'var(--card-bg)' }}
+                className="day-cell-container"
+                data-month-long={d.monthNameLong}
+              />
+            )
+          }
+
           const tasksForDay = timelineTasks.filter((t) => t.date === d.dateString)
           const eventsForDay = allEvents.filter((e) => e.date === d.dateString)
 
           return (
             <div
               key={d.dateString + i}
+              className="day-cell-container"
+              data-month-long={d.monthNameLong}
+              data-is-today={d.isToday}
               onDoubleClick={() => {
                 if (projects.length > 0 && !addingToCell) {
                   setAddingToCell({ projectId: projects[0].id, date: d.dateString })
@@ -229,7 +283,7 @@ export default function MonthGrid({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '4px',
-                opacity: d.isCurrentMonth ? 1 : 0.4,
+                opacity: 1, // Continuous scroll means all months have 1 opacity
                 cursor: 'pointer',
                 overflow: 'hidden',
                 minHeight: 0
@@ -306,11 +360,11 @@ export default function MonthGrid({
                   textAlign: 'right',
                   fontSize: '12px',
                   color: d.isToday ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontWeight: d.isToday ? 'bold' : 'normal',
+                  fontWeight: d.isToday || d.isFirstDayOfMonth ? 'bold' : 'normal',
                   marginBottom: '4px'
                 }}
               >
-                {d.dayNumber}
+                {d.monthNameShort && d.isFirstDayOfMonth ? `${d.dayNumber} ${d.monthNameShort}` : d.dayNumber}
               </div>
               <div
                 style={{

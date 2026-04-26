@@ -206,59 +206,72 @@ export default function CalendarView({
     const arr: {
       dateString: string
       dayNumber: number
-      isCurrentMonth: boolean
       isToday: boolean
       isWeekend: boolean
+      isEmpty?: boolean
+      monthNameLong?: string
+      monthNameShort?: string
+      isFirstDayOfMonth?: boolean
     }[] = []
+
     const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const todayStr = today.toISOString().split('T')[0]
 
-    const firstDay = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1)
-    const dayOfWeek = firstDay.getDay()
-    const startOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+    // Start 6 months ago
+    const startMonth = new Date(today.getFullYear(), today.getMonth() - 6, 1)
+    
+    // Generate 18 months total
+    for (let i = 0; i < 18; i++) {
+       const mDate = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1)
+       const rawMonthLong = mDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+       const monthNameLong = rawMonthLong.charAt(0).toUpperCase() + rawMonthLong.slice(1)
+       
+       const rawMonthShort = mDate.toLocaleDateString('ru-RU', { month: 'short' })
+       const monthNameShort = rawMonthShort.replace('.', '')
+       
+       const dayOfWeek = mDate.getDay()
+       const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+       
+       // Empty pad the beginning to align the 1st of the month with its correct weekday
+       for (let p = 0; p < offset; p++) {
+          arr.push({ isEmpty: true, dateString: `dummy-${mDate.toISOString()}-${p}`, dayNumber: 0, isToday: false, isWeekend: false, monthNameLong })
+       }
+       
+       const lastDay = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0).getDate()
+       for (let d = 1; d <= lastDay; d++) {
+          const cDate = new Date(mDate.getFullYear(), mDate.getMonth(), d)
+          const dateString = cDate.toISOString().split('T')[0]
+          const isWeekend = cDate.getDay() === 0 || cDate.getDay() === 6
+          arr.push({
+             isEmpty: false,
+             dateString,
+             dayNumber: d,
+             isToday: dateString === todayStr,
+             isWeekend,
+             monthNameLong,
+             monthNameShort,
+             isFirstDayOfMonth: d === 1
+          })
+       }
+       
+       // Tail pad to finish the final week
+       let currentMonthLength = offset + lastDay
+       const endOffset = (7 - (currentMonthLength % 7)) % 7
+       for (let p = 0; p < endOffset; p++) {
+          arr.push({ isEmpty: true, dateString: `dummy-end-${mDate.toISOString()}-${p}`, dayNumber: 0, isToday: false, isWeekend: false, monthNameLong })
+       }
 
-    const prevMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 0)
-    for (let i = startOffset - 1; i >= 0; i--) {
-      const d = new Date(prevMonth)
-      d.setDate(prevMonth.getDate() - i)
-      const isWeekend = d.getDay() === 0 || d.getDay() === 6
-      arr.push({
-        dateString: d.toISOString().split('T')[0],
-        dayNumber: d.getDate(),
-        isCurrentMonth: false,
-        isToday: false,
-        isWeekend
-      })
-    }
-
-    const lastDay = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0)
-    for (let i = 1; i <= lastDay.getDate(); i++) {
-      const d = new Date(viewDate.getFullYear(), viewDate.getMonth(), i)
-      const isWeekend = d.getDay() === 0 || d.getDay() === 6
-      arr.push({
-        dateString: d.toISOString().split('T')[0],
-        dayNumber: i,
-        isCurrentMonth: true,
-        isToday: d.toDateString() === today.toDateString(),
-        isWeekend
-      })
-    }
-
-    const totalSlots = arr.length > 35 ? 42 : 35
-    const remaining = totalSlots - arr.length
-    for (let i = 1; i <= remaining; i++) {
-      const d = new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, i)
-      const isWeekend = d.getDay() === 0 || d.getDay() === 6
-      arr.push({
-        dateString: d.toISOString().split('T')[0],
-        dayNumber: i,
-        isCurrentMonth: false,
-        isToday: false,
-        isWeekend
-      })
+       // Add 1 full week (7 days) separator of empty cells if not the last month
+       if (i < 17) {
+          for (let p = 0; p < 7; p++) {
+             arr.push({ isEmpty: true, dateString: `dummy-sep-${mDate.toISOString()}-${p}`, dayNumber: 0, isToday: false, isWeekend: false, monthNameLong })
+          }
+       }
     }
 
     return arr
-  }, [viewDate])
+  }, [])
 
   const allEvents = useMemo(() => {
     const list: any[] = []
@@ -266,8 +279,14 @@ export default function CalendarView({
     // Determine the full range to expand events for (Timeline range + Month Grid range)
     const timelineStart = days[0]?.dateString || ''
     const timelineEnd = days[days.length - 1]?.dateString || ''
-    const monthStart = monthGridDays[0]?.dateString || ''
-    const monthEnd = monthGridDays[monthGridDays.length - 1]?.dateString || ''
+    
+    let monthStart = ''
+    let monthEnd = ''
+    if (monthGridDays.length > 0) {
+      const actualDays = monthGridDays.filter((d) => !d.isEmpty)
+      monthStart = actualDays[0]?.dateString || ''
+      monthEnd = actualDays[actualDays.length - 1]?.dateString || ''
+    }
 
     const startDate = [timelineStart, monthStart].filter(Boolean).sort()[0] || ''
     const endDate = [timelineEnd, monthEnd].filter(Boolean).sort().reverse()[0] || ''
@@ -312,14 +331,8 @@ export default function CalendarView({
         scrollRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' })
       }
     } else {
-      // Month view vertical scroll + reset date
       setViewDate(new Date())
-      const todayIndex = monthGridDays.findIndex((d) => d.isToday)
-      if (todayIndex !== -1) {
-        const row = Math.floor(todayIndex / 7)
-        const rowHeight = scrollRef.current.scrollHeight / (monthGridDays.length / 7)
-        scrollRef.current.scrollTo({ top: row * rowHeight, behavior: 'smooth' })
-      }
+      window.dispatchEvent(new CustomEvent('scroll-to-today'))
     }
   }
 
@@ -591,7 +604,8 @@ export default function CalendarView({
           style={{
             overflow: 'scroll',
             flex: 1,
-            cursor: isPanning ? 'grabbing' : 'auto'
+            cursor: isPanning ? 'grabbing' : 'auto',
+            position: 'relative'
           }}
         >
           {/* Shared Top Bar Controls */}
@@ -733,7 +747,8 @@ export default function CalendarView({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '4px',
-                    transition: 'all 0.2s'
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap'
                   }}
                 >
                   <RefreshCcw size={12} className={isSyncing ? 'spin-anim' : ''} />
@@ -1152,7 +1167,7 @@ export default function CalendarView({
                             >
                               {/* Project Boundary Bracket Lines */}
                               {project.startDate && project.endDate && d.dateString >= project.startDate && d.dateString <= project.endDate && (
-                                <div 
+                                <div
                                   style={{
                                     position: 'absolute',
                                     top: 0,
@@ -1633,10 +1648,16 @@ export default function CalendarView({
               </tbody>
             </table>
           ) : (
-            <MonthGrid
-              viewDate={viewDate}
-              adjustMonth={adjustMonth}
-              monthGridDays={monthGridDays}
+            <div style={{
+              position: 'absolute',
+              top: '45px',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: 'hidden'
+            }}>
+              <MonthGrid
+                monthGridDays={monthGridDays}
               timelineTasks={timelineTasks}
               setTimelineTasks={setTimelineTasks}
               allEvents={allEvents}
@@ -1650,47 +1671,11 @@ export default function CalendarView({
               setSelectedTaskId={setSelectedTaskId}
               onAddProjectItem={onAddProjectItem}
             />
+            </div>
           )}
         </div>
 
-        {/* Project Visibility Footer Summary (only if some are hidden) */}
-        {hiddenProjects.size > 0 && (
-          <div
-            style={{
-              padding: '8px 24px',
-              fontSize: '11px',
-              color: 'var(--text-secondary)',
-              background: 'rgba(255,255,255,0.02)',
-              borderTop: '1px solid rgba(255,255,255,0.05)',
-              display: 'flex',
-              gap: '12px',
-              alignItems: 'center'
-            }}
-          >
-            <EyeOff size={12} />
-            <span>
-              Hidden projects:{' '}
-              {Array.from(hiddenProjects)
-                .map((id) => projects.find((p) => p.id === id)?.name)
-                .filter(Boolean)
-                .join(', ')}
-            </span>
-            <button
-              onClick={() => setHiddenProjectIds([])}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--accent)',
-                fontSize: '11px',
-                cursor: 'pointer',
-                padding: 0,
-                textDecoration: 'underline'
-              }}
-            >
-              Show all
-            </button>
-          </div>
-        )}
+
       </div>
     </div>
   )

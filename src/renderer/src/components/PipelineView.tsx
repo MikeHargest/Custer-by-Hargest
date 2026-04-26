@@ -684,8 +684,8 @@ export default function PipelineView({
                     display: 'flex',
                     alignItems: 'center',
                     gap: '8px',
-                    background: p.id === activePipelineId ? 'rgba(255,255,255,0.08)' : 'transparent',
-                    border: 'none',
+                    background: p.id === activePipelineId ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    border: `1px solid ${p.id === activePipelineId ? 'rgba(255,255,255,0.1)' : 'transparent'}`,
                     color:
                       p.id === activePipelineId ? 'var(--text-primary)' : 'var(--text-secondary)',
                     transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'

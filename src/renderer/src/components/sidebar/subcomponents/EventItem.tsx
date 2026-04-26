@@ -53,16 +53,16 @@ const EventItem = memo(function EventItem({
   }, [activeSelect])
 
   // Reusable Custom Dropdown Component
-  const CustomSelect = ({ 
-    label, 
-    value, 
-    options, 
-    onSelect, 
-    id 
-  }: { 
-    label: string, 
-    value: any, 
-    options: { val: any, label: string }[], 
+  const CustomSelect = ({
+    label,
+    value,
+    options,
+    onSelect,
+    id
+  }: {
+    label: string,
+    value: any,
+    options: { val: any, label: string }[],
     onSelect: (val: any) => void,
     id: string
   }) => {
@@ -197,8 +197,8 @@ const EventItem = memo(function EventItem({
           cursor: 'pointer'
         }}
         onClick={() => {
-           setActiveSelect(null);
-           setExpandedEventId(isExpanded ? null : event.id);
+          setActiveSelect(null);
+          setExpandedEventId(isExpanded ? null : event.id);
         }}
       >
         <div
@@ -304,20 +304,23 @@ const EventItem = memo(function EventItem({
       </div>
       {isExpanded && (
         <div
+          tabIndex={-1}
+          onClick={(e) => {
+            const target = e.target as HTMLElement;
+            // Only blur if the user clicked the background, not another input or button
+            if (target.tagName !== 'INPUT' && target.tagName !== 'BUTTON' && !target.closest('.custom-select-container')) {
+              if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'INPUT') {
+                document.activeElement.blur();
+              }
+            }
+          }}
           style={{
             padding: '0 8px 12px 16px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',
-            borderTop: '1px solid rgba(255,255,255,0.04)'
-          }}
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => {
-             // Close any open select when clicking inside the content area (not on inputs)
-             if (activeSelect && !(e.target as HTMLElement).closest('.inline-edit-input')) {
-               setActiveSelect(null);
-             }
-             e.stopPropagation();
+            borderTop: '1px solid rgba(255,255,255,0.04)',
+            outline: 'none'
           }}
         >
           <div style={{ paddingTop: '8px' }}>
