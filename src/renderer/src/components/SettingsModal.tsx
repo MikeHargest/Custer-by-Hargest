@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, Cloud } from 'lucide-react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, Cloud, CalendarDays, Palette } from 'lucide-react'
 import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'
@@ -20,6 +20,8 @@ interface SettingsModalProps {
   setTimerVolume: (volume: number) => void
   backupIntervalMinutes: number
   setBackupIntervalMinutes: (val: number) => void
+  calendarTimezone: string
+  setCalendarTimezone: (tz: string) => void
 }
 
 export default function SettingsModal({
@@ -37,11 +39,13 @@ export default function SettingsModal({
   timerVolume,
   setTimerVolume,
   backupIntervalMinutes,
-  setBackupIntervalMinutes
+  setBackupIntervalMinutes,
+  calendarTimezone,
+  setCalendarTimezone
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'sync'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'calendar'>(
     'general'
   )
 
@@ -156,12 +160,12 @@ export default function SettingsModal({
             </div>
 
             {[
-              { id: 'general', label: 'General', icon: <Settings size={16} /> },
+              { id: 'general', label: 'Theme', icon: <Palette size={16} /> },
               { id: 'projects', label: 'Projects', icon: <Layout size={16} /> },
               { id: 'notes', label: 'Notes', icon: <FileText size={16} /> },
+              { id: 'calendar', label: 'Calendar', icon: <CalendarDays size={16} /> },
               { id: 'timers', label: 'Timers', icon: <Timer size={16} /> },
               { id: 'canvas', label: 'Canvas', icon: <Compass size={16} /> },
-              { id: 'sync', label: 'Integrations', icon: <Cloud size={16} /> },
               { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> }
             ].map((tab) => (
               <button
@@ -200,7 +204,7 @@ export default function SettingsModal({
                   transition={{ duration: 0.2 }}
                 >
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
-                    General Settings
+                    Theme Settings
                   </h3>
                   <p
                     style={{
@@ -281,8 +285,10 @@ export default function SettingsModal({
                                   ? 'Accent'
                                   : key === 'textPrimary'
                                     ? 'Text'
-                                    : key === 'timelineTaskBg'
-                                      ? 'Timeline'
+                                    : key === 'calendarTaskBg'
+                                      ? 'Calendar Tasks'
+                                    : key === 'calendarEventBg'
+                                      ? 'Calendar Events'
                                       : key === 'timerBg'
                                         ? 'Timers'
                                         : key
@@ -741,16 +747,16 @@ export default function SettingsModal({
                 </motion.div>
               )}
 
-              {activeTab === 'sync' && (
+              {activeTab === 'calendar' && (
                 <motion.div
-                  key="sync"
+                  key="calendar"
                   initial={{ opacity: 0, x: 10 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -10 }}
                   transition={{ duration: 0.2 }}
                 >
                   <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
-                    Sync & Integrations
+                    Calendar Settings
                   </h3>
                   <p
                     style={{
@@ -759,48 +765,91 @@ export default function SettingsModal({
                       fontSize: '13px'
                     }}
                   >
-                    Connect Cluster to external services.
+                    Configure how events are displayed and parsed.
                   </p>
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                    <div style={{ 
-                      background: 'rgba(255,255,255,0.02)', 
-                      padding: '16px', 
+                    <div style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      padding: '16px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Time Zone
+                      </h4>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                        Used for displaying event dates correctly. If events appear on wrong days, set this to your local timezone.
+                      </div>
+                      <select
+                        value={calendarTimezone}
+                        onChange={(e) => setCalendarTimezone(e.target.value)}
+                        style={{
+                          width: '100%',
+                          background: 'rgba(0,0,0,0.2)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: 'var(--text-primary)',
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          cursor: 'pointer',
+                          outline: 'none',
+                          appearance: 'none',
+                          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                          backgroundRepeat: 'no-repeat',
+                          backgroundPosition: 'right 12px center',
+                          paddingRight: '32px'
+                        }}
+                      >
+                        {Intl.supportedValuesOf('timeZone').map((tz) => (
+                          <option key={tz} value={tz} style={{ background: '#1a1a2e' }}>{tz}</option>
+                        ))}
+                      </select>
+                      <div style={{ marginTop: '8px', fontSize: '11px', color: 'var(--text-secondary)' }}>
+                        Current offset: {new Date().toLocaleTimeString('en', { timeZoneName: 'short', timeZone: calendarTimezone }).split(' ').pop()}
+                      </div>
+                    </div>
+
+                    {/* Google Calendar Sync */}
+                    <div style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      padding: '16px',
                       borderRadius: 'var(--radius-lg)',
                       border: '1px solid rgba(255,255,255,0.05)'
                     }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                         <div>
-                            <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                              Google Calendar
-                            </h4>
-                            <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Bidirectional sync for tasks & events</div>
-                         </div>
-                         <button
-                           onClick={async () => {
-                             // @ts-ignore
-                             await window.api.googleAuth();
-                             alert('Check your browser to complete Google Auth!');
-                           }}
-                           style={{
-                              padding: '6px 12px',
-                              borderRadius: '6px',
-                              background: 'rgba(255,255,255,0.1)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              color: 'white',
-                              cursor: 'pointer',
-                              fontSize: '12px',
-                              fontWeight: 500,
-                              transition: 'all 0.2s'
-                           }}
-                         >
-                           Connect Account
-                         </button>
+                        <div>
+                          <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                            Google Calendar
+                          </h4>
+                          <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Bidirectional sync for tasks &amp; events</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            // @ts-ignore
+                            await window.api.googleAuth();
+                            alert('Check your browser to complete Google Auth!');
+                          }}
+                          style={{
+                            padding: '6px 12px',
+                            borderRadius: '6px',
+                            background: 'rgba(255,255,255,0.1)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontSize: '12px',
+                            fontWeight: 500,
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          Connect Account
+                        </button>
                       </div>
                     </div>
                   </div>
                 </motion.div>
               )}
+
             </AnimatePresence>
           </div>
         </div>

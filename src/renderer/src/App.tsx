@@ -142,6 +142,9 @@ function App() {
   const [previousWorkspacePath, setPreviousWorkspacePath] = useState<string | null>(null)
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
   const [backupIntervalMinutes, setBackupIntervalMinutes] = useState(10)
+  const [calendarTimezone, setCalendarTimezone] = useState(() => {
+    try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return 'UTC' }
+  })
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
@@ -880,12 +883,8 @@ function App() {
     root.style.setProperty('--board-accent', boardAccent)
     root.style.setProperty('--board-accent-glow', `${boardAccent}40`)
     root.style.setProperty('--board-bg', theme.boardBg || DEFAULT_THEME.boardBg)
-
-    if (theme.timelineTaskBg) {
-      root.style.setProperty('--timeline-task-bg', theme.timelineTaskBg)
-    } else {
-      root.style.removeProperty('--timeline-task-bg')
-    }
+    root.style.setProperty('--calendar-task-bg', theme.calendarTaskBg || DEFAULT_THEME.calendarTaskBg || '#2a2a2a')
+    root.style.setProperty('--calendar-event-bg', theme.calendarEventBg || DEFAULT_THEME.calendarEventBg || 'rgba(255,255,255,0.03)')
 
     if (theme.timerBg) {
       root.style.setProperty('--timer-bg', theme.timerBg)
@@ -1136,6 +1135,45 @@ function App() {
       />
     )
   }
+
+    const handleAddEvent = (projectId: string, title: string, date: string) => {
+      pushToHistory()
+      setProjects((prev) => {
+        const updateRecursive = (projs: Project[]): Project[] => {
+          return projs.map((p) => {
+            if (p.id === projectId) {
+              const newEvent: AppEvent = {
+                id: uuidv4(),
+                title,
+                date,
+                time: '12:00',
+                syncStatus: 'pending_push',
+                updatedAt: Date.now()
+              }
+              return { ...p, events: [...(p.events || []), newEvent] }
+            }
+            if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
+            return p
+          })
+        }
+        return updateRecursive(prev)
+      })
+    }
+
+    const handleAddAlarm = (date: string, time: string, title: string) => {
+      setAlarms((prev) => [
+        ...prev,
+        {
+          id: uuidv4(),
+          title,
+          taskName: null,
+          date,
+          time,
+          isEnabled: true,
+          isNotified: false
+        }
+      ])
+    }
 
   return (
     <div className="app-container">
@@ -1435,13 +1473,15 @@ function App() {
             </div>
             <div style={{ display: currentView === 'timeline' ? 'contents' : 'none' }}>
               <CalendarView
-                projects={allProjects}
+                projects={projects}
                 timelineTasks={timelineTasks}
                 setTimelineTasks={(action: React.SetStateAction<TimelineTask[]>) => {
                   pushToHistory()
                   setTimelineTasks(action)
                 }}
                 onAddProjectItem={handleCreateTimelineTask}
+                onAddEvent={handleAddEvent}
+                onAddAlarm={handleAddAlarm}
                 hiddenProjectIds={hiddenTimelineProjectIds}
                 setHiddenProjectIds={setHiddenTimelineProjectIds}
                 isSidebarOpen={isSidebarOpen}
@@ -1449,6 +1489,7 @@ function App() {
                 onSyncWorkspaceEvents={handleSyncWorkspaceEvents}
                 isSyncing={isSyncingCalendar}
                 selectedProjectId={selectedProjectId}
+                setProjects={handleSetProjects}
               />
             </div>
             <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>
@@ -1647,6 +1688,8 @@ function App() {
         setTimerVolume={setTimerVolume}
         backupIntervalMinutes={backupIntervalMinutes}
         setBackupIntervalMinutes={setBackupIntervalMinutes}
+        calendarTimezone={calendarTimezone}
+        setCalendarTimezone={setCalendarTimezone}
         onSaveThemeAsDefault={async () => {
           // @ts-ignore
           await window.api.setStoreValue('ui-theme', theme)

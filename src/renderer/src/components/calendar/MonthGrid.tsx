@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { ChevronUp, ChevronDown, CheckSquare, Plus, X } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
+import { formatLocalDate } from '../../utils/dateUtils'
 
 const isParentTask = (
   projects: Project[],
@@ -44,11 +45,8 @@ interface MonthGridProps {
   projects: Project[]
   taskIdToNameMap: Map<string, string>
   addingToCell: { projectId: string; date: string } | null
-  setAddingToCell: React.Dispatch<React.SetStateAction<{ projectId: string; date: string } | null>>
-  newItemName: string
-  setNewItemName: React.Dispatch<React.SetStateAction<string>>
-  selectedTaskId: string
-  setSelectedTaskId: React.Dispatch<React.SetStateAction<string>>
+  setAddingToCell: React.Dispatch<React.SetStateAction<{ projectId: string; date: string; x: number; y: number } | null>>
+  setContextMenu: (menu: { type: 'task' | 'event', id: string, title: string, projectId: string, x: number, y: number } | null) => void
   onAddProjectItem: (projectId: string, name: string, parentTaskId?: string, explicitTaskId?: string) => string
 }
 
@@ -61,46 +59,52 @@ export default function MonthGrid({
   taskIdToNameMap,
   addingToCell,
   setAddingToCell,
-  newItemName,
-  setNewItemName,
-  selectedTaskId,
-  setSelectedTaskId,
+  setContextMenu,
   onAddProjectItem
 }: MonthGridProps) {
-  const dropdownRef = React.useRef<HTMLDivElement>(null)
   const monthGridContainerRef = React.useRef<HTMLDivElement>(null)
   const initialScrollDone = React.useRef(false)
+  const [isReady, setIsReady] = React.useState(false)
   const isPanning = React.useRef(false)
   const panStartY = React.useRef(0)
   const panScrollTop = React.useRef(0)
-  const [visibleMonthStr, setVisibleMonthStr] = React.useState(
-    monthGridDays.find((d) => !d.isEmpty)?.monthNameLong || ''
-  )
+  const [visibleMonthStr, setVisibleMonthStr] = React.useState(() => {
+    // Initialize with today's month so the header shows the correct month immediately
+    const today = new Date()
+    const raw = today.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    return raw.charAt(0).toUpperCase() + raw.slice(1)
+  })
 
-  React.useEffect(() => {
-    const doScrollToToday = (behavior: ScrollBehavior = 'instant') => {
-      const container = monthGridContainerRef.current
-      if (!container) return
-      const todayCell = container.querySelector('.day-cell-container[data-is-today="true"]') as HTMLElement
-      if (!todayCell) return
+  const doScrollToToday = React.useCallback((behavior: ScrollBehavior = 'instant') => {
+    const container = monthGridContainerRef.current
+    if (!container) return
+    const todayCell = container.querySelector('.day-cell-container[data-is-today="true"]') as HTMLElement
+    if (!todayCell) return
 
-      // With position:relative on the grid div, todayCell.offsetTop gives exact
-      // distance from the grid top. The grid starts right after the sticky header,
-      // so scrolling to todayCell.offsetTop places the row flush under the header.
-      container.scrollTo({ top: todayCell.offsetTop, behavior })
-    }
+    // With position:relative on the grid div, todayCell.offsetTop gives exact
+    // distance from the grid top. The grid starts right after the sticky header,
+    // so scrolling to todayCell.offsetTop places the row flush under the header.
+    container.scrollTo({ top: todayCell.offsetTop, behavior })
+  }, [])
 
+  // useLayoutEffect runs before browser paint. Combined with requestAnimationFrame
+  // and isReady state, it ensures we scroll to today before the user sees anything,
+  // preventing the "October 2025" flash.
+  React.useLayoutEffect(() => {
     if (!initialScrollDone.current && monthGridContainerRef.current && monthGridDays.length > 0) {
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         doScrollToToday('instant')
         initialScrollDone.current = true
-      }, 50)
+        setIsReady(true)
+      })
     }
+  }, [monthGridDays, doScrollToToday])
 
+  React.useEffect(() => {
     const handleCustomScroll = () => doScrollToToday('smooth')
     window.addEventListener('scroll-to-today', handleCustomScroll)
     return () => window.removeEventListener('scroll-to-today', handleCustomScroll)
-  }, [monthGridDays])
+  }, [doScrollToToday])
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const container = e.currentTarget
@@ -108,7 +112,7 @@ export default function MonthGrid({
     // Find an element slightly below the sticky header area
     const el = document.elementFromPoint(rect.left + rect.width / 2, rect.top + 160)
     if (!el) return
-    
+
     // Look for our specific data attribute
     const cell = el.closest('.day-cell-container') as HTMLElement
     if (cell && cell.dataset.monthLong) {
@@ -141,31 +145,6 @@ export default function MonthGrid({
     isPanning.current = false
   }
 
-  const handleInlineAdd = (): void => {
-    if (!addingToCell || !newItemName.trim()) {
-      setAddingToCell(null)
-      setNewItemName('')
-      setSelectedTaskId('')
-      return
-    }
-
-    const taskId = selectedTaskId ? selectedTaskId : undefined
-    const newTaskId = onAddProjectItem(addingToCell.projectId, newItemName.trim(), taskId, uuidv4())
-    setTimelineTasks((prev) => [
-      ...prev,
-      {
-        id: uuidv4(),
-        projectId: addingToCell.projectId,
-        taskName: newItemName.trim(),
-        date: addingToCell.date,
-        taskId: newTaskId
-      }
-    ])
-    setAddingToCell(null)
-    setNewItemName('')
-    setSelectedTaskId('')
-  }
-
   const removeTask = (taskId: string): void => {
     setTimelineTasks((prev) => prev.filter((t) => t.id !== taskId))
   }
@@ -180,7 +159,7 @@ export default function MonthGrid({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', cursor: isPanning.current ? 'grabbing' : 'auto' }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', cursor: isPanning.current ? 'grabbing' : 'auto', opacity: isReady ? 1 : 0 }}
     >
       {/* Combined sticky header: Month name + weekday labels */}
       <div
@@ -223,7 +202,7 @@ export default function MonthGrid({
                 padding: '4px 8px',
                 fontWeight: 600,
                 fontSize: '12px',
-                color: 'var(--text-secondary)',
+                color: 'rgba(255,255,255,0.4)',
                 textAlign: 'center'
               }}
             >
@@ -250,7 +229,7 @@ export default function MonthGrid({
             return (
               <div
                 key={`empty-${d.dateString}-${i}`}
-                style={{ background: 'var(--card-bg)' }}
+                style={{ background: d.isWeekend ? 'linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)), var(--card-bg)' : 'var(--card-bg)' }}
                 className="day-cell-container"
                 data-month-long={d.monthNameLong}
               />
@@ -266,19 +245,26 @@ export default function MonthGrid({
               className="day-cell-container"
               data-month-long={d.monthNameLong}
               data-is-today={d.isToday}
-              onDoubleClick={() => {
+              onDoubleClick={(e) => {
                 if (projects.length > 0 && !addingToCell) {
-                  setAddingToCell({ projectId: projects[0].id, date: d.dateString })
-                  setNewItemName('')
-                  setSelectedTaskId('')
+                  setAddingToCell({
+                    projectId: projects[0].id,
+                    date: d.dateString,
+                    x: e.clientX,
+                    y: e.clientY
+                  })
                 }
               }}
               style={{
                 background: d.isToday
-                  ? 'rgba(255,255,255,0.05)'
-                  : d.isWeekend
-                    ? 'rgba(0,0,0,0.3)'
-                    : 'var(--card-bg)',
+                  ? '#1f1f1f'
+                  : d.isPast
+                    ? d.isWeekend
+                      ? 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)), var(--card-bg)'
+                      : 'linear-gradient(rgba(0,0,0,0.2), rgba(0,0,0,0.2)), var(--card-bg)'
+                    : d.isWeekend
+                      ? 'linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)), var(--card-bg)'
+                      : 'var(--card-bg)',
                 padding: '8px',
                 display: 'flex',
                 flexDirection: 'column',
@@ -300,13 +286,11 @@ export default function MonthGrid({
                       prev.map((t) => {
                         if (t.id === payload.id) {
                           if (t.endDate) {
-                            const oldStartDate = new Date(t.date).getTime()
-                            const oldEndDate = new Date(t.endDate).getTime()
+                            const oldStartDate = new Date(t.date + 'T00:00:00').getTime()
+                            const oldEndDate = new Date(t.endDate + 'T00:00:00').getTime()
                             const diffMs = oldEndDate - oldStartDate
-                            const newStartDate = new Date(d.dateString).getTime()
-                            const newEndDate = new Date(newStartDate + diffMs)
-                              .toISOString()
-                              .split('T')[0]
+                            const newStartDate = new Date(d.dateString + 'T00:00:00').getTime()
+                            const newEndDate = formatLocalDate(new Date(newStartDate + diffMs))
                             return { ...t, date: d.dateString, endDate: newEndDate }
                           }
                           return { ...t, date: d.dateString }
@@ -359,8 +343,8 @@ export default function MonthGrid({
                 style={{
                   textAlign: 'right',
                   fontSize: '12px',
-                  color: d.isToday ? 'var(--accent)' : 'var(--text-secondary)',
-                  fontWeight: d.isToday || d.isFirstDayOfMonth ? 'bold' : 'normal',
+                  color: d.isToday ? 'var(--text-primary)' : d.isPast ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.45)',
+                  fontWeight: d.isToday ? 700 : 500,
                   marginBottom: '4px'
                 }}
               >
@@ -380,6 +364,18 @@ export default function MonthGrid({
                 {eventsForDay.map((event) => (
                   <div
                     key={event.id}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setContextMenu({
+                        type: 'event',
+                        id: event.id,
+                        title: event.title,
+                        projectId: event.projectId,
+                        x: e.clientX,
+                        y: e.clientY
+                      })
+                    }}
                     draggable
                     onDragStart={(e) => {
                       e.dataTransfer.setData(
@@ -396,9 +392,10 @@ export default function MonthGrid({
                       alignItems: 'center',
                       gap: '6px',
                       padding: '2px 6px',
-                      background: 'rgba(255,255,255,0.03)',
+                      background: 'var(--calendar-event-bg)',
                       borderRadius: 'var(--radius-sm)',
                       fontSize: '11px',
+                      border: '1px solid rgba(255,255,255,0.05)',
                       borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`,
                       marginBottom: '2px',
                       cursor: 'grab'
@@ -448,6 +445,18 @@ export default function MonthGrid({
                   return (
                     <div
                       key={task.id}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setContextMenu({
+                          type: 'task',
+                          id: task.id,
+                          title: currentTaskName || '',
+                          projectId: task.projectId,
+                          x: e.clientX,
+                          y: e.clientY
+                        })
+                      }}
                       draggable
                       onDragStart={(e) => {
                         e.dataTransfer.setData(
@@ -460,12 +469,13 @@ export default function MonthGrid({
                         )
                       }}
                       style={{
-                        background: 'rgba(0,0,0,0.2)',
+                        background: 'var(--calendar-task-bg)',
                         color: 'var(--text-primary)',
                         padding: '4px 6px',
                         borderRadius: 'var(--radius-md)',
                         fontSize: '11px',
                         fontWeight: isParent ? 600 : 400,
+                        border: '1px solid rgba(255,255,255,0.05)',
                         borderLeft: `3px solid ${project?.color || 'var(--accent)'}`,
                         display: 'flex',
                         alignItems: 'center',
@@ -506,114 +516,7 @@ export default function MonthGrid({
                   )
                 })}
 
-                {addingToCell && addingToCell.date === d.dateString && (
-                  <div
-                    ref={dropdownRef}
-                    style={{
-                      background: 'rgba(0,0,0,0.2)',
-                      padding: '4px 6px',
-                      borderRadius: 'var(--radius-md)',
-                      border: '1px solid var(--accent)',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '6px',
-                      zIndex: 10,
-                      minWidth: '100%',
-                      boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <input
-                        type="text"
-                        value={newItemName}
-                        onChange={(e) => setNewItemName(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') handleInlineAdd()
-                          if (e.key === 'Escape') setAddingToCell(null)
-                        }}
-                        placeholder="New task..."
-                        autoFocus
-                        style={{
-                          flex: 1,
-                          background: 'rgba(0,0,0,0.2)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          color: 'var(--text-primary)',
-                          padding: '4px 8px',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '12px',
-                          outline: 'none',
-                          width: '100%'
-                        }}
-                      />
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <select
-                        value={addingToCell.projectId}
-                        onChange={(e) =>
-                          setAddingToCell({ ...addingToCell, projectId: e.target.value })
-                        }
-                        style={{
-                          flex: 1,
-                          background: 'rgba(0,0,0,0.4)',
-                          color: 'var(--text-primary)',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '2px 4px',
-                          fontSize: '11px',
-                          outline: 'none'
-                        }}
-                      >
-                        {projects.map((p) => (
-                          <option key={p.id} value={p.id}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '4px',
-                        justifyContent: 'flex-end',
-                        marginTop: '2px'
-                      }}
-                    >
-                      <button
-                        onClick={() => setAddingToCell(null)}
-                        style={{
-                          background: 'transparent',
-                          border: '1px solid rgba(255,255,255,0.1)',
-                          color: 'var(--text-secondary)',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '11px',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={handleInlineAdd}
-                        style={{
-                          background: 'var(--accent)',
-                          border: 'none',
-                          color: 'white',
-                          padding: '2px 8px',
-                          borderRadius: 'var(--radius-md)',
-                          fontSize: '11px',
-                          cursor: 'pointer',
-                          fontWeight: 500
-                        }}
-                        disabled={!newItemName.trim()}
-                      >
-                        Add
-                      </button>
-                    </div>
-                  </div>
-                )}
+                {/* Tasks rendering continues... */}
               </div>
             </div>
           )

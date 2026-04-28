@@ -124,7 +124,8 @@ export interface UITheme {
   textPrimary: string
   boardAccent: string
   boardBg: string
-  timelineTaskBg?: string
+  calendarTaskBg?: string
+  calendarEventBg?: string
   timerBg?: string
 }
 
@@ -178,6 +179,7 @@ export const DEFAULT_THEME: UITheme = {
   textPrimary: '#EAEAEA',
   boardAccent: '#71717a',
   boardBg: '#1b1b1b',
-  timelineTaskBg: '#2a2a2a',
+  calendarTaskBg: '#2a2a2a',
+  calendarEventBg: 'rgba(255,255,255,0.03)',
   timerBg: '#171717'
 }

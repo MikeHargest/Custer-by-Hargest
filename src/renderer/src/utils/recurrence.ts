@@ -1,4 +1,5 @@
 import { AppEvent } from '../types'
+import { formatLocalDate } from './dateUtils'
 
 export function expandRecurringEvents(
   events: AppEvent[],
@@ -57,7 +58,7 @@ export function expandRecurringEvents(
         if (current > untilDate) break
       }
 
-      const isoDate = current.toISOString().split('T')[0]
+      const dateStr = formatLocalDate(current)
       
       // Match frequency logic
       let matchesFrequency = true
@@ -69,17 +70,17 @@ export function expandRecurringEvents(
         // Only if it's in our requested view range
         if (current >= start && current <= end) {
           // Check if this date has an exception
-          const exception = event.exceptions && event.exceptions[isoDate]
+          const exception = event.exceptions && event.exceptions[dateStr]
           if (!exception || !exception.deleted) {
             // If it's edited, we don't push the virtual one HERE,
             // because the edited standalone event will be pushed by the main loop (see event.originalEventId check above).
             if (!exception?.editedEventId) {
               result.push({
                 ...event,
-                id: `${event.id}_inst_${isoDate}`,
-                date: isoDate,
+                id: `${event.id}_inst_${dateStr}`,
+                date: dateStr,
                 originalEventId: event.id,
-                originalDate: isoDate
+                originalDate: dateStr
               })
             }
           }

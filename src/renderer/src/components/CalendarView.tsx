@@ -1,14 +1,19 @@
 import React, { useMemo, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import MonthGrid from './calendar/MonthGrid'
+import WeekGrid from './calendar/WeekGrid'
+import DayGrid from './calendar/DayGrid'
 import { Project, TaskItem, TimelineTask } from '../types'
 import { expandRecurringEvents } from '../utils/recurrence'
+import { formatLocalDate } from '../utils/dateUtils'
 import * as LucideIcons from 'lucide-react'
 import {
   FolderOpen,
   X,
   CheckSquare,
   CalendarDays,
+  CalendarRange,
+  Calendar as CalendarIcon,
   Plus,
   EyeOff,
   SlidersHorizontal,
@@ -19,6 +24,8 @@ import {
   ChevronDown,
   PanelLeft
 } from 'lucide-react'
+import CalendarQuickAdd from './calendar/CalendarQuickAdd'
+import CalendarContextMenu from './calendar/CalendarContextMenu'
 
 const isParentTask = (
   projects: Project[],
@@ -53,6 +60,8 @@ interface TimelineViewProps {
     parentTaskId?: string,
     explicitTaskId?: string
   ) => string
+  onAddEvent: (projectId: string, eventName: string, date: string) => void
+  onAddAlarm: (date: string, time: string, title: string) => void
   hiddenProjectIds: string[]
   setHiddenProjectIds: (ids: string[]) => void
   isSidebarOpen: boolean
@@ -60,6 +69,7 @@ interface TimelineViewProps {
   onSyncWorkspaceEvents?: () => void
   isSyncing?: boolean
   selectedProjectId?: string | null
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>
 }
 
 export default function CalendarView({
@@ -67,21 +77,38 @@ export default function CalendarView({
   timelineTasks,
   setTimelineTasks,
   onAddProjectItem,
+  onAddEvent,
+  onAddAlarm,
   hiddenProjectIds,
   setHiddenProjectIds,
   isSidebarOpen,
   onToggleSidebar,
   onSyncWorkspaceEvents,
   isSyncing,
-  selectedProjectId
+  selectedProjectId,
+  setProjects
 }: TimelineViewProps): React.ReactElement {
   const PAST_DAYS = 14
   const minCellWidth = 150
 
   // 1. State and Refs first
-  const [viewMode, setViewMode] = useState<'timeline' | 'month'>('timeline')
+  const [viewMode, setViewMode] = useState<'timeline' | 'month' | 'week' | 'day'>('timeline')
   const [viewDate, setViewDate] = useState(new Date())
-  const [addingToCell, setAddingToCell] = useState<{ projectId: string; date: string } | null>(null)
+  const [addingToCell, setAddingToCell] = useState<{
+    projectId: string
+    date: string
+    x: number
+    y: number
+  } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{
+    type: 'task' | 'event'
+    id: string
+    title: string
+    projectId: string
+    x: number
+    y: number
+    originalDate?: string
+  } | null>(null)
   const [newItemName, setNewItemName] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<string>('')
   const [isDraggingResize, setIsDraggingResize] = useState(false)
@@ -111,6 +138,17 @@ export default function CalendarView({
   }
 
   // 2. Memoized values next
+  const flattenedProjects = useMemo(() => {
+    const flat: Project[] = []
+    const traverse = (projs: Project[], depth = 0) => {
+      projs.forEach(p => {
+        flat.push({ ...p, depth })
+        if (p.subprojects) traverse(p.subprojects, depth + 1)
+      })
+    }
+    traverse(projects)
+    return flat
+  }, [projects])
 
   const { days, months, mondayOffsetIndex } = useMemo(() => {
     const arr: Array<{
@@ -126,7 +164,7 @@ export default function CalendarView({
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = formatLocalDate(today)
 
     // Start PAST_DAYS before today
     const START_OFFSET = -PAST_DAYS
@@ -136,14 +174,14 @@ export default function CalendarView({
       const d = new Date(today)
       d.setDate(today.getDate() + i)
 
-      const rawDay = d.toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit' })
+      const rawDay = d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit' })
       const dayStr = rawDay.charAt(0).toUpperCase() + rawDay.slice(1).replace(',', '')
 
-      const rawMonth = d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+      const rawMonth = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
       const monthStr = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1)
 
       const isWeekend = d.getDay() === 0 || d.getDay() === 6
-      const dateString = d.toISOString().split('T')[0]
+      const dateString = formatLocalDate(d)
 
       arr.push({
         dateString,
@@ -176,14 +214,14 @@ export default function CalendarView({
         const d = new Date(lastDate)
         d.setDate(lastDate.getDate() + i)
 
-        const rawDay = d.toLocaleDateString('ru-RU', { weekday: 'short', day: '2-digit' })
+        const rawDay = d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit' })
         const dayStr = rawDay.charAt(0).toUpperCase() + rawDay.slice(1).replace(',', '')
-        const rawMonth = d.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+        const rawMonth = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
         const monthStr = rawMonth.charAt(0).toUpperCase() + rawMonth.slice(1)
         const isWeekend = d.getDay() === 0 || d.getDay() === 6
 
         arr.push({
-          dateString: d.toISOString().split('T')[0],
+          dateString: formatLocalDate(d),
           dayStr,
           isToday: false,
           isWeekend,
@@ -216,62 +254,94 @@ export default function CalendarView({
 
     const today = new Date()
     today.setHours(0, 0, 0, 0)
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = formatLocalDate(today)
 
     // Start 6 months ago
     const startMonth = new Date(today.getFullYear(), today.getMonth() - 6, 1)
-    
+
     // Generate 18 months total
     for (let i = 0; i < 18; i++) {
-       const mDate = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1)
-       const rawMonthLong = mDate.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
-       const monthNameLong = rawMonthLong.charAt(0).toUpperCase() + rawMonthLong.slice(1)
-       
-       const rawMonthShort = mDate.toLocaleDateString('ru-RU', { month: 'short' })
-       const monthNameShort = rawMonthShort.replace('.', '')
-       
-       const dayOfWeek = mDate.getDay()
-       const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
-       
-       // Empty pad the beginning to align the 1st of the month with its correct weekday
-       for (let p = 0; p < offset; p++) {
-          arr.push({ isEmpty: true, dateString: `dummy-${mDate.toISOString()}-${p}`, dayNumber: 0, isToday: false, isWeekend: false, monthNameLong })
-       }
-       
-       const lastDay = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0).getDate()
-       for (let d = 1; d <= lastDay; d++) {
-          const cDate = new Date(mDate.getFullYear(), mDate.getMonth(), d)
-          const dateString = cDate.toISOString().split('T')[0]
-          const isWeekend = cDate.getDay() === 0 || cDate.getDay() === 6
-          arr.push({
-             isEmpty: false,
-             dateString,
-             dayNumber: d,
-             isToday: dateString === todayStr,
-             isWeekend,
-             monthNameLong,
-             monthNameShort,
-             isFirstDayOfMonth: d === 1
-          })
-       }
-       
-       // Tail pad to finish the final week
-       let currentMonthLength = offset + lastDay
-       const endOffset = (7 - (currentMonthLength % 7)) % 7
-       for (let p = 0; p < endOffset; p++) {
-          arr.push({ isEmpty: true, dateString: `dummy-end-${mDate.toISOString()}-${p}`, dayNumber: 0, isToday: false, isWeekend: false, monthNameLong })
-       }
+      const mDate = new Date(startMonth.getFullYear(), startMonth.getMonth() + i, 1)
+      const rawMonthLong = mDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      const monthNameLong = rawMonthLong.charAt(0).toUpperCase() + rawMonthLong.slice(1)
 
-       // Add 1 full week (7 days) separator of empty cells if not the last month
-       if (i < 17) {
-          for (let p = 0; p < 7; p++) {
-             arr.push({ isEmpty: true, dateString: `dummy-sep-${mDate.toISOString()}-${p}`, dayNumber: 0, isToday: false, isWeekend: false, monthNameLong })
-          }
-       }
+      const rawMonthShort = mDate.toLocaleDateString('en-US', { month: 'short' })
+      const monthNameShort = rawMonthShort.replace('.', '')
+
+      const dayOfWeek = mDate.getDay()
+      const offset = dayOfWeek === 0 ? 6 : dayOfWeek - 1
+
+      // Empty pad the beginning to align the 1st of the month with its correct weekday
+      for (let p = 0; p < offset; p++) {
+        arr.push({ isEmpty: true, dateString: `dummy-${formatLocalDate(mDate)}-${p}`, dayNumber: 0, isToday: false, isWeekend: p === 5 || p === 6, monthNameLong })
+      }
+
+      const lastDay = new Date(mDate.getFullYear(), mDate.getMonth() + 1, 0).getDate()
+      for (let d = 1; d <= lastDay; d++) {
+        const cDate = new Date(mDate.getFullYear(), mDate.getMonth(), d)
+        const dateString = formatLocalDate(cDate)
+        const isWeekend = cDate.getDay() === 0 || cDate.getDay() === 6
+        arr.push({
+          isEmpty: false,
+          dateString,
+          dayNumber: d,
+          isToday: dateString === todayStr,
+          isWeekend,
+          monthNameLong,
+          monthNameShort,
+          isFirstDayOfMonth: d === 1
+        })
+      }
+
+      // Tail pad to finish the final week
+      let currentMonthLength = offset + lastDay
+      const endOffset = (7 - (currentMonthLength % 7)) % 7
+      for (let p = 0; p < endOffset; p++) {
+        const weekdayIndex = (currentMonthLength + p) % 7
+        arr.push({ isEmpty: true, dateString: `dummy-end-${formatLocalDate(mDate)}-${p}`, dayNumber: 0, isToday: false, isWeekend: weekdayIndex === 5 || weekdayIndex === 6, monthNameLong })
+      }
+
     }
 
     return arr
   }, [])
+
+  const weekDays = useMemo(() => {
+    const list: any[] = []
+    const startOfWeek = new Date(viewDate)
+    const day = startOfWeek.getDay()
+    const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1) // adjust when day is sunday
+    startOfWeek.setDate(diff)
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    const todayStr = formatLocalDate(new Date())
+
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(startOfWeek)
+      d.setDate(startOfWeek.getDate() + i)
+      const dateString = formatLocalDate(d)
+      const isToday = dateString === todayStr
+      const dayNumber = d.getDate()
+      const dayNameShort = d.toLocaleDateString('en-US', { weekday: 'short' })
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6
+      const monthNameLong = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      list.push({ dateString, dayNumber, dayNameShort, isToday, isWeekend, monthNameLong })
+    }
+    return list
+  }, [viewDate])
+
+  const dayData = useMemo(() => {
+    const d = new Date(viewDate)
+    d.setHours(0, 0, 0, 0)
+    const todayStr = formatLocalDate(new Date())
+    const dateString = formatLocalDate(d)
+    const isToday = dateString === todayStr
+    const dayNumber = d.getDate()
+    const dayNameLong = d.toLocaleDateString('en-US', { weekday: 'long' })
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6
+    const monthNameLong = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    return { dateString, dayNumber, dayNameLong, isToday, isWeekend, monthNameLong }
+  }, [viewDate])
 
   const allEvents = useMemo(() => {
     const list: any[] = []
@@ -279,7 +349,7 @@ export default function CalendarView({
     // Determine the full range to expand events for (Timeline range + Month Grid range)
     const timelineStart = days[0]?.dateString || ''
     const timelineEnd = days[days.length - 1]?.dateString || ''
-    
+
     let monthStart = ''
     let monthEnd = ''
     if (monthGridDays.length > 0) {
@@ -310,16 +380,59 @@ export default function CalendarView({
   const taskIdToNameMap = useMemo(() => {
     const map = new Map<string, string>()
 
-    const traverse = (tasks: TaskItem[]): void => {
+    const traverseTasks = (tasks: TaskItem[]): void => {
       for (const t of tasks) {
         map.set(t.id, t.text)
-        if (t.subtasks) traverse(t.subtasks)
+        if (t.subtasks) traverseTasks(t.subtasks)
       }
     }
 
-    projects.forEach((p) => traverse(p.tasks))
+    const traverseProjects = (projs: Project[]) => {
+      projs.forEach(p => {
+        if (p.tasks) traverseTasks(p.tasks)
+        if (p.subprojects) traverseProjects(p.subprojects)
+      })
+    }
+
+    traverseProjects(projects)
     return map
   }, [projects])
+
+  const handlePrevWeek = () => {
+    setViewDate(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() - 7)
+      return d
+    })
+  }
+
+  const handleNextWeek = () => {
+    setViewDate(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() + 7)
+      return d
+    })
+  }
+
+  const handlePrevDay = () => {
+    setViewDate(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() - 1)
+      return d
+    })
+  }
+
+  const handleNextDay = () => {
+    setViewDate(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() + 1)
+      return d
+    })
+  }
+
+  const handleSelectDay = (dateStr: string) => {
+    setViewDate(new Date(dateStr + 'T00:00:00'))
+  }
 
   const scrollToToday = (): void => {
     if (!scrollRef.current) return
@@ -426,30 +539,113 @@ export default function CalendarView({
     })
   }
 
-  const handleInlineAdd = (): void => {
-    if (!addingToCell || !newItemName.trim()) {
-      setAddingToCell(null)
-      setNewItemName('')
-      setSelectedTaskId('')
-      return
-    }
+  const handleQuickAddTask = (projectId: string, name: string, date: string, taskId?: string) => {
+    const finalTaskId = taskId ? onAddProjectItem(projectId, name, taskId, uuidv4()) : onAddProjectItem(projectId, name, undefined, uuidv4())
 
-    const taskId = selectedTaskId ? selectedTaskId : undefined
-
-    const newTaskId = onAddProjectItem(addingToCell.projectId, newItemName.trim(), taskId, uuidv4())
     setTimelineTasks((prev) => [
       ...prev,
       {
         id: uuidv4(),
-        projectId: addingToCell.projectId,
-        taskName: newItemName.trim(),
-        date: addingToCell.date,
-        taskId: newTaskId
+        projectId: projectId,
+        taskName: name,
+        date: date,
+        taskId: finalTaskId
       }
     ])
-    setAddingToCell(null)
-    setNewItemName('')
-    setSelectedTaskId('')
+  }
+
+  const handleRenameItem = (type: 'task' | 'event', id: string, projectId: string, newTitle: string) => {
+    if (type === 'task') {
+      const targetTask = timelineTasks.find(t => t.id === id)
+      const taskId = targetTask?.taskId || id // Fallback to id if it's already the taskId
+
+      const updateTasksRecursive = (tasks: TaskItem[]): TaskItem[] => {
+        return tasks.map(t => {
+          if (t.id === taskId) return { ...t, text: newTitle }
+          if (t.subtasks) return { ...t, subtasks: updateTasksRecursive(t.subtasks) }
+          return t
+        })
+      }
+      const updateProjectsRecursive = (projs: Project[]): Project[] => {
+        return projs.map(p => {
+          if (p.id === projectId) return { ...p, tasks: updateTasksRecursive(p.tasks || []) }
+          if (p.subprojects) return { ...p, subprojects: updateProjectsRecursive(p.subprojects) }
+          return p
+        })
+      }
+      setProjects(prev => updateProjectsRecursive(prev))
+      setTimelineTasks(prev => prev.map(t => {
+        // Update BOTH the record we clicked AND any other records pointing to the same taskId
+        if (t.id === id || t.taskId === taskId) return { ...t, taskName: newTitle }
+        return t
+      }))
+    } else {
+      const updateProjectsRecursive = (projs: Project[]): Project[] => {
+        return projs.map(p => {
+          if (p.id === projectId) return {
+            ...p,
+            events: (p.events || []).map(e => e.id === id ? { ...e, title: newTitle, updatedAt: Date.now() } : e)
+          }
+          if (p.subprojects) return { ...p, subprojects: updateProjectsRecursive(p.subprojects) }
+          return p
+        })
+      }
+      setProjects(prev => updateProjectsRecursive(prev))
+    }
+  }
+
+  const handleDeleteItem = (type: 'task' | 'event', id: string, projectId: string) => {
+    if (type === 'task') {
+      // Right click delete on calendar item just removes IT from the calendar record
+      setTimelineTasks(prev => prev.filter(t => t.id !== id))
+    } else {
+      const updateProjectsRecursive = (projs: Project[]): Project[] => {
+        return projs.map(p => {
+          if (p.id === projectId) return { ...p, events: (p.events || []).filter(e => e.id !== id) }
+          if (p.subprojects) return { ...p, subprojects: updateProjectsRecursive(p.subprojects) }
+          return p
+        })
+      }
+      setProjects(prev => updateProjectsRecursive(prev))
+    }
+  }
+
+  const handleChangeItemProject = (type: 'task' | 'event', id: string, oldProjectId: string, newProjectId: string) => {
+    if (type === 'task') {
+      // If we change project for a timeline task, we update the reference
+      setTimelineTasks(prev => prev.map(t => {
+        if (t.id === id) return { ...t, projectId: newProjectId }
+        return t
+      }))
+      // Note: moving the actual TaskItem to another project in the sidebar is more complex
+      // so for now we just change the calendar assignment.
+    } else {
+      setProjects(prev => {
+        let movedEvent: any = null
+        const removeRecursive = (projs: Project[]): Project[] => {
+          return projs.map(p => {
+            if (p.id === oldProjectId) {
+              const events = p.events || []
+              const found = events.find(e => e.id === id)
+              if (found) movedEvent = found
+              return { ...p, events: events.filter(e => e.id !== id) }
+            }
+            if (p.subprojects) return { ...p, subprojects: removeRecursive(p.subprojects) }
+            return p
+          })
+        }
+        const addRecursive = (projs: Project[]): Project[] => {
+          return projs.map(p => {
+            if (p.id === newProjectId) return { ...p, events: [...(p.events || []), movedEvent] }
+            if (p.subprojects) return { ...p, subprojects: addRecursive(p.subprojects) }
+            return p
+          })
+        }
+        const projsAfterRemove = removeRecursive(prev)
+        if (movedEvent) return addRecursive(projsAfterRemove)
+        return projsAfterRemove
+      })
+    }
   }
 
   const handleDragOver = (e: React.DragEvent): void => {
@@ -484,11 +680,11 @@ export default function CalendarView({
               if (t.id === parsed.id) {
                 // If it has an endDate, shift it too to maintain duration
                 if (t.endDate) {
-                  const oldStartDate = new Date(t.date).getTime()
-                  const oldEndDate = new Date(t.endDate).getTime()
+                  const oldStartDate = new Date(t.date + 'T00:00:00').getTime()
+                  const oldEndDate = new Date(t.endDate + 'T00:00:00').getTime()
                   const diffMs = oldEndDate - oldStartDate
-                  const newStartDate = new Date(dateString).getTime()
-                  const newEndDate = new Date(newStartDate + diffMs).toISOString().split('T')[0]
+                  const newStartDate = new Date(dateString + 'T00:00:00').getTime()
+                  const newEndDate = formatLocalDate(new Date(newStartDate + diffMs))
                   return { ...t, date: dateString, endDate: newEndDate }
                 }
                 return { ...t, date: dateString }
@@ -602,10 +798,11 @@ export default function CalendarView({
           onMouseMove={handleMouseMove}
           onContextMenu={(e) => e.preventDefault()} // Prevent default right click menu
           style={{
-            overflow: 'scroll',
+            overflow: viewMode === 'timeline' ? 'scroll' : 'hidden',
             flex: 1,
             cursor: isPanning ? 'grabbing' : 'auto',
-            position: 'relative'
+            position: 'relative',
+            background: 'var(--card-bg)'
           }}
         >
           {/* Shared Top Bar Controls */}
@@ -712,7 +909,172 @@ export default function CalendarView({
                 >
                   <CalendarDays size={14} />
                 </button>
+                <button
+                  onClick={() => setViewMode('week')}
+                  style={{
+                    background: viewMode === 'week' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: viewMode === 'week' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: 'none',
+                    padding: '4px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Week View"
+                >
+                  <CalendarRange size={14} />
+                </button>
+                <button
+                  onClick={() => setViewMode('day')}
+                  style={{
+                    background: viewMode === 'day' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: viewMode === 'day' ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    border: 'none',
+                    padding: '4px',
+                    borderRadius: 'var(--radius-md)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'all 0.2s'
+                  }}
+                  title="Day View"
+                >
+                  <CalendarIcon size={14} />
+                </button>
               </div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowFilterMenu(!showFilterMenu)
+                }}
+                style={{
+                  background: showFilterMenu ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  color: 'var(--text-primary)',
+                  padding: '4px',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  transition: 'all 0.2s',
+                  position: 'relative'
+                }}
+                title="Filter projects"
+              >
+                <SlidersHorizontal size={14} />
+                {showFilterMenu && (
+                  <div
+                    ref={filterMenuRef}
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 8px)',
+                      left: 0,
+                      background: 'var(--card-bg)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '6px 0',
+                      minWidth: '180px',
+                      zIndex: 100,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                      maxHeight: '400px',
+                      overflowY: 'auto'
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>
+                      Visibility
+                    </div>
+                    {flattenedProjects.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleProjectVisibility(p.id)
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          width: '100%',
+                          padding: '8px 12px',
+                          paddingLeft: '12px',
+                          background: 'transparent',
+                          border: 'none',
+                          color: hiddenProjects.has(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          textAlign: 'left',
+                          transition: 'background 0.2s',
+                          opacity: hiddenProjects.has(p.id) ? 0.6 : 1,
+                          position: 'relative'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        {/* Recursive hierarchy lines */}
+                        {Array.from({ length: p.depth || 0 }).map((_, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              position: 'absolute',
+                              left: `${12 + idx * 16 + 6}px`, // 12px padding + 16px per depth + 6px (half of 12px icon)
+                              top: 0,
+                              bottom: 0,
+                              width: '1px',
+                              background: 'rgba(255,255,255,0.08)',
+                              zIndex: 1
+                            }}
+                          />
+                        ))}
+
+                        <div
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '3px',
+                            border: `2px solid ${p.color || 'var(--accent)'}`,
+                            background: hiddenProjects.has(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
+                            flexShrink: 0,
+                            marginLeft: `${(p.depth || 0) * 16}px`,
+                            zIndex: 2
+                          }}
+                        />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 2 }}>{p.name}</span>
+                      </button>
+                    ))}
+                    {hiddenProjects.size > 0 && (
+                      <>
+                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setHiddenProjectIds([])
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            textAlign: 'left',
+                            fontWeight: 500
+                          }}
+                        >
+                          <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
+                          <span>Show all projects</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </button>
               <button
                 onClick={scrollToToday}
                 style={{
@@ -789,120 +1151,7 @@ export default function CalendarView({
                       boxShadow: '1px 0 0 rgba(255,255,255,0.05)'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative' }}>
-                      <span style={{ fontSize: '13px', color: 'var(--text-primary)' }}>Projects</span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setShowFilterMenu(!showFilterMenu)
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '2px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          opacity: showFilterMenu ? 1 : 0.5
-                        }}
-                        title="Filter projects"
-                      >
-                        <SlidersHorizontal size={14} />
-                      </button>
-                      {showFilterMenu && (
-                        <div
-                          ref={filterMenuRef}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: '100%',
-                            marginLeft: '8px',
-                            background: 'var(--card-bg)',
-                            border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: 'var(--radius-md)',
-                            padding: '6px 0',
-                            minWidth: '180px',
-                            zIndex: 100,
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                            maxHeight: '400px',
-                            overflowY: 'auto'
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>
-                            Visibility
-                          </div>
-                          {projects.map((p) => (
-                            <button
-                              key={p.id}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                toggleProjectVisibility(p.id)
-                              }}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '10px',
-                                width: '100%',
-                                padding: '8px 12px',
-                                paddingLeft: `${24 + (p.depth || 0) * 16}px`,
-                                background: 'transparent',
-                                border: 'none',
-                                color: hiddenProjects.has(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
-                                cursor: 'pointer',
-                                fontSize: '13px',
-                                textAlign: 'left',
-                                transition: 'background 0.2s',
-                                opacity: hiddenProjects.has(p.id) ? 0.6 : 1
-                              }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                            >
-                              <div
-                                style={{
-                                  width: '12px',
-                                  height: '12px',
-                                  borderRadius: '3px',
-                                  border: `2px solid ${p.color || 'var(--accent)'}`,
-                                  background: hiddenProjects.has(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
-                                  flexShrink: 0
-                                }}
-                              />
-                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-                            </button>
-                          ))}
-                          {hiddenProjects.size > 0 && (
-                            <>
-                              <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setHiddenProjectIds([])
-                                }}
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: '10px',
-                                  width: '100%',
-                                  padding: '8px 12px',
-                                  background: 'transparent',
-                                  border: 'none',
-                                  color: 'var(--text-primary)',
-                                  cursor: 'pointer',
-                                  fontSize: '13px',
-                                  textAlign: 'left',
-                                  fontWeight: 500
-                                }}
-                              >
-                                <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
-                                <span>Show all projects</span>
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center' }} />
                   </th>
                   {months.map((m) => (
                     <th
@@ -957,19 +1206,19 @@ export default function CalendarView({
                         color: d.isDummy
                           ? 'rgba(255,255,255,0.12)'
                           : d.isToday
-                            ? 'var(--accent)'
-                            : d.isPast
-                              ? 'rgba(255,255,255,0.3)'
-                              : 'var(--text-secondary)',
-                        fontWeight: d.isToday ? 'bold' : 'normal',
-                        opacity: d.isPast && !d.isToday ? 0.55 : 1,
+                            ? 'var(--text-primary)'
+                            : 'rgba(255,255,255,0.4)', // Darker color for other days
+                        fontWeight: 600,
+                        opacity: 1,
                         background: d.isDummy
                           ? 'rgba(0,0,0,0.15)'
-                          : d.isPast
-                            ? 'rgba(0,0,0,0.08)'
+                          : d.isToday
+                            ? '#1f1f1f' // Darkened solid color
                             : d.isWeekend
-                              ? 'rgba(0,0,0,0.3)'
-                              : 'var(--card-bg)',
+                              ? 'linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)), var(--card-bg)'
+                              : d.isPast && !d.isToday
+                                ? 'rgba(0,0,0,0.08)'
+                                : 'var(--card-bg)',
                         position: 'sticky',
                         top: '90px',
                         zIndex: 10,
@@ -984,7 +1233,7 @@ export default function CalendarView({
 
               {/* Project Rows */}
               <tbody>
-                {projects.length === 0 ? (
+                {flattenedProjects.length === 0 ? (
                   <tr>
                     <td
                       style={{
@@ -999,7 +1248,7 @@ export default function CalendarView({
                     </td>
                   </tr>
                 ) : (
-                  projects
+                  flattenedProjects
                     .filter((p) => !hiddenProjects.has(p.id))
                     .map((project) => (
                       <tr
@@ -1141,10 +1390,12 @@ export default function CalendarView({
                                 position: 'relative',
                                 width: `${minCellWidth}px`,
                                 minWidth: `${minCellWidth}px`,
+                                maxWidth: `${minCellWidth}px`,
                                 padding: '8px',
                                 borderLeft: 'none',
                                 borderBottom: '1px solid rgba(255,255,255,0.05)',
                                 verticalAlign: 'top',
+                                overflow: 'hidden',
                                 background: d.isDummy
                                   ? `repeating-linear-gradient(
                                     -45deg,
@@ -1154,13 +1405,13 @@ export default function CalendarView({
                                     transparent 10px
                                   )`
                                   : d.isToday
-                                    ? 'rgba(255,255,255,0.05)'
-                                    : d.isPast
-                                      ? 'rgba(0,0,0,0.06)'
-                                      : d.isWeekend
-                                        ? 'rgba(0,0,0,0.3)'
-                                        : 'transparent',
-                                opacity: d.isPast && !d.isToday ? 0.7 : 1,
+                                    ? '#1f1f1f' // Darkened solid color
+                                    : d.isWeekend
+                                      ? 'linear-gradient(rgba(255,255,255,0.015), rgba(255,255,255,0.015)), var(--card-bg)'
+                                      : d.isPast && !d.isToday
+                                        ? 'rgba(0,0,0,0.06)'
+                                        : 'var(--card-bg)', // Use var(--card-bg) instead of transparent
+                                opacity: d.isPast && !d.isToday && !d.isWeekend ? 0.7 : 1,
                                 cursor: d.isDummy ? 'default' : 'pointer',
                                 pointerEvents: d.isDummy ? 'none' : 'auto'
                               }}
@@ -1244,6 +1495,18 @@ export default function CalendarView({
                                 {eventsForDay.map((event) => (
                                   <div
                                     key={event.id}
+                                    onContextMenu={(e) => {
+                                      e.preventDefault()
+                                      e.stopPropagation()
+                                      setContextMenu({
+                                        type: 'event',
+                                        id: event.id,
+                                        title: event.title,
+                                        projectId: project.id,
+                                        x: e.clientX,
+                                        y: e.clientY
+                                      })
+                                    }}
                                     draggable
                                     onDragStart={(e) => {
                                       e.dataTransfer.setData(
@@ -1260,11 +1523,14 @@ export default function CalendarView({
                                       alignItems: 'center',
                                       gap: '6px',
                                       padding: '4px 8px',
-                                      background: 'rgba(255,255,255,0.03)',
+                                      background: 'var(--calendar-event-bg)',
                                       borderRadius: 'var(--radius-sm)',
                                       fontSize: '11px',
+                                      border: '1px solid rgba(255,255,255,0.05)',
                                       borderLeft: `2px solid ${project.color || 'var(--accent)'}`,
-                                      cursor: 'grab'
+                                      cursor: 'grab',
+                                      overflow: 'hidden',
+                                      minWidth: 0
                                     }}
                                     className="timeline-task-item"
                                     title={`Event: ${event.title}${event.time ? '\nTime: ' + event.time : ''}${event.location ? '\nLoc: ' + event.location : ''}\n(Drag to move instance)`}
@@ -1352,6 +1618,18 @@ export default function CalendarView({
                                       }}
                                     >
                                       <div
+                                        onContextMenu={(e) => {
+                                          e.preventDefault()
+                                          e.stopPropagation()
+                                          setContextMenu({
+                                            type: 'task',
+                                            id: task.id,
+                                            title: currentTaskName || '',
+                                            projectId: project.id,
+                                            x: e.clientX,
+                                            y: e.clientY
+                                          })
+                                        }}
                                         onDoubleClick={(e) => e.stopPropagation()}
                                         draggable={isStart}
                                         onDragStart={(e) => {
@@ -1369,7 +1647,7 @@ export default function CalendarView({
                                           }
                                         }}
                                         style={{
-                                          background: 'var(--timeline-task-bg, var(--card-bg))',
+                                          background: 'var(--calendar-task-bg)',
                                           color: 'var(--text-primary)',
                                           padding: '5px 9px',
                                           borderRadius: 'var(--radius-md)',
@@ -1545,99 +1823,26 @@ export default function CalendarView({
                                   )
                                 })}
 
-                                {addingToCell?.projectId === project.id &&
-                                  addingToCell?.date === d.dateString ? (
-                                  <div
-                                    ref={dropdownRef}
-                                    className="timeline-add-dropdown"
-                                    style={{
-                                      borderLeft: `3px solid ${project.color || 'var(--accent)'}`
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    onDoubleClick={(e) => e.stopPropagation()}
-                                  >
-                                    {project.tasks && project.tasks.length > 0 && (
-                                      <>
-                                        <div className="dropdown-header">Existing Tasks</div>
-                                        {project.tasks.map((t) => (
-                                          <button
-                                            key={t.id}
-                                            className="dropdown-task-item"
-                                            onClick={() => {
-                                              const newTaskId = onAddProjectItem(
-                                                project.id,
-                                                t.text,
-                                                t.id,
-                                                uuidv4()
-                                              )
-                                              setTimelineTasks((prev) => [
-                                                ...prev,
-                                                {
-                                                  id: uuidv4(),
-                                                  projectId: project.id,
-                                                  taskName: t.text,
-                                                  date: d.dateString,
-                                                  taskId: newTaskId
-                                                }
-                                              ])
-                                              setAddingToCell(null)
-                                            }}
-                                          >
-                                            <CheckSquare size={14} />
-                                            <span
-                                              style={{
-                                                overflow: 'hidden',
-                                                textOverflow: 'ellipsis',
-                                                whiteSpace: 'nowrap'
-                                              }}
-                                            >
-                                              {t.text}
-                                            </span>
-                                          </button>
-                                        ))}
-                                        <div className="dropdown-divider" />
-                                      </>
-                                    )}
-                                    <div className="dropdown-header">New Task</div>
-                                    <div className="dropdown-new-task">
-                                      <input
-                                        autoFocus
-                                        value={newItemName}
-                                        onChange={(e) => setNewItemName(e.target.value)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Enter') handleInlineAdd()
-                                          if (e.key === 'Escape') setAddingToCell(null)
-                                        }}
-                                        placeholder="Task name..."
-                                      />
-                                      <button
-                                        onClick={handleInlineAdd}
-                                        disabled={!newItemName.trim()}
-                                        title="Add Task"
-                                      >
-                                        <Plus size={16} />
-                                      </button>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <button
-                                    className="timeline-add-btn"
-                                    data-project-id={project.id}
-                                    data-date={d.dateString}
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      setAddingToCell({ projectId: project.id, date: d.dateString })
-                                      setNewItemName('')
-                                      setSelectedTaskId('')
-                                    }}
-                                    title="Double click cell or click here to add"
-                                    style={{
-                                      pointerEvents: 'auto'
-                                    }}
-                                  >
-                                    +
-                                  </button>
-                                )}
+                                <button
+                                  className="timeline-add-btn"
+                                  data-project-id={project.id}
+                                  data-date={d.dateString}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setAddingToCell({
+                                      projectId: project.id,
+                                      date: d.dateString,
+                                      x: e.clientX,
+                                      y: e.clientY
+                                    })
+                                  }}
+                                  title="Add Task, Event or Alarm"
+                                  style={{
+                                    pointerEvents: 'auto'
+                                  }}
+                                >
+                                  +
+                                </button>
                               </div>
                             </td>
                           )
@@ -1647,7 +1852,7 @@ export default function CalendarView({
                 )}
               </tbody>
             </table>
-          ) : (
+          ) : viewMode === 'month' ? (
             <div style={{
               position: 'absolute',
               top: '45px',
@@ -1658,24 +1863,95 @@ export default function CalendarView({
             }}>
               <MonthGrid
                 monthGridDays={monthGridDays}
-              timelineTasks={timelineTasks}
-              setTimelineTasks={setTimelineTasks}
-              allEvents={allEvents}
-              projects={projects}
-              taskIdToNameMap={taskIdToNameMap}
-              addingToCell={addingToCell}
-              setAddingToCell={setAddingToCell}
-              newItemName={newItemName}
-              setNewItemName={setNewItemName}
-              selectedTaskId={selectedTaskId}
-              setSelectedTaskId={setSelectedTaskId}
-              onAddProjectItem={onAddProjectItem}
-            />
+                timelineTasks={timelineTasks}
+                setTimelineTasks={setTimelineTasks}
+                allEvents={allEvents}
+                projects={flattenedProjects}
+                taskIdToNameMap={taskIdToNameMap}
+                addingToCell={addingToCell}
+                setAddingToCell={setAddingToCell}
+                setContextMenu={setContextMenu}
+                onAddProjectItem={onAddProjectItem}
+              />
+            </div>
+          ) : viewMode === 'week' ? (
+            <div style={{
+              position: 'absolute',
+              top: '45px',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: 'hidden'
+            }}>
+              <WeekGrid
+                weekDays={weekDays}
+                onPrevWeek={handlePrevWeek}
+                onNextWeek={handleNextWeek}
+                timelineTasks={timelineTasks}
+                setTimelineTasks={setTimelineTasks}
+                allEvents={allEvents}
+                projects={flattenedProjects}
+                taskIdToNameMap={taskIdToNameMap}
+                addingToCell={addingToCell}
+                setAddingToCell={setAddingToCell}
+                setContextMenu={setContextMenu}
+              />
+            </div>
+          ) : (
+            <div style={{
+              position: 'absolute',
+              top: '45px',
+              left: 0,
+              right: 0,
+              bottom: 0,
+              overflow: 'hidden'
+            }}>
+              <DayGrid
+                dayData={dayData}
+                weekDaysForDayView={weekDays}
+                onSelectDay={handleSelectDay}
+                onPrevDay={handlePrevDay}
+                onNextDay={handleNextDay}
+                timelineTasks={timelineTasks}
+                setTimelineTasks={setTimelineTasks}
+                allEvents={allEvents}
+                projects={flattenedProjects}
+                taskIdToNameMap={taskIdToNameMap}
+                addingToCell={addingToCell}
+                setAddingToCell={setAddingToCell}
+                setContextMenu={setContextMenu}
+              />
             </div>
           )}
         </div>
 
 
+        {addingToCell && (
+          <CalendarQuickAdd
+            projects={flattenedProjects}
+            initialDate={addingToCell.date}
+            initialProjectId={addingToCell.projectId}
+            position={{ x: addingToCell.x, y: addingToCell.y }}
+            onClose={() => setAddingToCell(null)}
+            onAddTask={handleQuickAddTask}
+            onAddEvent={onAddEvent}
+            onAddAlarm={onAddAlarm}
+            showProjectSelector={viewMode !== 'timeline'}
+          />
+        )}
+
+        {contextMenu && (
+          <CalendarContextMenu
+            type={contextMenu.type}
+            item={{ id: contextMenu.id, title: contextMenu.title, projectId: contextMenu.projectId }}
+            projects={flattenedProjects}
+            position={{ x: contextMenu.x, y: contextMenu.y }}
+            onClose={() => setContextMenu(null)}
+            onRename={(newTitle) => handleRenameItem(contextMenu.type, contextMenu.id, contextMenu.projectId, newTitle)}
+            onDelete={() => handleDeleteItem(contextMenu.type, contextMenu.id, contextMenu.projectId)}
+            onChangeProject={(newProjId) => handleChangeItemProject(contextMenu.type, contextMenu.id, contextMenu.projectId, newProjId)}
+          />
+        )}
       </div>
     </div>
   )

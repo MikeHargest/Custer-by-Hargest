@@ -142,7 +142,7 @@ export default function PipelineView({
         }
       })
     }
-    
+
     // Adjust when data or visibility changes
     if (isVisible !== false) {
       adjustAllHeights()
@@ -256,9 +256,9 @@ export default function PipelineView({
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId ? { ...p, stages: p.stages.filter((s) => s.id !== stageId) } : p
     )
-    onUpdate(project.id, { 
-      pipelines: newPipelines, 
-      ...(stageId === selectedStageId ? { activePipelineStageId: undefined } : {}) 
+    onUpdate(project.id, {
+      pipelines: newPipelines,
+      ...(stageId === selectedStageId ? { activePipelineStageId: undefined } : {})
     })
   }
 
@@ -873,10 +873,10 @@ export default function PipelineView({
                       display: 'flex',
                       flexDirection: 'column',
                       border: `1px solid ${stage.color
-                          ? `${stage.color}${Math.round((stage.colorOpacity ?? 0.1) * 2 * 255)
-                            .toString(16)
-                            .padStart(2, '0')}`
-                          : 'rgba(255,255,255,0.05)'
+                        ? `${stage.color}${Math.round((stage.colorOpacity ?? 0.1) * 2 * 255)
+                          .toString(16)
+                          .padStart(2, '0')}`
+                        : 'rgba(255,255,255,0.05)'
                         }`,
                       position: 'relative',
                       height: 'fit-content',

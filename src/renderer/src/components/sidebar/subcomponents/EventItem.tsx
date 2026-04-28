@@ -159,7 +159,7 @@ const EventItem = memo(function EventItem({
         position: 'relative',
         background: 'rgba(255,255,255,0.03)',
         borderRadius: '10px',
-        border: isExpanded ? '1px solid rgba(255,255,255,0.08)' : '1px solid transparent',
+        border: '1px solid rgba(255,255,255,0.05)',
         transition: 'all 0.2s',
         overflow: 'visible'
       }}
