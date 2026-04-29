@@ -132,7 +132,7 @@ export class GoogleSyncManager {
       // Events created before sync was added don't have syncStatus — mark them for upload
       for (const e of localEvents) {
         if (!e.syncStatus && !e.externalId) {
-          e.syncStatus = 'pending_push'
+          e.syncStatus = 'pending_push' as any
           e.updatedAt = e.updatedAt || Date.now()
           console.log(`[Sync] Marking untracked event for push: ${e.title}`)
         }
@@ -179,7 +179,7 @@ export class GoogleSyncManager {
               e.etag = res.data.etag || undefined
               e.updatedAt = res.data.updated ? new Date(res.data.updated).getTime() : Date.now()
             }
-            e.syncStatus = 'synced'
+            e.syncStatus = 'synced' as any
             console.log(`[Sync] Pushed to Google: ${e.title}`)
          } catch (err) {
             console.error('Push error', err)
@@ -257,14 +257,14 @@ export class GoogleSyncManager {
 
          if (!localMatch) {
             // Remote item doesn't exist locally -> Insert it
-            finalEventsMap.set(externalId, mapped)
+            finalEventsMap.set(externalId, mapped as AppEvent)
             hasPulledChanges = true
             console.log(`[Sync] Pulled new from Google: ${mapped.title}`)
          } else {
             // Conflict check
             if (mapped.updatedAt && localMatch.updatedAt && mapped.updatedAt > localMatch.updatedAt) {
                // Remote is newer -> overwrite local
-               finalEventsMap.set(externalId, { ...mapped, id: localMatch.id }) // Keep local UUID just in case
+               finalEventsMap.set(externalId, { ...mapped, id: localMatch.id } as AppEvent) // Keep local UUID just in case
                hasPulledChanges = true
                console.log(`[Sync] Overwrote local with Remote: ${mapped.title}`)
             }

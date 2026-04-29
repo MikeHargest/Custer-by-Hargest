@@ -1,11 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Image as ImageIcon,
-  Calendar,
-  Flag,
-  CheckCircle2,
-  Edit2,
-  Save,
   FileText,
   ChevronDown,
   ChevronUp,
@@ -18,7 +13,7 @@ import {
   ArrowRight
 } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
-import { Project, TaskItem, AppNote, PipelineData, PipelineStage } from '../types'
+import { Project, TaskItem, AppNote } from '../types'
 import OverviewEditor from './OverviewEditor'
 
 // --- STYLES ---
@@ -94,13 +89,7 @@ const dividerStyle: React.CSSProperties = {
   marginTop: '16px',
   marginBottom: '16px'
 }
-const sidebarDividerStyle: React.CSSProperties = {
-  ...dividerStyle,
-  marginLeft: '-24px',
-  marginRight: '-24px',
-  width: 'auto',
-  display: 'block'
-}
+
 const mainDividerStyle: React.CSSProperties = {
   ...dividerStyle,
   marginLeft: '-24px',
@@ -121,19 +110,7 @@ const iconBoxStyle: React.CSSProperties = {
   border: '1px solid transparent',
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
 }
-const editBtnStyle: React.CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  borderRadius: '6px',
-  padding: '6px 12px',
-  color: 'var(--text-secondary)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  fontSize: '12px',
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-}
+
 const bannerActionBtnStyle: React.CSSProperties = {
   width: '30px',
   height: '30px',
@@ -149,18 +126,7 @@ const bannerActionBtnStyle: React.CSSProperties = {
   transition: 'all 0.2s',
   padding: 0
 }
-const toggleBtnStyle = (active: boolean): React.CSSProperties => ({
-  flex: 1,
-  padding: '6px 0',
-  fontSize: '12px',
-  fontWeight: 600,
-  cursor: 'pointer',
-  border: 'none',
-  borderRadius: '6px',
-  background: active ? 'rgba(255,255,255,0.08)' : 'transparent',
-  color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-})
+
 const subprojectsGridStyle: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -201,49 +167,7 @@ const SectionLabel = ({ children }: any): React.ReactElement => (
   </h3>
 )
 
-const MetaField = ({
-  icon,
-  label,
-  children,
-  flex
-}: {
-  icon: React.ReactNode
-  label: string
-  children: React.ReactNode
-  flex?: boolean
-}): React.ReactElement => (
-  <div
-    style={{
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: '12px',
-      flex: flex ? 1 : 'none',
-      width: '100%',
-      minHeight: '36px',
-      padding: '0'
-    }}
-  >
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        color: 'var(--text-secondary)',
-        fontSize: '13px',
-        fontWeight: 500
-      }}
-    >
-      <div style={{ display: 'flex', width: '24px', alignItems: 'center', justifyContent: 'center' }}>
-        {icon}
-      </div>
-      {label}
-    </div>
-    <div style={{ position: 'relative', display: 'flex', justifyContent: 'flex-end', flex: 1 }}>
-      {children}
-    </div>
-  </div>
-)
+
 
 const CustomSelect = ({
   icon,
@@ -1211,7 +1135,7 @@ export default function ProjectOverview({
                   )}
                 </div>
                 <div style={{ ...subprojectsGridStyle, gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: '16px' }}>
-                  {project.subprojects.map((sub) => (
+                  {project.subprojects?.map((sub) => (
                     <div
                       key={sub.id}
                       style={{ ...noteCardStyle, cursor: onProjectClick ? 'pointer' : 'default', transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)' }}

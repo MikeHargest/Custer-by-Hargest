@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Pencil, Trash2, FolderSync, X, Check } from 'lucide-react'
 import { Project } from '../../types'
 

@@ -1,6 +1,6 @@
 import React from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { ChevronUp, ChevronDown, CheckSquare, Plus, X } from 'lucide-react'
+import { X } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
 import { formatLocalDate } from '../../utils/dateUtils'
@@ -38,6 +38,7 @@ interface MonthGridProps {
     monthNameLong?: string
     monthNameShort?: string
     isFirstDayOfMonth?: boolean
+    isPast?: boolean
   }[]
   timelineTasks: TimelineTask[]
   setTimelineTasks: React.Dispatch<React.SetStateAction<TimelineTask[]>>
@@ -47,7 +48,6 @@ interface MonthGridProps {
   addingToCell: { projectId: string; date: string } | null
   setAddingToCell: React.Dispatch<React.SetStateAction<{ projectId: string; date: string; x: number; y: number } | null>>
   setContextMenu: (menu: { type: 'task' | 'event', id: string, title: string, projectId: string, x: number, y: number } | null) => void
-  onAddProjectItem: (projectId: string, name: string, parentTaskId?: string, explicitTaskId?: string) => string
 }
 
 export default function MonthGrid({
@@ -59,8 +59,7 @@ export default function MonthGrid({
   taskIdToNameMap,
   addingToCell,
   setAddingToCell,
-  setContextMenu,
-  onAddProjectItem
+  setContextMenu
 }: MonthGridProps) {
   const monthGridContainerRef = React.useRef<HTMLDivElement>(null)
   const initialScrollDone = React.useRef(false)

@@ -1,32 +1,11 @@
 import React from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 import * as LucideIcons from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
 import { formatLocalDate } from '../../utils/dateUtils'
 
-const isParentTask = (
-  projects: Project[],
-  projectId: string,
-  taskId?: string,
-  taskName?: string
-): boolean => {
-  const project = projects.find((p) => p.id === projectId)
-  if (!project) return false
 
-  const checkTasks = (tasks: any[]): boolean => {
-    for (const t of tasks) {
-      if (taskId && t.id === taskId) return !!(t.subtasks && t.subtasks.length > 0)
-      if (!taskId && taskName && t.text === taskName) return !!(t.subtasks && t.subtasks.length > 0)
-
-      if (t.subtasks && t.subtasks.length > 0) {
-        if (checkTasks(t.subtasks)) return true
-      }
-    }
-    return false
-  }
-  return checkTasks(project.tasks || [])
-}
 
 interface DayGridProps {
   dayData: {
@@ -104,9 +83,7 @@ export default function DayGrid({
     e.dataTransfer.dropEffect = 'copy'
   }
 
-  const removeTask = (taskId: string): void => {
-    setTimelineTasks((prev) => prev.filter((t) => t.id !== taskId))
-  }
+
 
   const tasksForDay = timelineTasks.filter((t) => t.date === dayData.dateString)
   const allEventsForDay = allEvents.filter((e) => e.date === dayData.dateString)

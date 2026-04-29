@@ -1,6 +1,6 @@
 {
   "name": "cluster",
-  "version": "0.3.0",
+  "version": "0.3.32",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
@@ -26,6 +26,7 @@
     "@pixi/react": "^8.0.5",
     "@tiptap/extension-color": "^3.22.1",
     "@tiptap/extension-highlight": "^3.22.1",
+    "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-placeholder": "^3.22.1",
     "@tiptap/extension-task-item": "^3.22.1",
     "@tiptap/extension-task-list": "^3.22.1",

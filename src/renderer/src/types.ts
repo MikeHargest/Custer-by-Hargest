@@ -158,7 +158,7 @@ export interface AppEvent {
   // Sync Fields
   externalId?: string // Link to external calendar event ID (e.g., Google Calendar)
   etag?: string // Server revision tracking
-  syncStatus?: 'synced' | 'pending_push' | 'pending_delete' | 'conflict'
+  syncStatus?: string // 'synced' | 'pending_push' | 'pending_delete' | 'conflict'
   updatedAt?: number // Timestamp of last local change
 }
 

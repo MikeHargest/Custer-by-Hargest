@@ -14,14 +14,10 @@ import {
   CalendarDays,
   CalendarRange,
   Calendar as CalendarIcon,
-  Plus,
-  EyeOff,
-  SlidersHorizontal,
+  AlignLeft,
   RotateCcw,
   RefreshCcw,
-  AlignLeft,
-  ChevronUp,
-  ChevronDown,
+  SlidersHorizontal,
   PanelLeft
 } from 'lucide-react'
 import CalendarQuickAdd from './calendar/CalendarQuickAdd'
@@ -85,7 +81,6 @@ export default function CalendarView({
   onToggleSidebar,
   onSyncWorkspaceEvents,
   isSyncing,
-  selectedProjectId,
   setProjects
 }: TimelineViewProps): React.ReactElement {
   const PAST_DAYS = 14
@@ -109,8 +104,8 @@ export default function CalendarView({
     y: number
     originalDate?: string
   } | null>(null)
-  const [newItemName, setNewItemName] = useState('')
-  const [selectedTaskId, setSelectedTaskId] = useState<string>('')
+  // const [newItemName, setNewItemName] = useState('')
+  // const [selectedTaskId, setSelectedTaskId] = useState<string>('')
   const [isDraggingResize, setIsDraggingResize] = useState(false)
   const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
@@ -123,9 +118,11 @@ export default function CalendarView({
   const filterMenuRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
+  /*
   const adjustMonth = (offset: number): void => {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + offset, 1))
   }
+  */
 
   const hiddenProjects = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds])
 
@@ -250,6 +247,7 @@ export default function CalendarView({
       monthNameLong?: string
       monthNameShort?: string
       isFirstDayOfMonth?: boolean
+      isPast?: boolean
     }[] = []
 
     const today = new Date()
@@ -287,6 +285,7 @@ export default function CalendarView({
           dayNumber: d,
           isToday: dateString === todayStr,
           isWeekend,
+          isPast: dateString < todayStr,
           monthNameLong,
           monthNameShort,
           isFirstDayOfMonth: d === 1
@@ -338,9 +337,10 @@ export default function CalendarView({
     const isToday = dateString === todayStr
     const dayNumber = d.getDate()
     const dayNameLong = d.toLocaleDateString('en-US', { weekday: 'long' })
+    const dayNameShort = d.toLocaleDateString('en-US', { weekday: 'short' })
     const isWeekend = d.getDay() === 0 || d.getDay() === 6
     const monthNameLong = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    return { dateString, dayNumber, dayNameLong, isToday, isWeekend, monthNameLong }
+    return { dateString, dayNumber, dayNameLong, dayNameShort, isToday, isWeekend, monthNameLong }
   }, [viewDate])
 
   const allEvents = useMemo(() => {
@@ -1381,9 +1381,9 @@ export default function CalendarView({
                               }
                               onDoubleClick={() => {
                                 if (!addingToCell && !d.isDummy) {
-                                  setAddingToCell({ projectId: project.id, date: d.dateString })
-                                  setNewItemName('')
-                                  setSelectedTaskId('')
+                                  setAddingToCell({ projectId: project.id, date: d.dateString, x: 0, y: 0 })
+                                  // setNewItemName('')
+                                  // setSelectedTaskId('')
                                 }
                               }}
                               style={{
@@ -1871,7 +1871,6 @@ export default function CalendarView({
                 addingToCell={addingToCell}
                 setAddingToCell={setAddingToCell}
                 setContextMenu={setContextMenu}
-                onAddProjectItem={onAddProjectItem}
               />
             </div>
           ) : viewMode === 'week' ? (

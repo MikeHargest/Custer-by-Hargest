@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { Plus, CheckSquare, Calendar, Bell, Search } from 'lucide-react'
+import { Plus, Calendar, Search } from 'lucide-react'
 import { Project, TaskItem } from '../../types'
 
 interface CalendarQuickAddProps {
@@ -22,7 +22,7 @@ export default function CalendarQuickAdd({
   onClose,
   onAddTask,
   onAddEvent,
-  onAddAlarm,
+  onAddAlarm: _,
   showProjectSelector = true
 }: CalendarQuickAddProps) {
   const [query, setQuery] = useState('')

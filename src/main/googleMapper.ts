@@ -7,7 +7,7 @@ import { AppEvent } from '../renderer/src/types'
  */
 export function googleToClusterEvent(
   gEvent: calendar_v3.Schema$Event,
-  projectId: string
+  _projectId: string
 ): AppEvent {
   // If no summary, label it as Untitled
   let title = gEvent.summary || 'Untitled Event'
@@ -15,13 +15,13 @@ export function googleToClusterEvent(
   // Try to find if it was originally a task or note via extended properties
   // We will store projectId in extendedProperties, but AppEvent itself doesn't strictly have a root 'projectId' 
   // parameter in types.ts (it's implicitly known in context).
-  let clusterType = 'event'
+  // let _clusterType = 'event'
 
-  if (gEvent.extendedProperties?.private) {
-    if (gEvent.extendedProperties.private.clusterType) {
-      clusterType = gEvent.extendedProperties.private.clusterType
-    }
-  }
+  // if (gEvent.extendedProperties?.private) {
+  //   if (gEvent.extendedProperties.private.clusterType) {
+  //     _clusterType = gEvent.extendedProperties.private.clusterType
+  //   }
+  // }
 
   let date = ''
   let time = ''
@@ -60,12 +60,12 @@ export function googleToClusterEvent(
     // Sync Metadata
     externalId: gEvent.id || undefined,
     etag: gEvent.etag || undefined,
-    syncStatus: 'synced' as any,
+    syncStatus: 'synced' as 'synced',
     updatedAt: gEvent.updated ? new Date(gEvent.updated).getTime() : Date.now(),
     
     recurrence,
     originalEventId
-  }
+  } as AppEvent
 }
 
 /**
@@ -73,7 +73,7 @@ export function googleToClusterEvent(
  */
 export function clusterToGoogleEvent(
   event: AppEvent,
-  projectId?: string
+  _projectId?: string
 ): calendar_v3.Schema$Event {
   const gEvent: calendar_v3.Schema$Event = {
     summary: event.title,
@@ -81,7 +81,7 @@ export function clusterToGoogleEvent(
     extendedProperties: {
       private: {
         clusterType: 'event',
-        ...(projectId ? { projectId } : {})
+        ...(_projectId ? { projectId: _projectId } : {})
       }
     }
   }

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, Cloud, CalendarDays, Palette } from 'lucide-react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette } from 'lucide-react'
 import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'

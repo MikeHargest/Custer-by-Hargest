@@ -149,6 +149,7 @@ export default function PipelineView({
       const timer = setTimeout(adjustAllHeights, 50)
       return () => clearTimeout(timer)
     }
+    return undefined
   }, [activePipelineId, pipelines, activePipeline, isVisible])
 
   useEffect(() => {

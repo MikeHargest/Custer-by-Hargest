@@ -663,7 +663,7 @@ const BoardContent = React.memo(
 
               const baseHandleSize = 8
               const handleSize = baseHandleSize / viewport.scale
-              const lineWidth = 2 / viewport.scale
+              // const lineWidth = 2 / viewport.scale
 
               const handles = [
                 { id: 'top-left', x: minX, y: minY, cursor: 'nwse-resize' },
@@ -891,7 +891,7 @@ const BoardContent = React.memo(
           </Container>
         )}
         {/* Group selection border - always mounted, drawn imperatively via useEffect */}
-        <pixiGraphics ref={groupBorderRef as any} />
+        <pixiGraphics ref={groupBorderRef as any} draw={() => {}} />
         <SnappingGuidesRenderer guidesRef={guidesRef} scale={viewport.scale} theme={theme} />
       </Container>
     )

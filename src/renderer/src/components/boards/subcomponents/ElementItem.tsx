@@ -596,7 +596,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
 
         {/* Thin border overlay for non-grouped elements - rendered on top of content */}
         {!element.groupId && (
-          <pixiGraphics ref={borderRef as any} />
+          <pixiGraphics ref={borderRef as any} draw={() => {}} />
         )}
         <SelectionUI
           element={element}

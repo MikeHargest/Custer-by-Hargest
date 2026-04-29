@@ -27,7 +27,11 @@ import {
   Save,
   Check,
   FolderOpen,
-  PanelLeft
+  PanelLeft,
+  Link2,
+  Unlink,
+  Image as ImageIcon,
+  ExternalLink
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
@@ -39,6 +43,8 @@ import TaskItem from '@tiptap/extension-task-item'
 import Placeholder from '@tiptap/extension-placeholder'
 import Highlight from '@tiptap/extension-highlight'
 import { Markdown } from 'tiptap-markdown'
+import Link from '@tiptap/extension-link'
+import ImageExt from '@tiptap/extension-image'
 import { Virtuoso } from 'react-virtuoso'
 
 import { AppNote, Project } from '../types'
@@ -119,20 +125,24 @@ export default function NotesView({
   const [collapsedNotes, setCollapsedNotes] = useState<Set<string>>(new Set())
   const [draggedNoteId, setDraggedNoteId] = useState<string | null>(null)
   const [dragTargetId, setDragTargetId] = useState<string | null>(null)
+
+  // Link dialog state
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; initialUrl: string } | null>(null)
+  const [linkDialogUrl, setLinkDialogUrl] = useState('')
   const notesRef = useRef(notes)
   // Board cache: stores loaded board content per board id
   const [boardContent, setBoardContent] = useState<Record<string, string>>({})
   const boardContentRef = useRef<Record<string, string>>({})
-  
+
   const [sidebarContextMenu, setSidebarContextMenu] = useState<{
     x: number
     y: number
     note: AppNote
   } | null>(null)
-  
+
   // Save State
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
-  
+
   // Backup / History States
   const [isPreviewMode, setIsPreviewMode] = useState(false)
   const [previewContent, setPreviewContent] = useState<string | null>(null)
@@ -147,11 +157,11 @@ export default function NotesView({
   useEffect(() => {
     boardContentRef.current = boardContent
   }, [boardContent])
-  
+
   useEffect(() => {
     titleEffectRef.current = localTitle
   }, [localTitle])
-  
+
   useEffect(() => {
     activeNoteIdRef.current = activeNoteId
   }, [activeNoteId])
@@ -232,7 +242,7 @@ export default function NotesView({
             if (ok) window.api.packBoard(id, targetDir, fileName)
           })
         } else {
-          ;(window as any).api.saveNote(targetDir, fileName, currentNoteVersion)
+          ; (window as any).api.saveNote(targetDir, fileName, currentNoteVersion)
         }
       }
     }
@@ -244,17 +254,17 @@ export default function NotesView({
   // BACKUP SYSTEM
   const createBackupSnapshot = useCallback(async (noteToBackup: AppNote) => {
     const isBoard = noteToBackup.type === 'board'
-    const noteProjectId = noteToBackup.projectId || 'default'
-    const isTrash = noteToBackup.isTrash || noteProjectId === 'trash'
-    const pId = noteProjectId === 'trash' ? 'default' : noteProjectId
-    
+    // const noteProjectId = noteToBackup.projectId || 'default'
+    // const _isTrash = noteToBackup.isTrash || noteProjectId === 'trash'
+    // const _pId = noteProjectId === 'trash' ? 'default' : noteProjectId
+
     let targetDir: string
     if (isBoard) {
       targetDir = getBoardTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
     } else {
       targetDir = getNoteTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
     }
-    
+
     // For markdown notes, check if content changed. For boards, always allow.
     if (!isBoard) {
       const content = noteToBackup.content || ''
@@ -290,10 +300,10 @@ export default function NotesView({
   useEffect(() => {
     const previousId = lastActiveIdRef.current
     if (previousId && previousId !== activeNoteId) {
-       const previousNote = notesRef.current.find(n => n.id === previousId)
-       if (previousNote) {
-         createBackupSnapshot(previousNote)
-       }
+      const previousNote = notesRef.current.find(n => n.id === previousId)
+      if (previousNote) {
+        createBackupSnapshot(previousNote)
+      }
     }
     lastActiveIdRef.current = activeNoteId
     // Reset preview mode on switch
@@ -304,9 +314,9 @@ export default function NotesView({
 
   const handleLoadHistory = async () => {
     if (!activeNoteId) return
-    const currentNote =  notesRef.current.find(n => n.id === activeNoteId)
+    const currentNote = notesRef.current.find(n => n.id === activeNoteId)
     if (!currentNote || currentNote.type === 'board') return
-    
+
     let targetDir = workspacePath + '/notes'
     const noteProjectId = currentNote.projectId || 'default'
     if (noteProjectId !== 'trash') {
@@ -316,7 +326,7 @@ export default function NotesView({
       }
     }
     const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'md')
-    
+
     // @ts-ignore
     const backups = await window.api.listNoteBackups(targetDir, fileName)
     setHistoryList(backups)
@@ -345,14 +355,14 @@ export default function NotesView({
   const handleRestorePreview = async () => {
     const currentNote = notesRef.current.find(n => n.id === activeNoteId)
     if (!currentNote || !previewContent) return
-    
+
     // Force backup of current state
     await createBackupSnapshot(currentNote)
-    
+
     const newContent = previewContent
     setIsPreviewMode(false)
     setPreviewContent(null)
-    
+
     handleUpdateNoteRef.current(currentNote.id, { content: newContent })
   }
 
@@ -406,7 +416,7 @@ export default function NotesView({
                   projectId: currentNoteVersion.projectId,
                   type: 'board'
                 })
-              } catch (e) {}
+              } catch (e) { }
 
               // @ts-ignore
               const ok = await window.api.writeBoardJson(id, boardPayload)
@@ -469,7 +479,7 @@ export default function NotesView({
           projectId: currentNote.projectId,
           type: 'board'
         })
-      } catch (e) {}
+      } catch (e) { }
 
       // @ts-ignore
       const ok = await window.api.writeBoardJson(activeNoteId, boardPayload)
@@ -479,16 +489,35 @@ export default function NotesView({
       // @ts-ignore
       await window.api.saveNote(targetDir, fileName, currentNote)
     }
-    
+
     setSaveStatus('saved')
   }, [activeNoteId, getBoardTargetDir, getNoteTargetDir])
 
   const activeNote = notes.find((n) => n.id === activeNoteId)
   const handleUpdateNoteRef = useRef(handleUpdateNote)
-  
+
   useEffect(() => {
     handleUpdateNoteRef.current = handleUpdateNote
   }, [handleUpdateNote])
+
+  // Stable ref for openLink so editorProps.handleClick never has a stale closure
+  const openLinkRef = useRef((href: string) => {
+    if (!href) return
+    const trimmed = href.trim()
+    if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) {
+      ; (window as any).api.openExternal(trimmed)
+    } else {
+      let pathToOpen = trimmed
+      if (pathToOpen.startsWith('file://')) {
+        pathToOpen = decodeURI(pathToOpen.replace('file://', ''))
+      }
+      // On Windows, markdown might have saved it as /C:/..., strip the leading slash
+      if (/^\/[a-zA-Z]:[\\/]/.test(pathToOpen)) {
+        pathToOpen = pathToOpen.substring(1)
+      }
+      ; (window as any).api.openPath(decodeURI(pathToOpen))
+    }
+  })
 
   // Tiptap editor instance
   const editor = useEditor({
@@ -503,15 +532,118 @@ export default function NotesView({
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: 'Start typing your notes here...' }),
       Highlight.configure({ multicolor: true }),
-      Markdown
+      Markdown,
+      Link.configure({
+        openOnClick: false, // We handle clicks manually
+        autolink: true,
+        linkOnPaste: true,
+        protocols: ['http', 'https', 'ftp', 'mailto', 'file'], // Add file protocol
+        HTMLAttributes: {
+          class: 'tiptap-link',
+          rel: 'noopener noreferrer',
+          target: '_blank'
+        }
+      }),
+      ImageExt.configure({
+        HTMLAttributes: {
+          class: 'tiptap-image'
+        }
+      })
     ],
     content: activeNote?.content || '',
     editorProps: {
       attributes: {
         class: 'tiptap-editor'
+      },
+      handleClick: (_view, _pos, event) => {
+        const target = event.target as HTMLElement
+        const linkEl = target.closest('a')
+        if (linkEl && (event.ctrlKey || event.metaKey)) {
+          const href = linkEl.getAttribute('href')
+          if (href) {
+            event.preventDefault()
+            openLinkRef.current(href)
+            return true
+          }
+        }
+        return false
       }
     }
   })
+
+
+  // Saved selection ref — we capture {from,to} before the dialog steals focus
+  const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
+
+  // Open the link dialog, saving the current editor selection first
+  const handleOpenLinkDialog = useCallback(() => {
+    if (!editor) return
+    // Capture selection before the dialog input steals focus
+    const { from, to } = editor.state.selection
+    savedSelectionRef.current = { from, to }
+    const existingHref = editor.getAttributes('link').href || ''
+    setLinkDialogUrl(existingHref)
+    setLinkDialog({ open: true, initialUrl: existingHref })
+  }, [editor])
+
+  // Apply or remove link — restores selection first so setLink has something to wrap
+  const handleApplyLink = useCallback((url: string) => {
+    if (!editor) return
+    setLinkDialog(null)
+
+    const sel = savedSelectionRef.current
+    savedSelectionRef.current = null
+
+    const chain = editor.chain().focus()
+
+    // Restore the selection the user had when they opened the dialog
+    if (sel && sel.from !== sel.to) {
+      chain.setTextSelection({ from: sel.from, to: sel.to })
+    }
+
+    let finalUrl = url.trim()
+    if (!finalUrl) {
+      chain.extendMarkRange('link').unsetLink().run()
+      return
+    }
+
+    // Convert local paths like C:\ to absolute path /C:/ so markdown-it preserves it
+    if (/^[a-zA-Z]:[\\/]/.test(finalUrl) || finalUrl.startsWith('/')) {
+      finalUrl = finalUrl.replace(/\\/g, '/')
+      if (/^[a-zA-Z]:\//.test(finalUrl)) {
+        finalUrl = `/${finalUrl}`
+      }
+    }
+
+    chain.extendMarkRange('link').setLink({ href: finalUrl }).run()
+  }, [editor])
+
+  // Browse for a local file to attach as link
+  const handleBrowseFile = useCallback(async () => {
+    const filePath: string | null = await (window as any).api.selectFile()
+    if (filePath) {
+      setLinkDialogUrl(filePath)
+    }
+  }, [])
+
+  // Insert image callback
+  const handleInsertImage = useCallback(async () => {
+    if (!editor) return
+    const filePath: string | null = await (window as any).api.selectFile()
+    if (filePath) {
+      let finalUrl = filePath.replace(/\\/g, '/')
+      if (/^[a-zA-Z]:\//.test(finalUrl)) {
+        finalUrl = `/${finalUrl}` // Make it /C:/... so markdown-it allows it as absolute path
+      }
+      editor.chain().focus().setImage({ src: finalUrl }).run()
+    }
+  }, [editor])
+
+  // Remove link directly
+  const handleUnlink = useCallback(() => {
+    if (!editor) return
+    editor.chain().focus().extendMarkRange('link').unsetLink().run()
+  }, [editor])
 
   // Use a stable update listener that always uses the current activeNoteId from Ref
   useEffect(() => {
@@ -532,6 +664,49 @@ export default function NotesView({
     }
   }, [editor])
 
+  // Ctrl+K shortcut to open link dialog from anywhere in the note editor
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        // Only trigger if editor is focused
+        if (editor && editor.isFocused) {
+          e.preventDefault()
+          const existingHref = editor.getAttributes('link').href || ''
+          setLinkDialogUrl(existingHref)
+          setLinkDialog({ open: true, initialUrl: existingHref })
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editor])
+
+  // Track Ctrl key state to show clickable link cursor
+  useEffect(() => {
+    const container = document.querySelector('.notes-view-container')
+    if (!container) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        container.classList.add('ctrl-held')
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        container.classList.remove('ctrl-held')
+      }
+    }
+    const onBlur = () => container.classList.remove('ctrl-held')
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      container.classList.remove('ctrl-held')
+    }
+  }, [])
+
   // Lock/unlock editor when entering/exiting history preview mode
   useEffect(() => {
     if (editor) editor.setEditable(!isPreviewMode)
@@ -541,7 +716,7 @@ export default function NotesView({
   useEffect(() => {
     if (editor && activeNote && activeNote.type !== 'board') {
       const noteContent = activeNote.content || ''
-      
+
       // Try to parse as JSON first (modern format fallback for older notes)
       try {
         const json = JSON.parse(noteContent)
@@ -561,7 +736,7 @@ export default function NotesView({
         editor.commands.setContent(noteContent, { emitUpdate: false })
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor, activeNoteId, activeNote?.content])
 
   const applyFormatting = (type: string, value?: string): void => {
@@ -676,7 +851,7 @@ export default function NotesView({
               projectId: noteToSave.projectId,
               type: 'board'
             })
-          } catch (e) {}
+          } catch (e) { }
 
           // @ts-ignore
           const ok = await window.api.writeBoardJson(id, boardPayload)
@@ -686,7 +861,7 @@ export default function NotesView({
           // @ts-ignore
           await window.api.saveNote(targetDir, newFileName, finalNote)
         }
-        
+
         // Update the notes list in App.tsx so the change persists in the sidebar/state
         setNotes(prev => prev.map(n => n.id === id ? finalNote : n))
       }
@@ -697,7 +872,7 @@ export default function NotesView({
       // titleEffectRef.current still holds the OLD note's pending title at this point
       // because this effect fires before the title-sync effect below
       flushSave(prevId, titleEffectRef.current)
-      
+
       if (saveTimers.current[prevId]) {
         clearTimeout(saveTimers.current[prevId])
         delete saveTimers.current[prevId]
@@ -772,8 +947,8 @@ export default function NotesView({
     if (targetDir) {
       if (isBoard) {
         // Initialize empty board in cache and pack to .board ZIP
-        const emptyBoard = JSON.stringify({ 
-          elements: [], 
+        const emptyBoard = JSON.stringify({
+          elements: [],
           viewport: { x: 0, y: 0, scale: 1 },
           id: newNote.id,
           title: newNote.title,
@@ -833,7 +1008,7 @@ export default function NotesView({
   }
 
   // Toggle collapse/expand
-    const handleDragStart = (e: React.DragEvent, id: string) => {
+  const handleDragStart = (e: React.DragEvent, id: string) => {
     setDraggedNoteId(id)
     e.dataTransfer.setData('text/plain', id)
     e.dataTransfer.effectAllowed = 'move'
@@ -849,13 +1024,13 @@ export default function NotesView({
       setDragTargetId(id)
     }
   }
-  
-  const handleDragLeave = (e: React.DragEvent, id: string) => {
+
+  const handleDragLeave = (_e: React.DragEvent, id: string) => {
     if (dragTargetId === id) {
       setDragTargetId(null)
     }
   }
-  
+
   const handleDragEnd = (e: React.DragEvent) => {
     if (e.target instanceof HTMLElement) {
       e.target.style.opacity = '1'
@@ -867,13 +1042,13 @@ export default function NotesView({
   const handleDrop = (e: React.DragEvent, dropTargetId: string, itemType: string) => {
     e.preventDefault()
     setDragTargetId(null)
-    
+
     if (itemType === 'project') return
     if (!draggedNoteId || draggedNoteId === dropTargetId) {
       handleDragEnd(e)
       return
     }
-    
+
     const targetNote = notes.find(n => n.id === dropTargetId)
     if (!targetNote) return
 
@@ -881,22 +1056,22 @@ export default function NotesView({
     const siblings = notes
       .filter(n => n.parentId === actualParentId && n.projectId === targetNote.projectId && n.id !== draggedNoteId)
       .sort((a, b) => {
-          const diff = (a.order ?? 0) - (b.order ?? 0);
-          if (diff !== 0) return diff;
-          const aTime = a.createdAt || a.id.charCodeAt(0);
-          const bTime = b.createdAt || b.id.charCodeAt(0);
-          if (aTime !== bTime) return aTime - bTime;
-          return a.id.localeCompare(b.id);
-        })
-      
+        const diff = (a.order ?? 0) - (b.order ?? 0);
+        if (diff !== 0) return diff;
+        const aTime = a.createdAt || a.id.charCodeAt(0);
+        const bTime = b.createdAt || b.id.charCodeAt(0);
+        if (aTime !== bTime) return aTime - bTime;
+        return a.id.localeCompare(b.id);
+      })
+
     const targetIdx = siblings.findIndex(n => n.id === dropTargetId)
     siblings.splice(targetIdx + 1, 0, notes.find(n => n.id === draggedNoteId)!)
-    
+
     const updatedNotes = siblings.map((sib, index) => ({
       ...sib,
       order: index * 10
     }))
-    
+
     const draggedNote = updatedNotes.find(n => n.id === draggedNoteId)
     if (draggedNote) draggedNote.parentId = actualParentId
 
@@ -1078,10 +1253,10 @@ export default function NotesView({
         // @ts-ignore
         await window.api.renameNote(targetDir, oldFileName, newFileName)
       }
-      
+
       // commit current local title and filename to the global state once
       setNotes(prev => prev.map(n => n.id === activeNoteId ? { ...n, fileName: newFileName, title: localTitle } : n))
-      
+
       if (isBoard) {
         let boardPayload = boardContentRef.current[activeNoteId] || activeNote.content || '{}'
         try {
@@ -1093,7 +1268,7 @@ export default function NotesView({
             projectId: activeNote.projectId,
             type: 'board'
           })
-        } catch (e) {}
+        } catch (e) { }
 
         // @ts-ignore
         await window.api.writeBoardJson(activeNoteId, boardPayload)
@@ -1140,7 +1315,7 @@ export default function NotesView({
         setNotes(prev => prev.map(n => n.id === note.id ? { ...n, content: loaded } : n))
       }
     })
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeNote?.id])
 
   type FlattenedItem =
@@ -1341,6 +1516,150 @@ export default function NotesView({
           border-top: 1px solid rgba(255,255,255,0.1);
           margin: 1em 0;
         }
+        .tiptap-editor a.tiptap-link {
+          color: var(--accent-primary, #7c8bdc);
+          text-decoration: underline;
+          text-decoration-color: color-mix(in srgb, var(--accent-primary, #7c8bdc) 60%, transparent);
+          text-underline-offset: 3px;
+          cursor: text;
+          transition: color 0.15s, text-decoration-color 0.15s, opacity 0.15s;
+          border-radius: 2px;
+          position: relative;
+        }
+        /* When Ctrl is held anywhere in the editor — links become clickable */
+        .ctrl-held .tiptap-editor a.tiptap-link,
+        .tiptap-editor.ctrl-held a.tiptap-link {
+          cursor: pointer !important;
+          text-decoration-color: var(--accent-primary, #7c8bdc) !important;
+          opacity: 0.85;
+        }
+        .ctrl-held .tiptap-editor a.tiptap-link:hover,
+        .tiptap-editor.ctrl-held a.tiptap-link:hover {
+          opacity: 1;
+          text-decoration-color: var(--accent, #9ba8f0) !important;
+          color: var(--accent, #9ba8f0);
+        }
+        .tiptap-editor img.tiptap-image {
+          max-width: 100%;
+          height: auto;
+          border-radius: 8px;
+          margin: 1em 0;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .tiptap-editor img.tiptap-image.ProseMirror-selectednode {
+          outline: 2px solid var(--accent-primary, #7c8bdc);
+        }
+        /* Link dialog overlay */
+        .link-dialog-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.55);
+          backdrop-filter: blur(4px);
+          z-index: 10000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .link-dialog-box {
+          background: var(--card-bg, #1e1e2e);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 12px;
+          padding: 24px;
+          width: 480px;
+          max-width: 90vw;
+          box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .link-dialog-title {
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--text-primary);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .link-dialog-input-row {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .link-dialog-input {
+          flex: 1;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 8px;
+          color: var(--text-primary);
+          font-size: 13px;
+          padding: 10px 14px;
+          outline: none;
+          transition: border-color 0.2s;
+          font-family: inherit;
+        }
+        .link-dialog-input:focus {
+          border-color: var(--accent-primary, #7c8bdc);
+          background: rgba(255,255,255,0.07);
+        }
+        .link-dialog-hint {
+          font-size: 11px;
+          color: var(--text-secondary);
+          opacity: 0.7;
+          line-height: 1.5;
+        }
+        .link-dialog-actions {
+          display: flex;
+          gap: 8px;
+          justify-content: flex-end;
+        }
+        .link-btn-secondary {
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: transparent;
+          color: var(--text-primary);
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: inherit;
+        }
+        .link-btn-secondary:hover {
+          background: rgba(255,255,255,0.06);
+        }
+        .link-btn-primary {
+          padding: 8px 20px;
+          border-radius: 8px;
+          border: none;
+          background: var(--accent-primary, #7c8bdc);
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: inherit;
+        }
+        .link-btn-primary:hover {
+          opacity: 0.85;
+        }
+        .link-btn-browse {
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.04);
+          color: var(--text-secondary);
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s;
+          font-family: inherit;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+        .link-btn-browse:hover {
+          background: rgba(255,255,255,0.08);
+          color: var(--text-primary);
+        }
       `}</style>
           {/* Sidebar list */}
           <div
@@ -1371,12 +1690,12 @@ export default function NotesView({
                 }}
               >
                 <div
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between', 
-                    gap: '8px', 
-                    width: '100%' 
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '8px',
+                    width: '100%'
                   }}
                 >
                   <div style={{ display: 'flex', gap: '4px' }}>
@@ -1908,14 +2227,14 @@ export default function NotesView({
                                   {historyList.map((h, i) => {
                                     const dt = new Date(h.timestamp)
                                     const dateStr = dt.toLocaleDateString()
-                                    const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute:'2-digit' })
+                                    const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                     return (
                                       <button key={i} onClick={() => handlePreviewHistory(h)} style={{
                                         padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
                                         background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
                                       }} className="file-item-hover">
                                         <RotateCcw size={12} color="var(--text-secondary)" />
-                                        <span style={{flex: 1}}>{dateStr} <span style={{opacity:0.6}}>{timeStr}</span></span>
+                                        <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
                                       </button>
                                     )
                                   })}
@@ -1925,9 +2244,9 @@ export default function NotesView({
                           )}
                         </div>
                         <div style={{ position: 'relative' }}>
-                          <ToolbarButton 
-                            onClick={handleManualSave} 
-                            title={saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Save'} 
+                          <ToolbarButton
+                            onClick={handleManualSave}
+                            title={saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Save'}
                           >
                             {saveStatus === 'saved' ? (
                               <Check size={16} style={{ opacity: 0.7 }} />
@@ -2044,6 +2363,37 @@ export default function NotesView({
                           title="Separator"
                         >
                           <Minus size={16} />
+                        </ToolbarButton>
+
+                        <div
+                          style={{
+                            width: '1px',
+                            height: '20px',
+                            background: 'rgba(255,255,255,0.1)',
+                            margin: '0 4px'
+                          }}
+                        />
+
+                        <ToolbarButton
+                          onClick={handleOpenLinkDialog}
+                          title="Insert Link (Ctrl+K)"
+                        >
+                          <Link2 size={16} />
+                        </ToolbarButton>
+
+                        <ToolbarButton
+                          onClick={handleUnlink}
+                          title="Remove Link"
+                          disabled={!editor?.isActive('link')}
+                        >
+                          <Unlink size={16} style={{ opacity: editor?.isActive('link') ? 1 : 0.5 }} />
+                        </ToolbarButton>
+
+                        <ToolbarButton
+                          onClick={handleInsertImage}
+                          title="Insert Image"
+                        >
+                          <ImageIcon size={16} />
                         </ToolbarButton>
                       </div>
                       <button
@@ -2309,10 +2659,10 @@ export default function NotesView({
                 }}
               >
                 <div
-                  style={{ 
-                    display: 'flex', 
-                    justifyContent: 'space-between', 
-                    padding: '0 10px', 
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    padding: '0 10px',
                     alignItems: 'center',
                     height: '45px',
                     borderBottom: '1px solid rgba(255,255,255,0.05)',
@@ -2400,6 +2750,68 @@ export default function NotesView({
         />
       )}
 
+      {/* Link Insert Dialog */}
+      {linkDialog?.open && (
+        <div
+          className="link-dialog-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setLinkDialog(null) }}
+        >
+          <div className="link-dialog-box">
+            <div className="link-dialog-title">
+              <Link2 size={16} style={{ opacity: 0.8 }} />
+              Insert Link
+            </div>
+
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 500 }}>
+                URL or File Path
+              </div>
+              <div className="link-dialog-input-row">
+                <input
+                  autoFocus
+                  className="link-dialog-input"
+                  type="text"
+                  placeholder="https://example.com  or  C:\Users\...\file.pdf"
+                  value={linkDialogUrl}
+                  onChange={(e) => setLinkDialogUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleApplyLink(linkDialogUrl)
+                    if (e.key === 'Escape') setLinkDialog(null)
+                  }}
+                />
+                <button className="link-btn-browse" onClick={handleBrowseFile}>
+                  <FolderOpen size={13} />
+                  Browse
+                </button>
+              </div>
+            </div>
+
+            <div className="link-dialog-hint">
+              <ExternalLink size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+              Web links (https://...) open in the browser. Local file paths open with the default app.
+            </div>
+
+            <div className="link-dialog-actions">
+              {linkDialog.initialUrl && (
+                <button
+                  className="link-btn-secondary"
+                  style={{ marginRight: 'auto', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                  onClick={() => handleApplyLink('')}
+                >
+                  Remove Link
+                </button>
+              )}
+              <button className="link-btn-secondary" onClick={() => setLinkDialog(null)}>
+                Cancel
+              </button>
+              <button className="link-btn-primary" onClick={() => handleApplyLink(linkDialogUrl)}>
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sidebarContextMenu && (
         <>
           <div
@@ -2469,18 +2881,21 @@ function ToolbarButton({
   children,
   onClick,
   title,
-  className
+  className,
+  disabled
 }: {
   children: React.ReactNode
   onClick: () => void
   title: string
   className?: string
+  disabled?: boolean
 }): React.ReactElement {
   return (
     <button
       onClick={onClick}
       title={title}
       className={className}
+      disabled={disabled}
       style={{
         padding: '6px',
         background: 'transparent',

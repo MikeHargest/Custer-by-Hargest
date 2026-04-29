@@ -1,7 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, dialog, Notification, screen, protocol, Tray, Menu, nativeImage, safeStorage } from 'electron'
 import path, { join } from 'path'
 import fs from 'fs'
-import { v4 } from 'uuid'
 import { syncManager } from './googleSyncManager'
 import { Readable } from 'stream'
 import JSZip from 'jszip'
