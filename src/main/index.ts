@@ -1528,6 +1528,16 @@ protocol.registerSchemesAsPrivileged([
       bypassCSP: true,
       stream: true
     }
+  },
+  {
+    scheme: 'local-file',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      bypassCSP: true,
+      stream: true
+    }
   }
 ])
 
