@@ -650,7 +650,7 @@ export default function NotesView({
       // Это решает проблему пробелов и спецсимволов в именах файлов
       const encodedPath = normalizedPath
         .split('/')
-        .map(segment => encodeURIComponent(segment))
+        .map(segment => segment.replace(/ /g, '%20'))
         .join('/')
       const finalUrl = `local-file:///${encodedPath}`
 

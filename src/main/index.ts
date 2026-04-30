@@ -1620,33 +1620,18 @@ app.whenReady().then(() => {
     }
   })
 
-  protocol.handle('local-file', async (req) => {
-    try {
-      const url = new URL(req.url)
-      let filePath = decodeURIComponent(url.pathname)
-      if (process.platform === 'win32' && filePath.startsWith('/')) {
-        filePath = filePath.substring(1)
-      }
-
-      const absolutePath = path.resolve(filePath)
-      const data = await fs.promises.readFile(absolutePath)
-
-      const ext = path.extname(absolutePath).toLowerCase()
-      let contentType = 'application/octet-stream'
-      if (ext === '.png') contentType = 'image/png'
-      else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg'
-      else if (ext === '.gif') contentType = 'image/gif'
-      else if (ext === '.webp') contentType = 'image/webp'
-      else if (ext === '.svg') contentType = 'image/svg+xml'
-
-      return new Response(data, {
-        headers: { 'Content-Type': contentType }
-      })
-    } catch (error) {
-      console.error('local-file protocol error:', error)
-      return new Response('Not found', { status: 404 })
+protocol.handle('local-file', async (req) => {
+  try {
+    const url = new URL(req.url)
+    // url.pathname уже раскодирован браузером автоматически
+    let filePath = url.pathname
+    if (process.platform === 'win32' && filePath.startsWith('/')) {
+      filePath = filePath.substring(1)
     }
-  })
+    const absolutePath = path.resolve(filePath)
+    // ...
+  }
+})
 
   createWindow()
 
