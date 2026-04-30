@@ -532,7 +532,11 @@ export default function NotesView({
       TaskItem.configure({ nested: true }),
       Placeholder.configure({ placeholder: 'Start typing your notes here...' }),
       Highlight.configure({ multicolor: true }),
-      Markdown,
+      Markdown.configure({
+        html: true,
+        transformPastedText: true,
+        transformCopiedText: true,
+      }),
       Link.configure({
         openOnClick: false, // We handle clicks manually
         autolink: true,
