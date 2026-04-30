@@ -646,9 +646,13 @@ export default function NotesView({
     if (filePath) {
       // Нормализуем слеши
       const normalizedPath = filePath.replace(/\\/g, '/')
-
-      // Формируем URL через наш новый кастомный протокол
-      const finalUrl = `local-file:///${normalizedPath}`
+      // Кодируем каждый сегмент пути отдельно (чтобы не трогать слэши)
+      // Это решает проблему пробелов и спецсимволов в именах файлов
+      const encodedPath = normalizedPath
+        .split('/')
+        .map(segment => encodeURIComponent(segment))
+        .join('/')
+      const finalUrl = `local-file:///${encodedPath}`
 
       editor.chain().focus().setImage({ src: finalUrl }).run()
     }
