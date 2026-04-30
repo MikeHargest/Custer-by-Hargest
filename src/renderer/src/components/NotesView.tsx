@@ -635,11 +635,14 @@ export default function NotesView({
     if (!editor) return
     const filePath: string | null = await (window as any).api.selectFile()
     if (filePath) {
-      let finalUrl = filePath.replace(/\\/g, '/')
-      if (/^[a-zA-Z]:\//.test(finalUrl)) {
-        finalUrl = `/${finalUrl}` // Make it /C:/... so markdown-it allows it as absolute path
-      }
-      editor.chain().focus().setImage({ src: finalUrl }).run()
+      // Нормализуем слеши
+      const normalizedPath = filePath.replace(/\\/g, '/')
+
+      // Формируем URL через кастомный протокол, который уже есть в вашем проекте
+      // Это на 100% обходит блокировки CSP и markdown-it
+      const assetUrl = `board-asset://?path=${encodeURIComponent(normalizedPath)}`
+
+      editor.chain().focus().setImage({ src: assetUrl }).run()
     }
   }, [editor])
 
