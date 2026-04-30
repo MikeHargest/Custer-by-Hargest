@@ -638,11 +638,10 @@ export default function NotesView({
       // Нормализуем слеши
       const normalizedPath = filePath.replace(/\\/g, '/')
 
-      // Формируем URL через кастомный протокол, который уже есть в вашем проекте
-      // Это на 100% обходит блокировки CSP и markdown-it
-      const assetUrl = `board-asset://?path=${encodeURIComponent(normalizedPath)}`
+      // Формируем URL через наш новый кастомный протокол
+      const finalUrl = `local-file:///${normalizedPath}`
 
-      editor.chain().focus().setImage({ src: assetUrl }).run()
+      editor.chain().focus().setImage({ src: finalUrl }).run()
     }
   }, [editor])
 
