@@ -536,12 +536,21 @@ export default function NotesView({
         html: true,
         transformPastedText: true,
         transformCopiedText: true,
+        markdownItSetup: (md) => {
+          // По умолчанию markdown-it проверяет протоколы ссылок и картинок.
+          // Эта функция добавляет local-file в белый список для картинок (и ссылок).
+          const defaultValidateLink = md.validateLink;
+          md.validateLink = (url) => {
+            if (url.startsWith('local-file://')) return true;
+            return defaultValidateLink ? defaultValidateLink(url) : true;
+          };
+        }
       }),
       Link.configure({
         openOnClick: false, // We handle clicks manually
         autolink: true,
         linkOnPaste: true,
-        protocols: ['http', 'https', 'ftp', 'mailto', 'file'], // Add file protocol
+        protocols: ['http', 'https', 'ftp', 'mailto', 'file', 'local-file'], // <-- ДОБАВЛЕНО local-file
         HTMLAttributes: {
           class: 'tiptap-link',
           rel: 'noopener noreferrer',
