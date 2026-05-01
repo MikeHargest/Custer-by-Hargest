@@ -1620,7 +1620,7 @@ app.whenReady().then(() => {
     }
   })
 
-protocol.handle('local-file', async (req) => {
+  protocol.handle('local-file', async (req) => {
   try {
     const url = new URL(req.url)
     // url.pathname уже раскодирован браузером автоматически
@@ -1628,11 +1628,27 @@ protocol.handle('local-file', async (req) => {
     if (process.platform === 'win32' && filePath.startsWith('/')) {
       filePath = filePath.substring(1)
     }
+
     const absolutePath = path.resolve(filePath)
-    // ...
+    const data = await fs.promises.readFile(absolutePath)
+
+    const ext = path.extname(absolutePath).toLowerCase()
+    let contentType = 'application/octet-stream'
+    if (ext === '.png') contentType = 'image/png'
+    else if (ext === '.jpg' || ext === '.jpeg') contentType = 'image/jpeg'
+    else if (ext === '.gif') contentType = 'image/gif'
+    else if (ext === '.webp') contentType = 'image/webp'
+    else if (ext === '.svg') contentType = 'image/svg+xml'
+    else if (ext === '.bmp') contentType = 'image/bmp'
+
+    return new Response(data, {
+      headers: { 'Content-Type': contentType }
+    })
+  } catch (error) {
+    console.error('local-file protocol error:', error)
+    return new Response('Not found', { status: 404 })
   }
 })
-
   createWindow()
 
   // Create Tray Icon (destroy previous if exists, e.g. after HMR restart)
