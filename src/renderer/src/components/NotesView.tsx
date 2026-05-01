@@ -508,14 +508,18 @@ export default function NotesView({
       ; (window as any).api.openExternal(trimmed)
     } else {
       let pathToOpen = trimmed
-      if (pathToOpen.startsWith('file://')) {
+      if (pathToOpen.startsWith('file:///')) {
+        pathToOpen = decodeURI(pathToOpen.replace('file:///', ''))
+      } else if (pathToOpen.startsWith('local-file:///')) {
+        pathToOpen = decodeURI(pathToOpen.replace('local-file:///', ''))
+      } else if (pathToOpen.startsWith('file://')) {
         pathToOpen = decodeURI(pathToOpen.replace('file://', ''))
       }
       // On Windows, markdown might have saved it as /C:/..., strip the leading slash
       if (/^\/[a-zA-Z]:[\\/]/.test(pathToOpen)) {
         pathToOpen = pathToOpen.substring(1)
       }
-      ; (window as any).api.openPath(decodeURI(pathToOpen))
+      ; (window as any).api.openPath(decodeURIComponent(pathToOpen))
     }
   })
 
@@ -536,15 +540,6 @@ export default function NotesView({
         html: true,
         transformPastedText: true,
         transformCopiedText: true,
-        markdownItSetup: (md) => {
-          // По умолчанию markdown-it проверяет протоколы ссылок и картинок.
-          // Эта функция добавляет local-file в белый список для картинок (и ссылок).
-          const defaultValidateLink = md.validateLink;
-          md.validateLink = (url) => {
-            if (url.startsWith('local-file://')) return true;
-            return defaultValidateLink ? defaultValidateLink(url) : true;
-          };
-        }
       }),
       Link.configure({
         openOnClick: false, // We handle clicks manually
@@ -584,6 +579,21 @@ export default function NotesView({
     }
   })
 
+  // Патч markdown-it validateLink напрямую через storage редактора.
+  // markdownItSetup в tiptap-markdown НЕ поддерживается — опция молча игнорируется.
+  // Единственный надёжный способ — патчить md после инициализации через storage.
+  useEffect(() => {
+    if (!editor) return
+    // tiptap-markdown хранит markdown-it instance в editor.storage.markdown.parser.md
+    const md = (editor.storage as any)?.markdown?.parser?.md
+    if (!md) return
+    const originalValidate = md.validateLink?.bind(md)
+    md.validateLink = (url: string) => {
+      // Разрешаем file:// и local-file:// (Electron с webSecurity:false их поддерживает)
+      if (url.startsWith('file://') || url.startsWith('local-file://')) return true
+      return originalValidate ? originalValidate(url) : true
+    }
+  }, [editor])
 
   // Saved selection ref — we capture {from,to} before the dialog steals focus
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
@@ -620,12 +630,14 @@ export default function NotesView({
       return
     }
 
-    // Convert local paths like C:\ to absolute path /C:/ so markdown-it preserves it
-    if (/^[a-zA-Z]:[\\/]/.test(finalUrl) || finalUrl.startsWith('/')) {
-      finalUrl = finalUrl.replace(/\\/g, '/')
-      if (/^[a-zA-Z]:\//.test(finalUrl)) {
-        finalUrl = `/${finalUrl}`
-      }
+    // Convert local Windows paths like C:\ to file:/// URL so markdown-it preserves them correctly
+    if (/^[a-zA-Z]:[\\/]/.test(finalUrl)) {
+      const normalized = finalUrl.replace(/\\/g, '/')
+      // encodeURI кодирует пробелы/кириллицу, но НЕ кодирует ':' и '/'
+      finalUrl = `file:///${encodeURI(normalized)}`
+    } else if (/^\/[a-zA-Z]:[\/]/.test(finalUrl)) {
+      // Already /C:/... format — convert to file:///C:/...
+      finalUrl = `file://${encodeURI(finalUrl)}`
     }
 
     chain.extendMarkRange('link').setLink({ href: finalUrl }).run()
@@ -644,15 +656,11 @@ export default function NotesView({
     if (!editor) return
     const filePath: string | null = await (window as any).api.selectFile()
     if (filePath) {
-      // Нормализуем слеши
+      // Нормализуем обратные слеши Windows → прямые
       const normalizedPath = filePath.replace(/\\/g, '/')
-      // Кодируем каждый сегмент пути отдельно (чтобы не трогать слэши)
-      // Это решает проблему пробелов и спецсимволов в именах файлов
-      const encodedPath = normalizedPath
-        .split('/')
-        .map(segment => segment.replace(/ /g, '%20'))
-        .join('/')
-      const finalUrl = `local-file:///${encodedPath}`
+      // Используем encodeURI (не encodeURIComponent!) — он кодирует пробелы и кириллицу,
+      // но НЕ кодирует ':' и '/', поэтому 'C:/...' остаётся валидным, а не 'C%3A/...'
+      const finalUrl = `file:///${encodeURI(normalizedPath)}`
 
       editor.chain().focus().setImage({ src: finalUrl }).run()
     }
@@ -731,14 +739,30 @@ export default function NotesView({
     if (editor) editor.setEditable(!isPreviewMode)
   }, [isPreviewMode, editor])
 
+  // Migrate legacy local-file:// and bare /C:/... paths to canonical file:/// format.
+  // Called once on content load to fix old notes without re-saving automatically.
+  const migrateLocalFilePaths = useCallback((markdown: string): string => {
+    // 1. local-file:///E:/... → file:///E:/...
+    let result = markdown.replace(/local-file:\/\/\//g, 'file:///')
+    // 2. Исправляем C%3A → C: (артефакт от encodeURIComponent, который не должен был кодировать ':')
+    result = result.replace(/file:\/\/\/([A-Za-z])%3A\//g, 'file:///$1:/')
+    // 3. Bare Windows paths saved as /C:/... inside markdown links/images → file:///C:/...
+    //    Matches: ](/C:/...) or ](/C:\...) or ](\/C:\/...)
+    result = result.replace(/(\])\(\/(([a-zA-Z]):[\\/][^)]*)\)/g, (_match, bracket, rest) => {
+      const normalized = rest.replace(/\\/g, '/')
+      return `${bracket}(file:///${normalized})`
+    })
+    return result
+  }, [])
+
   // Sync editor content when active note changes or content loads from disk
   useEffect(() => {
     if (editor && activeNote && activeNote.type !== 'board') {
-      const noteContent = activeNote.content || ''
+      const rawContent = activeNote.content || ''
 
       // Try to parse as JSON first (modern format fallback for older notes)
       try {
-        const json = JSON.parse(noteContent)
+        const json = JSON.parse(rawContent)
         // If it's a valid Tiptap JSON, set it
         if (json && typeof json === 'object') {
           // Compare with current state is hard for JSON, but emitUpdate: false prevents loops
@@ -748,6 +772,9 @@ export default function NotesView({
       } catch (e) {
         // Assume markdown
       }
+
+      // Migrate legacy local-file:// and /C:/... paths on load (backward compat)
+      const noteContent = migrateLocalFilePaths(rawContent)
 
       // Check purely text content change (for markdown)
       const currentMarkdown = (editor.storage as any).markdown.getMarkdown()
