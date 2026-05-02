@@ -1491,7 +1491,7 @@ export default function CalendarView({
                                 {spanningTasks.map((st) => (
                                   <div
                                     key={`placeholder-${st.id}`}
-                                    style={{ height: '26px', flexShrink: 0, visibility: 'hidden' }}
+                                    style={{ height: '24px', flexShrink: 0, visibility: 'hidden' }}
                                   />
                                 ))}
 
@@ -1529,6 +1529,7 @@ export default function CalendarView({
                                       background: 'var(--calendar-event-bg)',
                                       borderRadius: 'var(--radius-sm)',
                                       fontSize: '11px',
+                                      height: '24px',
                                       border: '1px solid rgba(255,255,255,0.05)',
                                       borderLeft: `2px solid ${project.color || 'var(--accent)'}`,
                                       cursor: 'grab',
@@ -1612,7 +1613,7 @@ export default function CalendarView({
                                       key={task.id}
                                       style={{
                                         position: 'relative',
-                                        height: '26px',
+                                        height: '24px',
                                         flexShrink: 0,
                                         zIndex: spanDays > 1 ? 5 : 2,
                                         // During resize drag, let pointer events pass through to td cells
@@ -1660,7 +1661,7 @@ export default function CalendarView({
                                           top: 0,
                                           left: 0,
                                           width: spanWidthPx,
-                                          height: '100%',
+                                          height: '24px',
                                           boxSizing: 'border-box',
                                           boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                                           border: `1px solid rgba(255,255,255,0.05)`,
@@ -1672,7 +1673,7 @@ export default function CalendarView({
                                           justifyContent: 'space-between',
                                           gap: '6px',
                                           opacity: 0.95,
-                                          minHeight: '26px',
+                                          minHeight: '24px',
                                           zIndex: 2 // relative to the slot's z-index
                                         }}
                                         title={`Task: ${currentTaskName}\nDates: ${new Date(task.date).toLocaleDateString()} - ${task.endDate ? new Date(task.endDate).toLocaleDateString() : 'Single day'}`}

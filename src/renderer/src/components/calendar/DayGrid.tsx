@@ -50,17 +50,17 @@ export default function DayGrid({
   addingToCell,
   setAddingToCell,
   setContextMenu
-}: DayGridProps) {
+}: DayGridProps): JSX.Element {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [allDayHeight, setAllDayHeight] = React.useState(80)
   const isResizingRef = React.useRef(false)
 
   React.useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+  const handleMouseMove = (e: MouseEvent): void => {
       if (!isResizingRef.current) return
       setAllDayHeight(prev => Math.max(40, Math.min(prev + e.movementY, 500)))
     }
-    const cleanup = () => {
+  const cleanup = (): void => {
       if (isResizingRef.current) {
         isResizingRef.current = false
         document.body.style.cursor = ''
@@ -171,10 +171,12 @@ export default function DayGrid({
                    }}
                    draggable
                    onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'move_event', id: event.id, projectId: event.projectId }))}
-                   style={{
-                     display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', background: 'var(--calendar-event-bg)', borderRadius: 'var(--radius-sm)',
-                     fontSize: '12px', border: '1px solid rgba(255,255,255,0.05)', borderLeft: `3px solid ${event.projectColor || 'var(--accent)'}`, cursor: 'grab', maxWidth: '200px'
-                   }}
+                     style={{
+                       display: 'flex', alignItems: 'center', gap: '8px', padding: '4px 8px', background: 'var(--calendar-event-bg)', borderRadius: 'var(--radius-sm)',
+                       fontSize: '12px', border: '1px solid rgba(255,255,255,0.05)',
+                       borderLeft: `3px solid ${event.projectColor || 'var(--accent)'}`,
+                       cursor: 'grab', height: '24px', maxWidth: '200px'
+                     }}
                  >
                    <LucideIcons.Calendar size={12} style={{ flexShrink: 0, opacity: 0.7, color: event.projectColor || 'var(--accent)' }} />
                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', flex: 1 }}>{event.title}</span>
@@ -193,11 +195,13 @@ export default function DayGrid({
                      }}
                      draggable
                      onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'move_timeline_task', id: task.id, projectId: task.projectId }))}
-                     style={{
-                       background: 'var(--calendar-task-bg)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: 'var(--radius-md)', fontSize: '12px',
-                       border: '1px solid rgba(255,255,255,0.05)', borderLeft: `4px solid ${project?.color || 'var(--accent)'}`,
-                       display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', maxWidth: '200px'
-                     }}
+                       style={{
+                         background: 'var(--calendar-task-bg)', color: 'var(--text-primary)', padding: '4px 8px', borderRadius: 'var(--radius-md)', fontSize: '12px',
+                         border: '1px solid rgba(255,255,255,0.05)',
+                         borderLeft: `4px solid ${project?.color || 'var(--accent)'}`,
+                         height: '24px',
+                         display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', maxWidth: '200px'
+                       }}
                    >
                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{currentTaskName}</span>
                    </div>
@@ -267,7 +271,7 @@ export default function DayGrid({
                    const sourceTaskId = payload.taskId || payload.itemId
                    setTimelineTasks((prev) => [...prev, { id: uuidv4(), projectId: payload.projectId, taskName: payload.text, date: dayData.dateString, taskId: sourceTaskId }])
                  }
-               } catch { }
+                  } catch (e) { console.error(e); }
              }}
           >
              {Array.from({ length: 24 }).map((_, i) => (
@@ -292,7 +296,7 @@ export default function DayGrid({
                        top: `${topPx}px`,
                        left: '4px',
                        right: '16px',
-                       height: '50px',
+                        height: '24px',
                        background: 'var(--calendar-event-bg)',
                        borderRadius: 'var(--radius-sm)',
                        border: '1px solid rgba(255,255,255,0.05)',

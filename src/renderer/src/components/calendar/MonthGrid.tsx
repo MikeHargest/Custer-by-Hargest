@@ -60,11 +60,11 @@ export default function MonthGrid({
   addingToCell,
   setAddingToCell,
   setContextMenu
-}: MonthGridProps) {
+}: MonthGridProps): JSX.Element {
   const monthGridContainerRef = React.useRef<HTMLDivElement>(null)
   const initialScrollDone = React.useRef(false)
   const [isReady, setIsReady] = React.useState(false)
-  const isPanning = React.useRef(false)
+  const [isPanning, setIsPanning] = React.useState(false)
   const panStartY = React.useRef(0)
   const panScrollTop = React.useRef(0)
   const [visibleMonthStr, setVisibleMonthStr] = React.useState(() => {
@@ -100,7 +100,7 @@ export default function MonthGrid({
   }, [monthGridDays, doScrollToToday])
 
   React.useEffect(() => {
-    const handleCustomScroll = () => doScrollToToday('smooth')
+    const handleCustomScroll = (): void => doScrollToToday('smooth')
     window.addEventListener('scroll-to-today', handleCustomScroll)
     return () => window.removeEventListener('scroll-to-today', handleCustomScroll)
   }, [doScrollToToday])
@@ -128,20 +128,20 @@ export default function MonthGrid({
 
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>): void => {
     if (e.button !== 2) return
-    isPanning.current = true
+    setIsPanning(true)
     panStartY.current = e.clientY
     panScrollTop.current = monthGridContainerRef.current?.scrollTop || 0
   }
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>): void => {
-    if (!isPanning.current || !monthGridContainerRef.current) return
+    if (!isPanning || !monthGridContainerRef.current) return
     e.preventDefault()
     const dy = e.clientY - panStartY.current
     monthGridContainerRef.current.scrollTop = panScrollTop.current - dy
   }
 
   const handleMouseUp = (): void => {
-    isPanning.current = false
+    setIsPanning(false)
   }
 
   const removeTask = (taskId: string): void => {
@@ -158,7 +158,7 @@ export default function MonthGrid({
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
       onContextMenu={(e) => e.preventDefault()}
-      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', cursor: isPanning.current ? 'grabbing' : 'auto', opacity: isReady ? 1 : 0 }}
+      style={{ height: '100%', display: 'flex', flexDirection: 'column', overflowY: 'auto', cursor: isPanning ? 'grabbing' : 'auto', opacity: isReady ? 1 : 0 }}
     >
       {/* Combined sticky header: Month name + weekday labels */}
       <div
@@ -393,7 +393,7 @@ export default function MonthGrid({
                       padding: '2px 6px',
                       background: 'var(--calendar-event-bg)',
                       borderRadius: 'var(--radius-sm)',
-                      fontSize: '11px',
+                      fontSize: '11px', height: '24px',
                       border: '1px solid rgba(255,255,255,0.05)',
                       borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`,
                       marginBottom: '2px',
@@ -472,7 +472,7 @@ export default function MonthGrid({
                         color: 'var(--text-primary)',
                         padding: '4px 6px',
                         borderRadius: 'var(--radius-md)',
-                        fontSize: '11px',
+                        fontSize: '11px', height: '24px',
                         fontWeight: isParent ? 600 : 400,
                         border: '1px solid rgba(255,255,255,0.05)',
                         borderLeft: `3px solid ${project?.color || 'var(--accent)'}`,

@@ -40,17 +40,17 @@ export default function WeekGrid({
   addingToCell,
   setAddingToCell,
   setContextMenu
-}: WeekGridProps) {
+}: WeekGridProps): React.ReactElement {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [allDayHeight, setAllDayHeight] = React.useState(80)
   const isResizingRef = React.useRef(false)
 
   React.useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
+    const handleMouseMove = (e: MouseEvent): void => {
       if (!isResizingRef.current) return
       setAllDayHeight(prev => Math.max(40, Math.min(prev + e.movementY, 500)))
     }
-    const cleanup = () => {
+    const cleanup = (): void => {
       if (isResizingRef.current) {
         isResizingRef.current = false
         document.body.style.cursor = ''
@@ -157,7 +157,7 @@ export default function WeekGrid({
                       onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'move_event', id: event.id, projectId: event.projectId }))}
                       style={{
                         display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px', background: 'var(--calendar-event-bg)', borderRadius: 'var(--radius-sm)',
-                        fontSize: '11px', border: '1px solid rgba(255,255,255,0.05)', borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`, cursor: 'grab'
+                        fontSize: '11px', height: '24px', border: '1px solid rgba(255,255,255,0.05)', borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`, cursor: 'grab'
                       }}
                     >
                       <LucideIcons.Calendar size={10} style={{ flexShrink: 0, opacity: 0.7, color: event.projectColor || 'var(--accent)' }} />
@@ -178,7 +178,7 @@ export default function WeekGrid({
                         draggable
                         onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'move_timeline_task', id: task.id, projectId: task.projectId }))}
                         style={{
-                          background: 'var(--calendar-task-bg)', color: 'var(--text-primary)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '11px',
+                          background: 'var(--calendar-task-bg)', color: 'var(--text-primary)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '11px', height: '24px',
                           border: '1px solid rgba(255,255,255,0.05)', borderLeft: `2px solid ${project?.color || 'var(--accent)'}`,
                           display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden'
                         }}
@@ -274,7 +274,7 @@ export default function WeekGrid({
                         const sourceTaskId = payload.taskId || payload.itemId
                         setTimelineTasks((prev) => [...prev, { id: uuidv4(), projectId: payload.projectId, taskName: payload.text, date: d.dateString, taskId: sourceTaskId }])
                       }
-                    } catch { }
+                    } catch (e) { console.error(e); }
                   }}
                 >
                   {Array.from({ length: 24 }).map((_, i) => (
