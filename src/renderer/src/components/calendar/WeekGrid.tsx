@@ -1,10 +1,10 @@
 import React from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
 import { formatLocalDate } from '../../utils/dateUtils'
-
+import CalendarEventItem from './CalendarEventItem'
+import CalendarTaskItem from './CalendarTaskItem'
 
 
 interface WeekGridProps {
@@ -74,7 +74,6 @@ export default function WeekGrid({
   }
 
 
-
   return (
     <div
       ref={containerRef}
@@ -130,7 +129,7 @@ export default function WeekGrid({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1 }}>
             {weekDays.map(d => {
-              const tasksForDay = timelineTasks.filter((t) => t.date === d.dateString)
+              const tasksForDay = timelineTasks.filter((t) => {\n            // Show tasks that start on this day\n            if (t.date === d.dateString) return true\n            // Show tasks that span across this day (started earlier, end later)\n            if (t.endDate) {\n              return (\n                t.date !== d.dateString &&\n                d.dateString > t.date &&\n                d.dateString <= t.endDate\n              )\n            }\n            return false\n          })
               const allEventsForDay = allEvents.filter((e) => e.date === d.dateString)
               const allDayItems = allEventsForDay.filter(e => !e.time)
 
@@ -146,45 +145,25 @@ export default function WeekGrid({
                   className="custom-scrollbar"
                 >
                   {allDayItems.map((event) => (
-                    <div
+                    <CalendarEventItem
                       key={event.id}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
-                        e.stopPropagation()
-                        setContextMenu({ type: 'event', id: event.id, title: event.title, projectId: event.projectId, x: e.clientX, y: e.clientY })
-                      }}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'move_event', id: event.id, projectId: event.projectId }))}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '4px', padding: '2px 6px', background: 'var(--calendar-event-bg)', borderRadius: 'var(--radius-sm)',
-                        fontSize: '11px', height: '24px', border: '1px solid rgba(255,255,255,0.05)', borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`, cursor: 'grab'
-                      }}
-                    >
-                      <LucideIcons.Calendar size={10} style={{ flexShrink: 0, opacity: 0.7, color: event.projectColor || 'var(--accent)' }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)', flex: 1 }}>{event.title}</span>
-                    </div>
+                      event={event}
+                      onContextMenu={(e, ev) => setContextMenu({ type: 'event', id: ev.id, title: ev.title, projectId: ev.projectId, x: e.clientX, y: e.clientY })}
+                      compact
+                    />
                   ))}
                   {tasksForDay.map((task) => {
                     const currentTaskName = task.taskId && taskIdToNameMap.has(task.taskId) ? taskIdToNameMap.get(task.taskId)! : task.taskName
                     const project = projects.find((p) => p.id === task.projectId)
                     return (
-                      <div
+                      <CalendarTaskItem
                         key={task.id}
-                        onContextMenu={(e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          setContextMenu({ type: 'task', id: task.id, title: currentTaskName || '', projectId: task.projectId, x: e.clientX, y: e.clientY })
-                        }}
-                        draggable
-                        onDragStart={(e) => e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'move_timeline_task', id: task.id, projectId: task.projectId }))}
-                        style={{
-                          background: 'var(--calendar-task-bg)', color: 'var(--text-primary)', padding: '2px 6px', borderRadius: 'var(--radius-sm)', fontSize: '11px', height: '24px',
-                          border: '1px solid rgba(255,255,255,0.05)', borderLeft: `2px solid ${project?.color || 'var(--accent)'}`,
-                          display: 'flex', alignItems: 'center', gap: '4px', overflow: 'hidden'
-                        }}
-                      >
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{currentTaskName}</span>
-                      </div>
+                        task={task}
+                        project={project}
+                        taskName={currentTaskName}
+                        onContextMenu={(e, t) => setContextMenu({ type: 'task', id: t.id, title: currentTaskName || '', projectId: t.projectId, x: e.clientX, y: e.clientY })}
+                        compact
+                      />
                     )
                   })}
                 </div>
@@ -324,3 +303,4 @@ export default function WeekGrid({
     </div>
   )
 }
+

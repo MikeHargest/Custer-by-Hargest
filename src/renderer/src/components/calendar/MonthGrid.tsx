@@ -1,32 +1,11 @@
 import React from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { X } from 'lucide-react'
-import * as LucideIcons from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
 import { formatLocalDate } from '../../utils/dateUtils'
-
-const isParentTask = (
-  projects: Project[],
-  projectId: string,
-  taskId?: string,
-  taskName?: string
-): boolean => {
-  const project = projects.find((p) => p.id === projectId)
-  if (!project) return false
-
-  const checkTasks = (tasks: any[]): boolean => {
-    for (const t of tasks) {
-      if (taskId && t.id === taskId) return !!(t.subtasks && t.subtasks.length > 0)
-      if (!taskId && taskName && t.text === taskName) return !!(t.subtasks && t.subtasks.length > 0)
-
-      if (t.subtasks && t.subtasks.length > 0) {
-        if (checkTasks(t.subtasks)) return true
-      }
-    }
-    return false
-  }
-  return checkTasks(project.tasks || [])
-}
+import CalendarEventItem from './CalendarEventItem'
+import CalendarTaskItem from './CalendarTaskItem'
+import { isParentTask } from './calendarUtils'
 
 interface MonthGridProps {
   monthGridDays: {
@@ -361,157 +340,38 @@ export default function MonthGrid({
                 className="custom-scrollbar"
               >
                 {eventsForDay.map((event) => (
-                  <div
+                  <CalendarEventItem
                     key={event.id}
-                    onContextMenu={(e) => {
-                      e.preventDefault()
+                    event={event}
+                    onContextMenu={(e, ev) => setContextMenu({ type: 'event', id: ev.id, title: ev.title, projectId: ev.projectId, x: e.clientX, y: e.clientY })}
+                    onDelete={(e, eventId) => {
                       e.stopPropagation()
-                      setContextMenu({
-                        type: 'event',
-                        id: event.id,
-                        title: event.title,
-                        projectId: event.projectId,
-                        x: e.clientX,
-                        y: e.clientY
+                      const delEvent = new CustomEvent('delete-event-instance', {
+                        detail: { eventId, projectId: event.projectId }
                       })
+                      window.dispatchEvent(delEvent)
                     }}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.setData(
-                        'text/plain',
-                        JSON.stringify({
-                          type: 'move_event',
-                          id: event.id,
-                          projectId: event.projectId
-                        })
-                      )
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '2px 6px',
-                      background: 'var(--calendar-event-bg)',
-                      borderRadius: 'var(--radius-sm)',
-                      fontSize: '11px', height: '24px',
-                      border: '1px solid rgba(255,255,255,0.05)',
-                      borderLeft: `2px solid ${event.projectColor || 'var(--accent)'}`,
-                      marginBottom: '2px',
-                      cursor: 'grab'
-                    }}
-                    title={`Event: ${event.title}\n(Drag to move instance)`}
-                  >
-                    <LucideIcons.Calendar size={10} style={{ flexShrink: 0, opacity: 0.7, color: event.projectColor || 'var(--accent)' }} />
-                    <span style={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: 'var(--text-secondary)',
-                      flex: 1
-                    }}>
-                      {event.title}
-                    </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        const delEvent = new CustomEvent('delete-event-instance', {
-                          detail: { eventId: event.id, projectId: event.projectId }
-                        })
-                        window.dispatchEvent(delEvent)
-                      }}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'rgba(255,255,255,0.2)',
-                        cursor: 'pointer',
-                        padding: '0 2px',
-                        display: 'flex',
-                        alignItems: 'center'
-                      }}
-                      title="Delete instance"
-                    >
-                      <LucideIcons.X size={10} />
-                    </button>
-                  </div>
+                    compact
+                  />
                 ))}
                 {tasksForDay.map((task) => {
-                  const currentTaskName =
-                    task.taskId && taskIdToNameMap.has(task.taskId)
-                      ? taskIdToNameMap.get(task.taskId)!
-                      : task.taskName
-                  const isParent = isParentTask(projects, task.projectId, task.taskId, currentTaskName)
+                  const currentTaskName = task.taskId && taskIdToNameMap.has(task.taskId) ? taskIdToNameMap.get(task.taskId)! : task.taskName
                   const project = projects.find((p) => p.id === task.projectId)
+                  const isParent = isParentTask(projects, task.projectId, task.taskId, currentTaskName)
                   return (
-                    <div
+                    <CalendarTaskItem
                       key={task.id}
-                      onContextMenu={(e) => {
-                        e.preventDefault()
+                      task={task}
+                      project={project}
+                      taskName={currentTaskName}
+                      isParent={isParent}
+                      onContextMenu={(e, t) => setContextMenu({ type: 'task', id: t.id, title: currentTaskName || '', projectId: t.projectId, x: e.clientX, y: e.clientY })}
+                      onDelete={(e, taskId) => {
                         e.stopPropagation()
-                        setContextMenu({
-                          type: 'task',
-                          id: task.id,
-                          title: currentTaskName || '',
-                          projectId: task.projectId,
-                          x: e.clientX,
-                          y: e.clientY
-                        })
+                        removeTask(taskId)
                       }}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(
-                          'text/plain',
-                          JSON.stringify({
-                            type: 'move_timeline_task',
-                            id: task.id,
-                            projectId: task.projectId
-                          })
-                        )
-                      }}
-                      style={{
-                        background: 'var(--calendar-task-bg)',
-                        color: 'var(--text-primary)',
-                        padding: '4px 6px',
-                        borderRadius: 'var(--radius-md)',
-                        fontSize: '11px', height: '24px',
-                        fontWeight: isParent ? 600 : 400,
-                        border: '1px solid rgba(255,255,255,0.05)',
-                        borderLeft: `3px solid ${project?.color || 'var(--accent)'}`,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '4px',
-                        overflow: 'hidden'
-                      }}
-                      title={`Task: ${currentTaskName} (${project?.name || 'Unknown'})`}
-                    >
-                      <span
-                        style={{
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                          flex: 1
-                        }}
-                      >
-                        {currentTaskName}
-                      </span>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          removeTask(task.id)
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'rgba(255,255,255,0.3)',
-                          cursor: 'pointer',
-                          padding: '0',
-                          display: 'flex',
-                          alignItems: 'center'
-                        }}
-                      >
-                        <X size={10} />
-                      </button>
-                    </div>
+                      compact
+                    />
                   )
                 })}
 

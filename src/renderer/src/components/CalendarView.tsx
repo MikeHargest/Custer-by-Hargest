@@ -22,29 +22,9 @@ import {
 } from 'lucide-react'
 import CalendarQuickAdd from './calendar/CalendarQuickAdd'
 import CalendarContextMenu from './calendar/CalendarContextMenu'
-
-const isParentTask = (
-  projects: Project[],
-  projectId: string,
-  taskId?: string,
-  taskName?: string
-): boolean => {
-  const project = projects.find((p) => p.id === projectId)
-  if (!project) return false
-
-  const checkTasks = (tasks: TaskItem[]): boolean => {
-    for (const t of tasks) {
-      if (taskId && t.id === taskId) return !!(t.subtasks && t.subtasks.length > 0)
-      if (!taskId && taskName && t.text === taskName) return !!(t.subtasks && t.subtasks.length > 0)
-
-      if (t.subtasks && t.subtasks.length > 0) {
-        if (checkTasks(t.subtasks)) return true
-      }
-    }
-    return false
-  }
-  return checkTasks(project.tasks)
-}
+import CalendarEventItem from './calendar/CalendarEventItem'
+import TimelineTaskItem from './calendar/TimelineTaskItem'
+import { isParentTask } from './calendar/calendarUtils'
 
 interface TimelineViewProps {
   projects: Project[]
