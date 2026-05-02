@@ -129,7 +129,19 @@ export default function WeekGrid({
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', flex: 1 }}>
             {weekDays.map(d => {
-              const tasksForDay = timelineTasks.filter((t) => {\n            // Show tasks that start on this day\n            if (t.date === d.dateString) return true\n            // Show tasks that span across this day (started earlier, end later)\n            if (t.endDate) {\n              return (\n                t.date !== d.dateString &&\n                d.dateString > t.date &&\n                d.dateString <= t.endDate\n              )\n            }\n            return false\n          })
+              const tasksForDay = timelineTasks.filter((t) => {
+                // Show tasks that start on this day
+                if (t.date === d.dateString) return true
+                // Show tasks that span across this day (started earlier, end later)
+                if (t.endDate) {
+                  return (
+                    t.date !== d.dateString &&
+                    d.dateString > t.date &&
+                    d.dateString <= t.endDate
+                  )
+                }
+                return false
+              })
               const allEventsForDay = allEvents.filter((e) => e.date === d.dateString)
               const allDayItems = allEventsForDay.filter(e => !e.time)
 

@@ -27,6 +27,7 @@ import {
   Save,
   Check,
   FolderOpen,
+  Folder,
   PanelLeft,
   Link2,
   Unlink,
@@ -34,6 +35,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
+import { BubbleMenu } from '@tiptap/react/menus'
 import StarterKit from '@tiptap/starter-kit'
 import UnderlineExt from '@tiptap/extension-underline'
 import { TextStyle } from '@tiptap/extension-text-style'
@@ -112,6 +114,24 @@ export default function NotesView({
   isSidebarOpen,
   onToggleSidebar
 }: NotesViewProps): React.ReactElement {
+  const floatingBtnStyle = (active = false): React.CSSProperties => ({
+    width: '28px',
+    height: '28px',
+    borderRadius: '7px',
+    border: active ? '1px solid rgba(255,255,255,0.2)' : '1px solid transparent',
+    background: active ? 'rgba(255,255,255,0.12)' : 'transparent',
+    color: active ? 'var(--text-primary)' : 'var(--text-secondary)',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.18s ease'
+  })
+
+  const NonInclusiveLink = Link.extend({
+    inclusive: false
+  })
+
   const activeProjectId = selectedProjectId || 'default'
   const [showTrash, setShowTrash] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
@@ -494,6 +514,13 @@ export default function NotesView({
   }, [activeNoteId, getBoardTargetDir, getNoteTargetDir])
 
   const activeNote = notes.find((n) => n.id === activeNoteId)
+  const activeNoteProjectColor = React.useMemo(() => {
+    if (!activeNote) return 'var(--accent, #9ba8f0)'
+    const projectId = activeNote.projectId || 'default'
+    if (projectId === 'default' || projectId === 'trash') return 'var(--accent, #9ba8f0)'
+    const project = findProjectRecursive(projects, projectId)
+    return project?.color || 'var(--accent, #9ba8f0)'
+  }, [activeNote, projects])
   const handleUpdateNoteRef = useRef(handleUpdateNote)
 
   useEffect(() => {
@@ -541,7 +568,7 @@ export default function NotesView({
         transformPastedText: true,
         transformCopiedText: true,
       }),
-      Link.configure({
+      NonInclusiveLink.configure({
         openOnClick: false, // We handle clicks manually
         autolink: true,
         linkOnPaste: true,
@@ -564,8 +591,9 @@ export default function NotesView({
         class: 'tiptap-editor'
       },
       handleClick: (_view, _pos, event) => {
-        const target = event.target as HTMLElement
-        const linkEl = target.closest('a')
+        const target = event.target as Node
+        const el = target.nodeType === 3 ? target.parentElement : (target as HTMLElement)
+        const linkEl = el?.closest('a')
         if (linkEl && (event.ctrlKey || event.metaKey)) {
           const href = linkEl.getAttribute('href')
           if (href) {
@@ -648,6 +676,14 @@ export default function NotesView({
     const filePath: string | null = await (window as any).api.selectFile()
     if (filePath) {
       setLinkDialogUrl(filePath)
+    }
+  }, [])
+
+  // Browse for a local folder to attach as link
+  const handleBrowseFolder = useCallback(async () => {
+    const folderPath: string | null = await (window as any).api.selectFolder()
+    if (folderPath) {
+      setLinkDialogUrl(folderPath)
     }
   }, [])
 
@@ -752,6 +788,9 @@ export default function NotesView({
       const normalized = rest.replace(/\\/g, '/')
       return `${bracket}(file:///${normalized})`
     })
+    // 4. Recover escaped markdown links/images like \[text\](...) and !\[\](...)
+    result = result.replace(/!\\\[([^\]]*)\\\]\(([^)]+)\)/g, '![$1]($2)')
+    result = result.replace(/\\\[([^\]]*)\\\]\(([^)]+)\)/g, '[$1]($2)')
     return result
   }, [])
 
@@ -1475,7 +1514,8 @@ export default function NotesView({
           width: '100%',
           overflow: 'hidden',
           padding: 0,
-          background: 'var(--card-bg)'
+          background: 'var(--card-bg)',
+          ['--note-project-accent' as any]: activeNoteProjectColor
         }}
       >
         <div
@@ -1563,11 +1603,12 @@ export default function NotesView({
           margin: 1em 0;
         }
         .tiptap-editor a.tiptap-link {
-          color: var(--accent-primary, #7c8bdc);
+          color: #8e8e8e;
           text-decoration: underline;
-          text-decoration-color: color-mix(in srgb, var(--accent-primary, #7c8bdc) 60%, transparent);
+          text-decoration-color: color-mix(in srgb, #8e8e8e 60%, transparent);
           text-underline-offset: 3px;
           cursor: text;
+          pointer-events: none; /* Links are inert unless Ctrl/Cmd is held */
           transition: color 0.15s, text-decoration-color 0.15s, opacity 0.15s;
           border-radius: 2px;
           position: relative;
@@ -1576,14 +1617,15 @@ export default function NotesView({
         .ctrl-held .tiptap-editor a.tiptap-link,
         .tiptap-editor.ctrl-held a.tiptap-link {
           cursor: pointer !important;
-          text-decoration-color: var(--accent-primary, #7c8bdc) !important;
+          pointer-events: auto !important;
+          text-decoration-color: #8e8e8e !important;
           opacity: 0.85;
         }
         .ctrl-held .tiptap-editor a.tiptap-link:hover,
         .tiptap-editor.ctrl-held a.tiptap-link:hover {
           opacity: 1;
-          text-decoration-color: var(--accent, #9ba8f0) !important;
-          color: var(--accent, #9ba8f0);
+          text-decoration-color: var(--note-project-accent, var(--accent, #9ba8f0)) !important;
+          color: var(--note-project-accent, var(--accent, #9ba8f0));
         }
         .tiptap-editor img.tiptap-image {
           max-width: 100%;
@@ -1593,7 +1635,7 @@ export default function NotesView({
           box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         .tiptap-editor img.tiptap-image.ProseMirror-selectednode {
-          outline: 2px solid var(--accent-primary, #7c8bdc);
+          outline: 2px solid #8e8e8e;
         }
         /* Link dialog overlay */
         .link-dialog-overlay {
@@ -2680,6 +2722,78 @@ export default function NotesView({
                           </div>
                         )}
 
+                        {editor && !isPreviewMode && (
+                          <BubbleMenu
+                            editor={editor}
+                            tippyOptions={{
+                              duration: 140,
+                              delay: [120, 0],
+                              placement: 'top',
+                              offset: [0, 8]
+                            }}
+                            shouldShow={({ editor: bubbleEditor }) => {
+                              if (!bubbleEditor?.isEditable) return false
+                              const { from, to } = bubbleEditor.state.selection
+                              return from !== to
+                            }}
+                          >
+                            <div
+                              style={{
+                                background: 'rgba(18,18,18,0.92)',
+                                border: '1px solid rgba(255,255,255,0.1)',
+                                borderRadius: '12px',
+                                padding: '6px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '2px',
+                                backdropFilter: 'blur(14px)',
+                                boxShadow: '0 8px 26px rgba(0,0,0,0.45)'
+                              }}
+                            >
+                              <button title="Bold" onClick={() => applyFormatting('bold')} style={floatingBtnStyle(editor.isActive('bold'))}>
+                                <Bold size={14} />
+                              </button>
+                              <button title="Italic" onClick={() => applyFormatting('italic')} style={floatingBtnStyle(editor.isActive('italic'))}>
+                                <Italic size={14} />
+                              </button>
+                              <button title="Underline" onClick={() => applyFormatting('underline')} style={floatingBtnStyle(editor.isActive('underline'))}>
+                                <Underline size={14} />
+                              </button>
+                              <button title="Strikethrough" onClick={() => applyFormatting('strikethrough')} style={floatingBtnStyle(editor.isActive('strike'))}>
+                                <Strikethrough size={14} />
+                              </button>
+                              <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+                              <button
+                                title="Text Color"
+                                onClick={(e) => setTextColorPickerRect((e.currentTarget as HTMLButtonElement).getBoundingClientRect())}
+                                style={floatingBtnStyle(!!editor.getAttributes('textStyle')?.color)}
+                              >
+                                <Palette size={14} />
+                              </button>
+                              <button title="Clear Formatting" onClick={() => applyFormatting('clear')} style={floatingBtnStyle(false)}>
+                                <Eraser size={14} />
+                              </button>
+                              <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+                              <button title="Heading 1" onClick={() => applyFormatting('h1')} style={floatingBtnStyle(editor.isActive('heading', { level: 1 }))}>
+                                <Heading1 size={14} />
+                              </button>
+                              <button title="Heading 2" onClick={() => applyFormatting('h2')} style={floatingBtnStyle(editor.isActive('heading', { level: 2 }))}>
+                                <Heading2 size={14} />
+                              </button>
+                              <button title="Heading 3" onClick={() => applyFormatting('h3')} style={floatingBtnStyle(editor.isActive('heading', { level: 3 }))}>
+                                <Heading3 size={14} />
+                              </button>
+                              <button title="Bullet List" onClick={() => applyFormatting('list')} style={floatingBtnStyle(editor.isActive('bulletList'))}>
+                                <List size={14} />
+                              </button>
+                              <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+                              <button title="Insert Link (Ctrl+K)" onClick={handleOpenLinkDialog} style={floatingBtnStyle(editor.isActive('link'))}>
+                                <Link2 size={14} />
+                              </button>
+                            </div>
+                          </BubbleMenu>
+                        )}
+
                         <EditorContent
                           editor={editor}
                           style={{
@@ -2827,7 +2941,11 @@ export default function NotesView({
                 />
                 <button className="link-btn-browse" onClick={handleBrowseFile}>
                   <FolderOpen size={13} />
-                  Browse
+                  File
+                </button>
+                <button className="link-btn-browse" onClick={handleBrowseFolder}>
+                  <Folder size={13} />
+                  Folder
                 </button>
               </div>
             </div>
