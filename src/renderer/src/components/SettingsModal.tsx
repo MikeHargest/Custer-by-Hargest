@@ -16,6 +16,8 @@ interface SettingsModalProps {
   setUseGPU: (use: boolean) => void
   showTaskCounts: boolean
   setShowTaskCounts: (show: boolean) => void
+  showColoredDots: boolean
+  setShowColoredDots: (show: boolean) => void
   timerVolume: number
   setTimerVolume: (volume: number) => void
   backupIntervalMinutes: number
@@ -36,6 +38,8 @@ export default function SettingsModal({
   setUseGPU,
   showTaskCounts,
   setShowTaskCounts,
+  showColoredDots,
+  setShowColoredDots,
   timerVolume,
   setTimerVolume,
   backupIntervalMinutes,
@@ -612,6 +616,54 @@ export default function SettingsModal({
                       >
                         <motion.div
                           animate={{ x: showTaskCounts ? 16 : 2 }}
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            background: '#fff',
+                            borderRadius: '50%',
+                            position: 'absolute',
+                            top: '3px'
+                          }}
+                        />
+                      </button>
+                    </div>
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '12px 16px',
+                        background: 'rgba(255,255,255,0.03)',
+                        borderRadius: '10px',
+                        cursor: 'pointer'
+                      }}
+                      onClick={() => setShowColoredDots(!showColoredDots)}
+                    >
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 500 }}>Colored Dots for Projects</div>
+                        <div
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--text-secondary)',
+                            marginTop: '2px'
+                          }}
+                        >
+                          Replace project icons with colored dots in the sidebar.
+                        </div>
+                      </div>
+                      <button
+                        style={{
+                          width: '36px',
+                          height: '20px',
+                          borderRadius: '10px',
+                          background: showColoredDots ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                          border: 'none',
+                          position: 'relative',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        <motion.div
+                          animate={{ x: showColoredDots ? 16 : 2 }}
                           style={{
                             width: '14px',
                             height: '14px',

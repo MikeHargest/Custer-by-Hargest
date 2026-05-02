@@ -134,6 +134,7 @@ function App() {
   const [showProfile, setShowProfile] = useState(false)
   const [showFPS, setShowFPS] = useState(false)
   const [showTaskCounts, setShowTaskCounts] = useState(false)
+  const [showColoredDots, setShowColoredDots] = useState(false)
   const [useGPU, setUseGPU] = useState(true)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true)
@@ -1405,6 +1406,7 @@ function App() {
             updateAlarm(alarmId, { taskName: taskText })
           }}
           showTaskCounts={showTaskCounts}
+          showColoredDots={showColoredDots}
         />
         <div className="main-content">
           <WorkspaceProfile
@@ -1682,6 +1684,8 @@ function App() {
         setShowFPS={setShowFPS}
         showTaskCounts={showTaskCounts}
         setShowTaskCounts={setShowTaskCounts}
+        showColoredDots={showColoredDots}
+        setShowColoredDots={setShowColoredDots}
         useGPU={useGPU}
         setUseGPU={setUseGPU}
         timerVolume={timerVolume}

@@ -35,6 +35,7 @@ interface TaskSidebarProps {
   onAssignTaskToTimer?: (timerId: string, taskText: string) => void
   onAssignTaskToAlarm?: (alarmId: string, taskText: string) => void
   showTaskCounts: boolean
+  showColoredDots: boolean
 }
 
 export default memo(function TaskSidebar({
@@ -50,7 +51,8 @@ export default memo(function TaskSidebar({
   onTaskDeleted,
   onAssignTaskToTimer,
   onAssignTaskToAlarm,
-  showTaskCounts
+  showTaskCounts,
+  showColoredDots
 }: TaskSidebarProps): React.ReactElement {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null)
   const [dropIndicator, setDropIndicator] = useState<{
@@ -1544,51 +1546,52 @@ export default memo(function TaskSidebar({
                 }}
               >
                 {projects.length === 0 ? (
-                  <div
-                    style={{
-                      flex: 1,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      textAlign: 'center',
-                      padding: '20px',
-                      color: 'var(--text-secondary)',
-                      opacity: 0.4,
-                      fontSize: '12px'
-                    }}
-                  >
-                    No projects planned
-                  </div>
-                ) : (
-                  projects.map((project) => (
-                    <ProjectItem
-                      key={project.id}
-                      project={project}
-                      level={0}
-                      selectedProjectId={selectedProjectId}
-                      setSelectedProjectId={setSelectedProjectId}
-                      editingId={editingId}
-                      editingValue={editingValue}
-                      setEditingValue={setEditingValue}
-                      saveProjectName={saveProjectName}
-                      saveTaskName={saveTaskName}
-                      cancelEditing={cancelEditing}
-                      activeDropdown={activeDropdown}
-                      setActiveDropdown={setActiveDropdown}
-                      updateProjectColor={updateProjectColor}
-                      startEditing={startEditing}
-                      deleteProject={handleDeleteProject}
-                      toggleProjectExpansion={toggleProjectExpansion}
-                      addSubProject={addSubProject}
-                      quickAddTask={quickAddTask}
-                      onDragStart={startMouseDrag}
-                      dropIndicator={dropIndicator}
-                      isDragging={isDragging}
-                      openColorPickerFor={openColorPickerFor}
-                      showTaskCounts={showTaskCounts}
-                    />
-                  ))
-                )}
+                 <div
+                   style={{
+                     flex: 1,
+                     display: 'flex',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     textAlign: 'center',
+                     padding: '20px',
+                     color: 'var(--text-secondary)',
+                     opacity: 0.4,
+                     fontSize: '12px'
+                   }}
+                 >
+                   No projects planned
+                 </div>
+               ) : (
+                 projects.map((project) => (
+                   <ProjectItem
+                     key={project.id}
+                     project={project}
+                     level={0}
+                     selectedProjectId={selectedProjectId}
+                     setSelectedProjectId={setSelectedProjectId}
+                     editingId={editingId}
+                     editingValue={editingValue}
+                     setEditingValue={setEditingValue}
+                     saveProjectName={saveProjectName}
+                     saveTaskName={saveTaskName}
+                     cancelEditing={cancelEditing}
+                     activeDropdown={activeDropdown}
+                     setActiveDropdown={setActiveDropdown}
+                     updateProjectColor={updateProjectColor}
+                     startEditing={startEditing}
+                     deleteProject={handleDeleteProject}
+                     toggleProjectExpansion={toggleProjectExpansion}
+                     addSubProject={addSubProject}
+                     quickAddTask={quickAddTask}
+                     onDragStart={startMouseDrag}
+                     dropIndicator={dropIndicator}
+                     isDragging={isDragging}
+                     openColorPickerFor={openColorPickerFor}
+                     showTaskCounts={showTaskCounts}
+                     showColoredDots={showColoredDots}
+                   />
+                 ))
+               )}
               </div>
             </div>
           </div>

@@ -35,6 +35,7 @@ interface ProjectItemProps {
   parentColor?: string
   openColorPickerFor: (projectId: string, rect: DOMRect) => void
   showTaskCounts: boolean
+  showColoredDots: boolean
 }
 
 const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
@@ -61,7 +62,8 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
   isDragging,
   parentColor,
   openColorPickerFor,
-  showTaskCounts
+  showTaskCounts,
+  showColoredDots
 }) {
   const isSelected = selectedProjectId === project.id
   const displayColor = project.color || parentColor || 'var(--accent)'
@@ -124,6 +126,20 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
           }}
         >
           {(() => {
+            if (showColoredDots) {
+              return (
+                  <div
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: displayColor,
+                      flexShrink: 0,
+                      boxShadow: '0 0 0 1px rgba(255,255,255,0.1)'
+                    }}
+                  />
+              )
+            }
             if (project.icon?.startsWith('file')) {
               return (
                 <img
@@ -374,6 +390,7 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
               parentColor={displayColor}
               openColorPickerFor={openColorPickerFor}
               showTaskCounts={showTaskCounts}
+              showColoredDots={showColoredDots}
             />
           ))}
         </div>
@@ -383,3 +400,4 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
 })
 
 export default ProjectItem
+
