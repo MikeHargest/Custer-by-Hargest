@@ -98,13 +98,13 @@ body {
   overflow: hidden;
   border-radius: 0;
   padding: 4px;
-  gap: 4px;
+  gap: 2px;
 }
 
 .app-body {
   display: flex;
   flex: 1;
-  gap: 4px;
+  gap: 2px;
   overflow: hidden;
 }
 
@@ -748,7 +748,7 @@ body {
 }
 
 .sidebar-block:not(:last-child):not(.has-resizer-after) {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .sidebar-block.has-resizer-after {
@@ -760,7 +760,7 @@ body {
 }
 
 .sidebar-resizer {
-  height: 4px;
+  height: 2px;
   /* Reduced from 8px */
   cursor: row-resize;
   position: relative;
@@ -1889,7 +1889,7 @@ body {
 }
 
 .progress-section input[type='range'] {
-  height: 4px;
+  height: 2px;
   border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.1);
   -webkit-appearance: none;
