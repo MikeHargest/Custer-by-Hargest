@@ -22,8 +22,6 @@ import {
 } from 'lucide-react'
 import CalendarQuickAdd from './calendar/CalendarQuickAdd'
 import CalendarContextMenu from './calendar/CalendarContextMenu'
-import CalendarEventItem from './calendar/CalendarEventItem'
-import TimelineTaskItem from './calendar/TimelineTaskItem'
 import { isParentTask } from './calendar/calendarUtils'
 
 interface TimelineViewProps {
@@ -1896,12 +1894,9 @@ export default function CalendarView({
                 onPrevDay={handlePrevDay}
                 onNextDay={handleNextDay}
                 timelineTasks={timelineTasks}
-                setTimelineTasks={setTimelineTasks}
                 allEvents={allEvents}
                 projects={flattenedProjects}
                 taskIdToNameMap={taskIdToNameMap}
-                addingToCell={addingToCell}
-                setAddingToCell={setAddingToCell}
                 setContextMenu={setContextMenu}
               />
             </div>

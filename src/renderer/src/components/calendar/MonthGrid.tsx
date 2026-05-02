@@ -1,6 +1,5 @@
 import React from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { X } from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
 import { formatLocalDate } from '../../utils/dateUtils'
 import CalendarEventItem from './CalendarEventItem'
@@ -26,7 +25,7 @@ interface MonthGridProps {
   taskIdToNameMap: Map<string, string>
   addingToCell: { projectId: string; date: string } | null
   setAddingToCell: React.Dispatch<React.SetStateAction<{ projectId: string; date: string; x: number; y: number } | null>>
-  setContextMenu: (menu: { type: 'task' | 'event', id: string, title: string, projectId: string, x: number, y: number } | null) => void
+  setContextMenu: (menu: { type: 'task' | 'event'; id: string; title: string; projectId: string; x: number; y: number } | null) => void
 }
 
 export default function MonthGrid({
@@ -39,7 +38,7 @@ export default function MonthGrid({
   addingToCell,
   setAddingToCell,
   setContextMenu
-}: MonthGridProps): JSX.Element {
+}: MonthGridProps): React.ReactElement {
   const monthGridContainerRef = React.useRef<HTMLDivElement>(null)
   const initialScrollDone = React.useRef(false)
   const [isReady, setIsReady] = React.useState(false)

@@ -2,7 +2,6 @@ import React from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Project, TimelineTask } from '../../types'
-import { formatLocalDate } from '../../utils/dateUtils'
 import CalendarEventItem from './CalendarEventItem'
 import CalendarTaskItem from './CalendarTaskItem'
 
@@ -16,7 +15,7 @@ interface DayGridProps {
     isWeekend: boolean
     monthNameLong: string
   }
-  weekDaysForDayView: { // pass week days so we can show horizontal list
+  weekDaysForDayView: {
     dateString: string
     dayNumber: number
     dayNameShort: string
@@ -26,12 +25,9 @@ interface DayGridProps {
   onPrevDay: () => void
   onNextDay: () => void
   timelineTasks: TimelineTask[]
-  setTimelineTasks: React.Dispatch<React.SetStateAction<TimelineTask[]>>
   allEvents: any[]
   projects: Project[]
   taskIdToNameMap: Map<string, string>
-  addingToCell: { projectId: string; date: string } | null
-  setAddingToCell: React.Dispatch<React.SetStateAction<{ projectId: string; date: string; x: number; y: number } | null>>
   setContextMenu: (menu: { type: 'task' | 'event'; id: string; title: string; projectId: string; x: number; y: number } | null) => void
 }
 
@@ -42,14 +38,11 @@ export default function DayGrid({
   onPrevDay,
   onNextDay,
   timelineTasks,
-  setTimelineTasks,
   allEvents,
   projects,
   taskIdToNameMap,
-  addingToCell,
-  setAddingToCell,
   setContextMenu
-}: DayGridProps): JSX.Element {
+}: DayGridProps): React.ReactElement {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [allDayHeight, setAllDayHeight] = React.useState(80)
   const isResizingRef = React.useRef(false)
@@ -224,8 +217,7 @@ export default function DayGrid({
             <CalendarEventItem
               key={event.id}
               event={event}
-              projectColor={projects.find(p => p.id === event.projectId)?.color || 'var(--accent)'}
-              onContextMenu={(x, y) => setContextMenu({ type: 'event', id: event.id, title: event.title, projectId: event.projectId || '', x, y })}
+              onContextMenu={(e: React.MouseEvent) => setContextMenu({ type: 'event', id: event.id, title: event.title, projectId: event.projectId || '', x: e.clientX, y: e.clientY })}
             />
           ))}
         </div>
@@ -248,25 +240,23 @@ export default function DayGrid({
       </div>
 
       {/* Timed events and tasks */}
-      <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {timedItems.map((event) => (
-          <CalendarEventItem
-            key={event.id}
-            event={event}
-            projectColor={projects.find(p => p.id === event.projectId)?.color || 'var(--accent)'}
-            onContextMenu={(x, y) => setContextMenu({ type: 'event', id: event.id, title: event.title, projectId: event.projectId || '', x, y })}
-          />
-        ))}
-        {tasksForDay.map((task) => (
-          <CalendarTaskItem
-            key={task.taskId || task.id}
-            task={task}
-            taskName={taskIdToNameMap.get(task.taskId || '') || 'Unknown Task'}
-            projectColor={projects.find(p => p.id === task.projectId)?.color || 'var(--accent)'}
-            onContextMenu={(x, y) => setContextMenu({ type: 'task', id: task.taskId || task.id, title: task.taskName || 'Unknown', projectId: task.projectId, x, y })}
-          />
-        ))}
-      </div>
+      <div style={{ flex:1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          {timedItems.map((event) => (
+            <CalendarEventItem
+              key={event.id}
+              event={event}
+              onContextMenu={(e: React.MouseEvent) => setContextMenu({ type: 'event', id: event.id, title: event.title, projectId: event.projectId || '', x: e.clientX, y: e.clientY })}
+            />
+          ))}
+          {tasksForDay.map((task) => (
+            <CalendarTaskItem
+              key={task.taskId || task.id}
+              task={task}
+              taskName={taskIdToNameMap.get(task.taskId || '') || 'Unknown Task'}
+              onContextMenu={(e: React.MouseEvent) => setContextMenu({ type: 'task', id: task.taskId || task.id, title: task.taskName || 'Unknown', projectId: task.projectId, x: e.clientX, y: e.clientY })}
+            />
+          ))}
+        </div>
     </div>
   )
 }

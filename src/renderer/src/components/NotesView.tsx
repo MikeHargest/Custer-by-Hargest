@@ -2725,12 +2725,6 @@ export default function NotesView({
                         {editor && !isPreviewMode && (
                           <BubbleMenu
                             editor={editor}
-                            tippyOptions={{
-                              duration: 140,
-                              delay: [120, 0],
-                              placement: 'top',
-                              offset: [0, 8]
-                            }}
                             shouldShow={({ editor: bubbleEditor }) => {
                               if (!bubbleEditor?.isEditable) return false
                               const { from, to } = bubbleEditor.state.selection

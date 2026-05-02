@@ -3,8 +3,12 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 import { ipcRenderer } from 'electron'
 
+const packageJson = require('../../package.json')
+const appVersion = packageJson.version
+
 // Custom APIs for renderer
 const api = {
+  appVersion: appVersion,
   selectAudioFile: () => ipcRenderer.invoke('dialog:openFile'),
   selectImageFile: () => ipcRenderer.invoke('dialog:openImage'),
 

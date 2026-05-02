@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette } from 'lucide-react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info } from 'lucide-react'
 import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'
@@ -49,7 +49,7 @@ export default function SettingsModal({
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'calendar'>(
+  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'calendar' | 'about'>(
     'general'
   )
 
@@ -170,7 +170,8 @@ export default function SettingsModal({
               { id: 'calendar', label: 'Calendar', icon: <CalendarDays size={16} /> },
               { id: 'timers', label: 'Timers', icon: <Timer size={16} /> },
               { id: 'canvas', label: 'Canvas', icon: <Compass size={16} /> },
-              { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> }
+              { id: 'shortcuts', label: 'Shortcuts', icon: <Hand size={16} /> },
+              { id: 'about', label: 'About', icon: <Info size={16} /> }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -896,6 +897,44 @@ export default function SettingsModal({
                         >
                           Connect Account
                         </button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'about' && (
+                <motion.div
+                  key="about"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>
+                    About Cluster
+                  </h3>
+                  <p
+                    style={{
+                      margin: '0 0 24px 0',
+                      color: 'var(--text-secondary)',
+                      fontSize: '13px'
+                    }}
+                  >
+                    Version information
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      padding: '16px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <h4 style={{ margin: '0 0 6px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        App Version
+                      </h4>
+                      <div style={{ fontSize: '24px', fontWeight: 700, color: 'var(--accent)' }}>
+                        BETA {(window as any).api?.appVersion ?? '0.3.35'}
                       </div>
                     </div>
                   </div>
