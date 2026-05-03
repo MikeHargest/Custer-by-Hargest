@@ -291,6 +291,63 @@ const renameWithRetry = async (oldPath: string, newPath: string, retries = 3, de
   }
 }
 
+const hasZipSignature = (filePath: string): boolean => {
+  try {
+    if (!fs.existsSync(filePath)) return false
+    const sig = Buffer.alloc(4)
+    const fd = fs.openSync(filePath, 'r')
+    fs.readSync(fd, sig, 0, 4, 0)
+    fs.closeSync(fd)
+    return sig[0] === 0x50 && sig[1] === 0x4b && sig[2] === 0x03 && sig[3] === 0x04
+  } catch {
+    return false
+  }
+}
+
+const getLatestBoardBackupPath = (targetDir: string, originalFileName: string): string | null => {
+  try {
+    const folderName = originalFileName.replace(/\.(md|board|ibo)$/, '')
+    const backupBaseDir = join(targetDir, '.backups', folderName)
+    if (!fs.existsSync(backupBaseDir)) return null
+    const files = fs.readdirSync(backupBaseDir).filter((f) => f.endsWith('.board') || f.endsWith('.ibo'))
+    if (files.length === 0) return null
+    const sorted = files
+      .map((f) => ({
+        path: join(backupBaseDir, f),
+        ts: fs.statSync(join(backupBaseDir, f)).mtimeMs
+      }))
+      .sort((a, b) => b.ts - a.ts)
+    return sorted[0]?.path || null
+  } catch {
+    return null
+  }
+}
+
+const recoverBoardContainerFromRecovery = (dirPath: string, fileName: string): boolean => {
+  const containerPath = join(dirPath, fileName)
+  const candidates = [
+    containerPath + '.replacing',
+    containerPath + '.tmp',
+    getLatestBoardBackupPath(dirPath, fileName)
+  ].filter(Boolean) as string[]
+
+  for (const candidate of candidates) {
+    if (!fs.existsSync(candidate) || !hasZipSignature(candidate)) continue
+    try {
+      if (fs.existsSync(containerPath) && !hasZipSignature(containerPath)) {
+        const corruptPath = `${containerPath}.corrupt.${Date.now()}`
+        fs.renameSync(containerPath, corruptPath)
+      }
+      fs.copyFileSync(candidate, containerPath)
+      console.warn(`[boards-recovery] Recovered board "${fileName}" from: ${candidate}`)
+      return true
+    } catch (e) {
+      console.error('[boards-recovery] Failed to recover candidate:', candidate, e)
+    }
+  }
+  return false
+}
+
 ipcMain.handle('workspace:scanAllNotes', async (_, workspacePath: string) => {
   try {
     if (!fs.existsSync(workspacePath)) return []
@@ -590,6 +647,67 @@ ipcMain.handle('app:selectFile', async (event) => {
   return null
 })
 
+ipcMain.handle('app:readTextFile', async (_, filePath: string) => {
+  try {
+    if (!filePath) return null
+    const normalizedPath = path.normalize(filePath)
+    if (!fs.existsSync(normalizedPath)) return null
+    return fs.readFileSync(normalizedPath, 'utf-8')
+  } catch (err) {
+    console.error('[main] app:readTextFile error:', err)
+    return null
+  }
+})
+
+ipcMain.handle('boards:selectImportFile', async (event) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  try {
+    const dialogOptions: Electron.OpenDialogOptions = {
+      properties: ['openFile'],
+      title: 'Select board file to import',
+      filters: [
+        { name: 'Board Files', extensions: ['board', 'ibo', 'zip'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    }
+    const result = win
+      ? await dialog.showOpenDialog(win, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions)
+    if (!result.canceled && result.filePaths.length > 0) {
+      return result.filePaths[0]
+    }
+  } catch (err) {
+    console.error('[main] boards:selectImportFile error:', err)
+  }
+  return null
+})
+
+ipcMain.handle('boards:importBoardFile', async (_, sourcePath: string, targetDir: string, targetFileName: string) => {
+  try {
+    if (!sourcePath || !targetDir || !targetFileName) return null
+    const normalizedSource = path.normalize(sourcePath)
+    if (!fs.existsSync(normalizedSource)) return null
+    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true })
+
+    const ext = path.extname(targetFileName) || path.extname(normalizedSource) || '.board'
+    const base = path.basename(targetFileName, path.extname(targetFileName))
+    let finalFileName = `${base}${ext}`
+    let finalPath = join(targetDir, finalFileName)
+    let counter = 1
+    while (fs.existsSync(finalPath)) {
+      finalFileName = `${base}_${counter}${ext}`
+      finalPath = join(targetDir, finalFileName)
+      counter++
+    }
+
+    fs.copyFileSync(normalizedSource, finalPath)
+    return finalFileName
+  } catch (err) {
+    console.error('[main] boards:importBoardFile error:', err)
+    return null
+  }
+})
+
 ipcMain.handle('app:selectFolder', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   try {
@@ -744,19 +862,40 @@ ipcMain.handle('notes:createBackup', async (_, targetDir: string, noteData: any,
        const fileContent = matter.stringify(content || '', metadata)
        fs.writeFileSync(backupFilePath, fileContent, 'utf-8')
     } else if (ext === 'board') {
-       // For boards, literally copy the whole ZIP archive if it exists
-       let sourceDir = noteData.projectId !== 'default' && noteData.projectId !== 'trash' ? targetDir : join(targetDir, 'boards')
-       // Fallback logic, as targetDir coming here might be '.../boards' or just project root
-       if (!sourceDir.endsWith('boards')) sourceDir = targetDir
-       
-       const sourceFileName = originalFileName.endsWith('.board') || originalFileName.endsWith('.ibo') ? originalFileName : `${originalFileName}.board`
-       const sourcePath = join(sourceDir, sourceFileName)
-       
-       if (fs.existsSync(sourcePath)) {
-         fs.copyFileSync(sourcePath, backupFilePath)
-       } else {
-         return false // Source board doesn't exist yet, can't backup
+       // For boards, copy the whole ZIP archive only if it's non-empty.
+       const backupReason = noteData?.__backupReason
+       const intervalMinutes = Math.max(1, Number(noteData?.__boardBackupIntervalMinutes) || 10)
+       const intervalMs = intervalMinutes * 60 * 1000
+       if (backupReason !== 'restore-preflight') {
+         const recentBoardBackups = fs.readdirSync(backupBaseDir)
+           .filter((f) => f.endsWith('.board') || f.endsWith('.ibo'))
+           .map((f) => {
+             const full = join(backupBaseDir, f)
+             try {
+               return fs.statSync(full).mtimeMs
+             } catch {
+               return 0
+             }
+           })
+           .filter((ts) => ts > 0)
+           .sort((a, b) => b - a)
+         const latestBackupTs = recentBoardBackups[0] || 0
+         if (latestBackupTs > 0 && Date.now() - latestBackupTs < intervalMs) {
+           // Hard server-side throttle: skip board backup within configured interval.
+           return true
+         }
        }
+
+       const sourceFileName = originalFileName.endsWith('.board') || originalFileName.endsWith('.ibo') ? originalFileName : `${originalFileName}.board`
+       const candidates = [
+        join(targetDir, sourceFileName),
+        join(targetDir, 'boards', sourceFileName)
+       ]
+       const sourcePath = candidates.find((p) => fs.existsSync(p))
+       if (!sourcePath) return false // Source board doesn't exist yet, can't backup
+       const sourceStats = fs.statSync(sourcePath)
+       if (sourceStats.size <= 0) return false // Never create backups from empty board files
+       fs.copyFileSync(sourcePath, backupFilePath)
     } else {
        const fileContent = typeof noteData === 'string' ? noteData : JSON.stringify(noteData, null, 2)
        fs.writeFileSync(backupFilePath, fileContent, 'utf-8')
@@ -775,7 +914,15 @@ ipcMain.handle('notes:listBackups', async (_, targetDir: string, originalFileNam
     const backupBaseDir = join(targetDir, '.backups', folderName)
     if (!fs.existsSync(backupBaseDir)) return []
     
-    const files = fs.readdirSync(backupBaseDir).filter(f => f.endsWith('.md') || f.endsWith('.board'))
+    const files = fs.readdirSync(backupBaseDir).filter((f) => {
+      if (!(f.endsWith('.md') || f.endsWith('.board') || f.endsWith('.ibo'))) return false
+      const backupPath = join(backupBaseDir, f)
+      try {
+        return fs.statSync(backupPath).size > 0
+      } catch {
+        return false
+      }
+    })
     const backups = files.map(f => {
       const stats = fs.statSync(join(backupBaseDir, f))
       return {
@@ -802,6 +949,51 @@ ipcMain.handle('notes:readBackup', async (_, backupFilePath: string) => {
   } catch(e) {
     console.error('Failed to read backup:', e)
     return null
+  }
+})
+
+ipcMain.handle('notes:restoreBackup', async (_, targetDir: string, originalFileName: string, backupFilePath: string) => {
+  try {
+    if (!fs.existsSync(backupFilePath)) {
+      return { success: false, error: 'Backup file not found' }
+    }
+    if (!fs.existsSync(targetDir)) {
+      fs.mkdirSync(targetDir, { recursive: true })
+    }
+
+    const targetPath = join(targetDir, originalFileName)
+    const now = new Date()
+    const pad = (n: number): string => n.toString().padStart(2, '0')
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
+
+    // Safety snapshot of current file before restore
+    if (fs.existsSync(targetPath)) {
+      const folderName = originalFileName.replace(/\.(md|board|ibo)$/, '')
+      const backupBaseDir = join(targetDir, '.backups', folderName)
+      if (!fs.existsSync(backupBaseDir)) {
+        fs.mkdirSync(backupBaseDir, { recursive: true })
+      }
+      const ext = path.extname(targetPath) || path.extname(backupFilePath) || '.md'
+      const safetyPath = join(backupBaseDir, `${timestamp}_pre-restore${ext}`)
+      fs.copyFileSync(targetPath, safetyPath)
+    }
+
+    const tmpRestorePath = `${targetPath}.restore_tmp`
+    fs.copyFileSync(backupFilePath, tmpRestorePath)
+
+    if (fs.existsSync(targetPath)) {
+      const replacingPath = `${targetPath}.replacing`
+      fs.renameSync(targetPath, replacingPath)
+      fs.renameSync(tmpRestorePath, targetPath)
+      setTimeout(() => { fs.promises.unlink(replacingPath).catch(() => {}) }, 100)
+    } else {
+      fs.renameSync(tmpRestorePath, targetPath)
+    }
+
+    return { success: true }
+  } catch (e: any) {
+    console.error('Failed to restore backup:', e)
+    return { success: false, error: e?.message || String(e) }
   }
 })
 
@@ -1108,25 +1300,28 @@ const getBoardCacheDir = (boardId: string): string => {
  * Unpacks a .board ZIP into the working cache and returns board.json as a string.
  * Asset URLs are converted from relative (assets/foo.png) → absolute file:/// in cache.
  */
-ipcMain.handle('boards:open-board', async (_, dirPath: string, fileName: string) => {
+ipcMain.handle('boards:open-board', async (_, dirPath: string, fileName: string, boardIdOverride?: string) => {
   const EMPTY_BOARD = JSON.stringify({ elements: [], viewport: { x: 0, y: 0, scale: 1 } })
   try {
     const containerPath = join(dirPath, fileName)
-    const exists = await fs.promises.access(containerPath).then(() => true).catch(() => false)
-    if (!exists) return EMPTY_BOARD // Brand-new board, no file yet
+    let exists = await fs.promises.access(containerPath).then(() => true).catch(() => false)
 
-    // Check ZIP magic bytes (PK\x03\x04) — if not a ZIP, return empty board
-    const sig = Buffer.alloc(4)
-    const fd = fs.openSync(containerPath, 'r')
-    fs.readSync(fd, sig, 0, 4, 0)
-    fs.closeSync(fd)
-    if (sig[0] !== 0x50 || sig[1] !== 0x4b || sig[2] !== 0x03 || sig[3] !== 0x04) {
-      console.warn('boards:open-board: file is not a ZIP, returning empty board:', containerPath)
+    // Recovery path after crash/restart: restore from .replacing/.tmp/latest backup first.
+    if (!exists || !hasZipSignature(containerPath)) {
+      const recovered = recoverBoardContainerFromRecovery(dirPath, fileName)
+      if (recovered) {
+        exists = true
+      }
+    }
+
+    if (!exists) return EMPTY_BOARD // Brand-new board, no file yet
+    if (!hasZipSignature(containerPath)) {
+      console.warn('boards:open-board: file is not a ZIP after recovery attempt, returning empty board:', containerPath)
       return EMPTY_BOARD
     }
 
-    // Derive boardId from filename (strip extension)
-    const boardId = fileName.replace(/\.board$/, '').replace(/\.ibo$/, '')
+    // Use note/board id from renderer when available; filename stem is not stable enough.
+    const boardId = boardIdOverride || fileName.replace(/\.board$/, '').replace(/\.ibo$/, '')
     const cacheDir = getBoardCacheDir(boardId)
     const assetsDir = join(cacheDir, 'assets')
 
@@ -1219,15 +1414,43 @@ ipcMain.handle('boards:write-board-json', async (_, boardId: string, jsonStr: st
 
     // Safe JSON parsing
     let boardData
+    const parseBoardPayload = (input: string): any => {
+      let current: any = input
+      for (let i = 0; i < 3; i++) {
+        if (typeof current !== 'string') break
+        current = JSON.parse(current)
+      }
+      return current
+    }
     try {
       // If it's literally empty, don't just erase it, throw to prevent data loss if it shouldn't be empty
       if (!jsonStr || String(jsonStr).trim() === '') {
         throw new Error("Empty jsonStr payload received")
       }
-      boardData = JSON.parse(jsonStr)
+      boardData = parseBoardPayload(String(jsonStr))
     } catch (parseError) {
-      console.error('[write-board-json] CRITICAL: Failed to parse JSON. Aborting write to prevent data loss. Length was:', jsonStr ? jsonStr.length : 0, parseError)
-      return false // Return false to abort packing
+      // Recovery path for malformed payloads with escaped brackets, e.g. "elements":\[\]
+      try {
+        const normalized = String(jsonStr)
+          .replace(/\\\[/g, '[')
+          .replace(/\\\]/g, ']')
+          .replace(/\\\{/g, '{')
+          .replace(/\\\}/g, '}')
+        boardData = parseBoardPayload(normalized)
+      } catch {
+        console.error('[write-board-json] CRITICAL: Failed to parse JSON. Aborting write to prevent data loss. Length was:', jsonStr ? jsonStr.length : 0, parseError)
+        return false // Return false to abort packing
+      }
+    }
+
+    if (!boardData || typeof boardData !== 'object' || Array.isArray(boardData)) {
+      console.error('[write-board-json] CRITICAL: Parsed payload is not a board object. Aborting write.')
+      return false
+    }
+
+    if (!Array.isArray(boardData.elements)) boardData.elements = []
+    if (!boardData.viewport || typeof boardData.viewport !== 'object') {
+      boardData.viewport = { x: 0, y: 0, scale: 1 }
     }
 
     const elements = boardData.elements || []
@@ -1317,9 +1540,11 @@ ipcMain.handle('boards:pack-board', async (_, boardId: string, dirPath: string, 
 
     // Read board.json from cache (already has relative paths from write-board-json)
     const boardJsonPath = join(cacheDir, 'board.json')
-    if (fs.existsSync(boardJsonPath)) {
-      zipfile.addFile(boardJsonPath, 'board.json')
+    if (!fs.existsSync(boardJsonPath)) {
+      console.error('boards:pack-board: board.json is missing in cache, aborting pack to prevent data loss')
+      return false
     }
+    zipfile.addFile(boardJsonPath, 'board.json')
 
     // Add all assets
     const assetsDir = join(cacheDir, 'assets')
