@@ -143,6 +143,7 @@ function App() {
   const [previousWorkspacePath, setPreviousWorkspacePath] = useState<string | null>(null)
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
   const [backupIntervalMinutes, setBackupIntervalMinutes] = useState(10)
+  const [boardBackupIntervalMinutes, setBoardBackupIntervalMinutes] = useState(10)
   const [calendarTimezone, setCalendarTimezone] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return 'UTC' }
   })
@@ -492,6 +493,10 @@ function App() {
           setHiddenTimelineProjectIds(workspaceData.hiddenTimelineProjectIds)
         if (workspaceData.backupIntervalMinutes !== undefined)
           setBackupIntervalMinutes(workspaceData.backupIntervalMinutes)
+        if (workspaceData.boardBackupIntervalMinutes !== undefined)
+          setBoardBackupIntervalMinutes(workspaceData.boardBackupIntervalMinutes)
+        if (workspaceData.showColoredDots !== undefined)
+          setShowColoredDots(workspaceData.showColoredDots)
 
         // Auto-restore last session
         const lastView = await api.getStoreValue('last-view')
@@ -913,6 +918,8 @@ function App() {
         timerVolume,
         hiddenTimelineProjectIds,
         backupIntervalMinutes,
+        boardBackupIntervalMinutes,
+        showColoredDots,
         isCleanedV1: true // Mark as clean
       }
       // @ts-ignore - preload api
@@ -936,6 +943,8 @@ function App() {
     timerVolume,
     hiddenTimelineProjectIds,
     backupIntervalMinutes,
+    boardBackupIntervalMinutes,
+    showColoredDots,
     isLoadingWorkspace
   ])
 
@@ -1508,6 +1517,7 @@ function App() {
                 showFPS={showFPS}
                 setCurrentView={setCurrentView}
                 backupIntervalMinutes={backupIntervalMinutes}
+                boardBackupIntervalMinutes={boardBackupIntervalMinutes}
                 isSidebarOpen={isSidebarOpen}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
@@ -1692,6 +1702,8 @@ function App() {
         setTimerVolume={setTimerVolume}
         backupIntervalMinutes={backupIntervalMinutes}
         setBackupIntervalMinutes={setBackupIntervalMinutes}
+        boardBackupIntervalMinutes={boardBackupIntervalMinutes}
+        setBoardBackupIntervalMinutes={setBoardBackupIntervalMinutes}
         calendarTimezone={calendarTimezone}
         setCalendarTimezone={setCalendarTimezone}
         onSaveThemeAsDefault={async () => {

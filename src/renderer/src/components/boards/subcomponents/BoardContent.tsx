@@ -167,27 +167,6 @@ const BoardContent = React.memo(
     const lastMultiClickTime = useRef<number>(0)
     // Ref to the bounding box PIXI container so we can move it during drag
     const selectionBBoxRef = useRef<PIXI.Container | null>(null)
-    // Ref to the thin white border graphics for the group selection
-    const groupBorderRef = useRef<PIXI.Graphics | null>(null)
-
-    // Imperatively redraw the group selection white border
-    useEffect(() => {
-      const g = groupBorderRef.current
-      if (!g || g.destroyed) return
-      g.clear()
-      if (selectedIds.length <= 1) return
-      const selectedElements = elements.filter(el => selectedIds.includes(el.id))
-      if (selectedElements.length === 0) return
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
-      selectedElements.forEach(el => {
-        const ew = el.width || 0, eh = el.height || 0
-        minX = Math.min(minX, el.x - ew / 2); minY = Math.min(minY, el.y - eh / 2)
-        maxX = Math.max(maxX, el.x + ew / 2); maxY = Math.max(maxY, el.y + eh / 2)
-      })
-      g.rect(minX, minY, maxX - minX, maxY - minY)
-      // @ts-ignore
-      g.stroke({ width: 1 / viewport.scale, color: 0xffffff, alpha: 1 })
-    }, [selectedIds, elements, viewport.scale])
 
     useEffect(() => {
       if (!isDraggingSelection) return
@@ -788,7 +767,7 @@ const BoardContent = React.memo(
                       // Тонкая белая рамка вокруг всей группы
                       g.rect(minX, minY, w, h)
                       // @ts-ignore - PIXI v8 stroke API
-                      g.stroke({ width: 1 / viewport.scale, color: 0xffffff, alpha: 1 })
+                      g.stroke({ width: 2 / viewport.scale, color: accentColor, alpha: 1 })
                     }}
                   />
                   {handles.map((hd) => {
@@ -890,8 +869,6 @@ const BoardContent = React.memo(
             })()}
           </Container>
         )}
-        {/* Group selection border - always mounted, drawn imperatively via useEffect */}
-        <pixiGraphics ref={groupBorderRef as any} draw={() => {}} />
         <SnappingGuidesRenderer guidesRef={guidesRef} scale={viewport.scale} theme={theme} />
       </Container>
     )

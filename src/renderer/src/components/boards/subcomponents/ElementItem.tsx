@@ -89,6 +89,7 @@ const SelectionUI = React.memo(({
   const baseHandleSize = 8
   const handleSize = baseHandleSize / viewport.scale
   const hitAreaSize = handleSize * 3
+  // Keep selection stroke visually consistent with multi-selection group frame.
   const lineWidth = 2 / viewport.scale
   const halfW = (element.width || 0) / 2
   const halfH = (element.height || 0) / 2
@@ -207,6 +208,7 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
     const currentSnapDY = useRef(0)
     const textRef = useRef<any>(null)
     const borderRef = useRef<PIXI.Graphics | null>(null)
+    const accentColor = useMemo(() => theme?.boardAccent ? parseInt(theme.boardAccent.replace('#', ''), 16) : 0x007aff, [theme])
 
     useEffect(() => {
       if (onRegisterPixi) onRegisterPixi(element.id, containerRef.current)
@@ -225,14 +227,17 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
         return
       }
       g.clear()
+      // For single selection, SelectionUI already draws the frame.
+      // Avoid stacking two borders (which makes single-select look thicker than multi-select).
+      if (isSelected && !isMultiSelection) return
       if (!isSelected) return
       const ew = element.width || 0
       const eh = element.height || 0
       g.rect(-ew / 2, -eh / 2, ew, eh)
       g.fill({ color: 0, alpha: 0 })
       // @ts-ignore
-      g.stroke({ width: 1 / viewport.scale, color: 0xffffff, alpha: 0.3 })
-    }, [element.width, element.height, viewport.scale, element.groupId, isSelected])
+      g.stroke({ width: 2 / viewport.scale, color: accentColor, alpha: 0.55 })
+    }, [element.width, element.height, viewport.scale, element.groupId, isSelected, isMultiSelection, accentColor])
 
     const [lodTextures, setLodTextures] = useState<any>(null)
     const [renderedLevel, setRenderedLevel] = useState<'high' | 'mid' | 'low'>(activeLevelProp || 'low')
@@ -511,8 +516,6 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
       const cx = mouseEvent.clientX - rX * factor, cy = mouseEvent.clientY - rY * factor
       resizeStartData.current = { w: element.width || 0, h: element.height || 0, x: element.x, y: element.y, mx: mouseEvent.clientX, my: mouseEvent.clientY, startRotation: element.rotation || 0, startAngle: Math.atan2(mouseEvent.clientY - cy, mouseEvent.clientX - cx), elementScreenCenterX: cx, elementScreenCenterY: cy, fontSize: element.fontSize }
     }
-
-    const accentColor = useMemo(() => theme?.boardAccent ? parseInt(theme.boardAccent.replace('#', ''), 16) : 0x007aff, [theme])
 
     return (
       <Container x={element.x} y={element.y} rotation={element.rotation || 0} visible={renderable} ref={containerRef as any}>

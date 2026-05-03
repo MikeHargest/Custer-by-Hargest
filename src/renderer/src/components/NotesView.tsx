@@ -66,6 +66,7 @@ interface NotesViewProps {
   showFPS?: boolean
   setCurrentView: (view: any) => void
   backupIntervalMinutes?: number
+  boardBackupIntervalMinutes?: number
   isSidebarOpen: boolean
   onToggleSidebar: () => void
 }
@@ -111,6 +112,7 @@ export default function NotesView({
   showFPS,
   setCurrentView,
   backupIntervalMinutes = 10,
+  boardBackupIntervalMinutes = 10,
   isSidebarOpen,
   onToggleSidebar
 }: NotesViewProps): React.ReactElement {
@@ -168,7 +170,11 @@ export default function NotesView({
   const [previewContent, setPreviewContent] = useState<string | null>(null)
   const [historyList, setHistoryList] = useState<any[]>([])
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
+  const [boardHistoryMenuPos, setBoardHistoryMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const boardHistoryButtonRef = useRef<HTMLDivElement | null>(null)
   const lastBackedUpContentRef = useRef<Record<string, string>>({})
+  const lastBoardBackupAtRef = useRef<Record<string, number>>({})
+  const lastBoardBackupHashRef = useRef<Record<string, string>>({})
 
   useEffect(() => {
     notesRef.current = notes
@@ -271,8 +277,44 @@ export default function NotesView({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
   }, [workspacePath, projects])
 
+  const buildBoardPayload = useCallback((note: AppNote): string => {
+    let boardPayload = boardContentRef.current[note.id] || note.content || '{}'
+    try {
+      const parsedContent = JSON.parse(boardPayload)
+      boardPayload = JSON.stringify({
+        ...parsedContent,
+        id: note.id,
+        title: note.title,
+        projectId: note.projectId,
+        type: 'board'
+      })
+    } catch (e) { }
+    return boardPayload
+  }, [])
+
+  const flushBoardToDisk = useCallback(async (note: AppNote): Promise<boolean> => {
+    const targetDir = getBoardTargetDir(note.projectId, note.isTrash)
+    const fileName = note.fileName || getFileName(note.title, note.id, 'board')
+
+    if (saveTimers.current[note.id]) {
+      clearTimeout(saveTimers.current[note.id])
+      delete saveTimers.current[note.id]
+    }
+
+    const boardPayload = buildBoardPayload(note)
+    // @ts-ignore
+    const ok = await window.api.writeBoardJson(note.id, boardPayload)
+    if (!ok) return false
+    // @ts-ignore
+    await window.api.packBoard(note.id, targetDir, fileName)
+    return true
+  }, [buildBoardPayload, getBoardTargetDir])
+
   // BACKUP SYSTEM
-  const createBackupSnapshot = useCallback(async (noteToBackup: AppNote) => {
+  const createBackupSnapshot = useCallback(async (
+    noteToBackup: AppNote,
+    reason: 'interval' | 'switch' | 'restore-preflight' = 'interval'
+  ) => {
     const isBoard = noteToBackup.type === 'board'
     // const noteProjectId = noteToBackup.projectId || 'default'
     // const _isTrash = noteToBackup.isTrash || noteProjectId === 'trash'
@@ -285,7 +327,7 @@ export default function NotesView({
       targetDir = getNoteTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
     }
 
-    // For markdown notes, check if content changed. For boards, always allow.
+    // For markdown notes, check if content changed.
     if (!isBoard) {
       const content = noteToBackup.content || ''
       if (lastBackedUpContentRef.current[noteToBackup.id] === content) {
@@ -293,28 +335,63 @@ export default function NotesView({
       }
     }
 
+    if (isBoard) {
+      const boardHash = buildBoardPayload(noteToBackup)
+      const previousHash = lastBoardBackupHashRef.current[noteToBackup.id]
+      const hasChanged = previousHash !== boardHash
+      const minIntervalMs = Math.max(1, boardBackupIntervalMinutes) * 60 * 1000
+      const lastBackupAt = lastBoardBackupAtRef.current[noteToBackup.id] || 0
+      const now = Date.now()
+      const inCooldown = now - lastBackupAt < minIntervalMs
+      const forceBackup = reason === 'restore-preflight'
+
+      // Always flush latest board state on switch/restore to avoid data loss.
+      if (reason !== 'interval') {
+        await flushBoardToDisk(noteToBackup)
+      }
+
+      // Skip noisy board backups unless forced or we have meaningful new state outside cooldown.
+      if (!forceBackup && (!hasChanged || inCooldown)) {
+        return
+      }
+    }
+
     const ext = isBoard ? 'board' : 'md'
     const fileName = noteToBackup.fileName || getFileName(noteToBackup.title, noteToBackup.id, ext)
+    const backupPayload = isBoard
+      ? {
+          ...noteToBackup,
+          __boardBackupIntervalMinutes: boardBackupIntervalMinutes,
+          __backupReason: reason
+        }
+      : noteToBackup
     // @ts-ignore
-    const success = await window.api.createNoteBackup(targetDir, noteToBackup, fileName)
+    const success = await window.api.createNoteBackup(targetDir, backupPayload, fileName)
     if (success && !isBoard) {
       lastBackedUpContentRef.current[noteToBackup.id] = noteToBackup.content || ''
     }
-  }, [workspacePath, projects])
+    if (success && isBoard) {
+      lastBoardBackupAtRef.current[noteToBackup.id] = Date.now()
+      lastBoardBackupHashRef.current[noteToBackup.id] = buildBoardPayload(noteToBackup)
+    }
+  }, [workspacePath, projects, boardBackupIntervalMinutes, buildBoardPayload, flushBoardToDisk])
 
   // Periodic Backup Timer
   useEffect(() => {
-    const ms = backupIntervalMinutes * 60 * 1000
+    const currentActive = notesRef.current.find(n => n.id === activeNoteIdRef.current)
+    const isBoard = currentActive?.type === 'board'
+    const intervalMinutes = isBoard ? boardBackupIntervalMinutes : backupIntervalMinutes
+    const ms = Math.max(1, intervalMinutes) * 60 * 1000
     const interval = setInterval(() => {
       const activeId = activeNoteIdRef.current
       if (!activeId || isPreviewMode) return
       const currentNote = notesRef.current.find(n => n.id === activeId)
       if (currentNote) {
-        createBackupSnapshot(currentNote)
+        createBackupSnapshot(currentNote, 'interval')
       }
     }, ms)
     return () => clearInterval(interval)
-  }, [backupIntervalMinutes, createBackupSnapshot, isPreviewMode])
+  }, [activeNoteId, backupIntervalMinutes, boardBackupIntervalMinutes, createBackupSnapshot, isPreviewMode])
 
   // Save final snapshot on Note Switch
   useEffect(() => {
@@ -322,7 +399,7 @@ export default function NotesView({
     if (previousId && previousId !== activeNoteId) {
       const previousNote = notesRef.current.find(n => n.id === previousId)
       if (previousNote) {
-        createBackupSnapshot(previousNote)
+        createBackupSnapshot(previousNote, 'switch')
       }
     }
     lastActiveIdRef.current = activeNoteId
@@ -330,30 +407,73 @@ export default function NotesView({
     setIsPreviewMode(false)
     setPreviewContent(null)
     setSaveStatus('saved') // Reset save state on note switch
+    setShowHistoryDropdown(false)
+    setBoardHistoryMenuPos(null)
   }, [activeNoteId, createBackupSnapshot])
+
+  useEffect(() => {
+    if (!showHistoryDropdown) return
+    const onDocPointerDown = (e: MouseEvent): void => {
+      const target = e.target as HTMLElement
+      if (target.closest('[data-history-menu-root="true"]') || target.closest('[data-history-menu-button="true"]')) return
+      setShowHistoryDropdown(false)
+      setBoardHistoryMenuPos(null)
+    }
+    document.addEventListener('mousedown', onDocPointerDown)
+    return () => document.removeEventListener('mousedown', onDocPointerDown)
+  }, [showHistoryDropdown])
 
   const handleLoadHistory = async () => {
     if (!activeNoteId) return
     const currentNote = notesRef.current.find(n => n.id === activeNoteId)
-    if (!currentNote || currentNote.type === 'board') return
-
-    let targetDir = workspacePath + '/notes'
-    const noteProjectId = currentNote.projectId || 'default'
-    if (noteProjectId !== 'trash') {
-      const project = findProjectRecursive(projects, noteProjectId)
-      if (project) {
-        targetDir = project.notesPath || (project.path ? `${project.path}/notes` : targetDir)
-      }
-    }
-    const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'md')
+    if (!currentNote) return
+    const isBoard = currentNote.type === 'board'
+    const targetDir = isBoard
+      ? getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      : getNoteTargetDir(currentNote.projectId, currentNote.isTrash)
+    const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, isBoard ? 'board' : 'md')
 
     // @ts-ignore
     const backups = await window.api.listNoteBackups(targetDir, fileName)
     setHistoryList(backups)
-    setShowHistoryDropdown(!showHistoryDropdown)
+    setShowHistoryDropdown((prev) => !prev)
   }
 
   const handlePreviewHistory = async (backupItem: any) => {
+    const currentNote = notesRef.current.find(n => n.id === activeNoteIdRef.current)
+    if (!currentNote) return
+    const isBoard = currentNote.type === 'board'
+    if (isBoard) {
+      if (saveTimers.current[currentNote.id]) {
+        clearTimeout(saveTimers.current[currentNote.id])
+        delete saveTimers.current[currentNote.id]
+      }
+      const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
+      await createBackupSnapshot(currentNote, 'restore-preflight')
+      // @ts-ignore
+      const restored = await window.api.restoreNoteBackup(targetDir, fileName, backupItem.path)
+      if (!restored?.success) {
+        console.error('Board backup restore failed:', restored?.error)
+        // @ts-ignore
+        window.api.showNotification('Restore Failed', restored?.error || 'Unable to restore board backup.')
+        return
+      }
+      // @ts-ignore
+      const loaded = await window.api.openBoard(targetDir, fileName, currentNote.id)
+      if (loaded) {
+        setBoardContent(prev => ({ ...prev, [currentNote.id]: loaded }))
+        setNotes(prev => prev.map(n => n.id === currentNote.id ? { ...n, content: loaded, lastModified: Date.now() } : n))
+      } else {
+        // @ts-ignore
+        window.api.showNotification('Restore Failed', 'Board backup was restored on disk but could not be opened.')
+      }
+      setShowHistoryDropdown(false)
+      setBoardHistoryMenuPos(null)
+      setSaveStatus('saved')
+      return
+    }
+
     // @ts-ignore
     const text = await window.api.readNoteBackup(backupItem.path)
     if (text !== null) {
@@ -1041,15 +1161,118 @@ export default function NotesView({
           type: 'board'
         })
         // @ts-ignore
-        window.api.writeBoardJson(newNote.id, emptyBoard).then(() => {
+        window.api.writeBoardJson(newNote.id, emptyBoard).then((ok) => {
           // @ts-ignore
-          window.api.packBoard(newNote.id, targetDir, initialFileName)
+          if (ok) window.api.packBoard(newNote.id, targetDir, initialFileName)
         })
       } else {
         // @ts-ignore
         window.api.saveNote(targetDir, initialFileName, newNote)
       }
     }
+  }
+
+  const getNameFromPath = (filePath: string): string => {
+    const raw = filePath.split(/[/\\]/).pop() || 'Imported'
+    return raw.replace(/\.[^/.]+$/, '') || 'Imported'
+  }
+
+  const handleImportFile = async (): Promise<void> => {
+    // @ts-ignore
+    const filePath: string | null = await window.api.selectFile()
+    if (!filePath) return
+    // @ts-ignore
+    const text: string | null = await window.api.readTextFile(filePath)
+    if (text === null) {
+      // @ts-ignore
+      window.api.showNotification('Import Failed', 'Could not read selected file as text.')
+      return
+    }
+
+    const noteProjId = activeProjectId
+    const targetDir = getNoteTargetDir(noteProjId, false)
+    const baseTitle = sanitizeFileName(getNameFromPath(filePath))
+    const newNote: AppNote = {
+      id: uuidv4(),
+      title: baseTitle || 'Imported Note',
+      content: text,
+      type: 'markdown',
+      projectId: noteProjId,
+      isTrash: false,
+      lastModified: Date.now(),
+      createdAt: Date.now()
+    }
+    const fileName = getFileName(newNote.title, newNote.id, 'md')
+    newNote.fileName = fileName
+    setNotes((prev) => [newNote, ...prev])
+    setActiveNoteId(newNote.id)
+    // @ts-ignore
+    await window.api.saveNote(targetDir, fileName, newNote)
+  }
+
+  const handleImportBoard = async (): Promise<void> => {
+    let sourcePath: string | null = null
+    try {
+      // @ts-ignore
+      sourcePath = await window.api.selectBoardImportFile()
+    } catch (err) {
+      console.error('[renderer] selectBoardImportFile failed, fallback to selectFile:', err)
+      // @ts-ignore
+      sourcePath = await window.api.selectFile()
+    }
+    if (!sourcePath) return
+
+    const noteProjId = activeProjectId
+    const targetDir = getBoardTargetDir(noteProjId, false)
+    const id = uuidv4()
+    const baseTitle = sanitizeFileName(getNameFromPath(sourcePath)) || 'Imported Board'
+    const targetFileName = getFileName(baseTitle, id, 'board')
+
+    let importedFileName: string | null = null
+    try {
+      // @ts-ignore
+      importedFileName = await window.api.importBoardFile(sourcePath, targetDir, targetFileName)
+    } catch (err) {
+      console.error('[renderer] importBoardFile failed:', err)
+      // @ts-ignore
+      window.api.showNotification('Ошибка импорта', 'Не удалось импортировать файл доски.')
+      return
+    }
+    if (!importedFileName) {
+      // @ts-ignore
+      window.api.showNotification('Ошибка импорта', 'Не удалось импортировать файл доски.')
+      return
+    }
+
+    // @ts-ignore
+    const loaded: string | null = await window.api.openBoard(targetDir, importedFileName, id)
+    if (!loaded) {
+      // @ts-ignore
+      window.api.showNotification('Ошибка импорта', 'Файл доски импортирован, но не удалось открыть содержимое.')
+      return
+    }
+
+    let parsedTitle = baseTitle
+    try {
+      const parsed = JSON.parse(loaded)
+      if (parsed?.title && typeof parsed.title === 'string') parsedTitle = parsed.title
+    } catch { }
+
+    const newBoard: AppNote = {
+      id,
+      title: parsedTitle || 'Imported Board',
+      content: loaded,
+      type: 'board',
+      projectId: noteProjId,
+      isTrash: false,
+      lastModified: Date.now(),
+      createdAt: Date.now(),
+      fileName: importedFileName
+    }
+
+    setBoardContent((prev) => ({ ...prev, [id]: loaded }))
+    setNotes((prev) => [newBoard, ...prev])
+    setActiveNoteId(id)
   }
 
   // Create a child note inside a parent note
@@ -1356,9 +1579,9 @@ export default function NotesView({
         } catch (e) { }
 
         // @ts-ignore
-        await window.api.writeBoardJson(activeNoteId, boardPayload)
+        const ok = await window.api.writeBoardJson(activeNoteId, boardPayload)
         // @ts-ignore
-        await window.api.packBoard(activeNoteId, targetDir, newFileName)
+        if (ok) await window.api.packBoard(activeNoteId, targetDir, newFileName)
       } else {
         // @ts-ignore
         const noteToSave = { ...activeNote, title: localTitle, fileName: newFileName }
@@ -1390,18 +1613,18 @@ export default function NotesView({
   // Open board: unpack from .board archive into cache when switching to a board
   useEffect(() => {
     if (!activeNote || activeNote.type !== 'board') return
-    const note = activeNote
+    const latestNote = notesRef.current.find(n => n.id === activeNote.id) || activeNote
+    const note = latestNote
     const targetDir = getBoardTargetDir(note.projectId, note.isTrash)
     const fileName = note.fileName || getFileName(note.title, note.id, 'board')
     // @ts-ignore
-    window.api.openBoard(targetDir, fileName).then((loaded: string | null) => {
+    window.api.openBoard(targetDir, fileName, note.id).then((loaded: string | null) => {
       if (loaded) {
         setBoardContent(prev => ({ ...prev, [note.id]: loaded }))
         setNotes(prev => prev.map(n => n.id === note.id ? { ...n, content: loaded } : n))
       }
     })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeNote?.id])
+  }, [activeNote?.id, activeNote?.fileName, activeNote?.title, activeNote?.projectId, activeNote?.isTrash, getBoardTargetDir])
 
   type FlattenedItem =
     | { type: 'project'; project: Project; level: number }
@@ -1841,7 +2064,7 @@ export default function NotesView({
                 </div>
               </div>
 
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 {filteredNotes.length === 0 ? (
                   <div
                     style={{
@@ -2074,6 +2297,54 @@ export default function NotesView({
                   />
                 )}
               </div>
+              <div
+                style={{
+                  padding: '10px 12px',
+                  borderTop: '1px solid rgba(255,255,255,0.06)',
+                  display: 'flex',
+                  gap: '4px',
+                  justifyContent: 'flex-start'
+                }}
+              >
+                <button
+                  onClick={handleImportFile}
+                  className="icon-btn"
+                  style={{
+                    padding: '4px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '24px',
+                    height: '24px'
+                  }}
+                  title="Загрузить текстовый файл как заметку"
+                >
+                  <FileText size={14} />
+                </button>
+                <button
+                  onClick={handleImportBoard}
+                  className="icon-btn"
+                  style={{
+                    padding: '4px',
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-primary)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '24px',
+                    height: '24px'
+                  }}
+                  title="Загрузить файл доски (.board/.ibo/.zip)"
+                >
+                  <Presentation size={14} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2177,6 +2448,59 @@ export default function NotesView({
                           cursor: isEditingTitle ? 'text' : 'pointer'
                         }}
                       />
+                      <div style={{ position: 'relative' }}>
+                        <div data-history-menu-button="true" ref={boardHistoryButtonRef}>
+                          <ToolbarButton onClick={() => {
+                            if (showHistoryDropdown) {
+                              setShowHistoryDropdown(false)
+                              setBoardHistoryMenuPos(null)
+                              return
+                            }
+                            const rect = boardHistoryButtonRef.current?.getBoundingClientRect()
+                            if (!rect) return
+                            setBoardHistoryMenuPos({
+                              top: rect.bottom + 8,
+                              right: Math.max(8, window.innerWidth - rect.right)
+                            })
+                            handleLoadHistory()
+                          }} title="Board Backup History">
+                            <History size={16} />
+                          </ToolbarButton>
+                        </div>
+                        {showHistoryDropdown && boardHistoryMenuPos && (
+                          <div data-history-menu-root="true" style={{
+                            position: 'fixed',
+                            top: `${boardHistoryMenuPos.top}px`,
+                            right: `${boardHistoryMenuPos.right}px`,
+                            zIndex: 2147483000,
+                            background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
+                          }}>
+                            <div style={{ padding: '0 4px 6px', fontSize: '11px', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '4px' }}>Board Backup History</div>
+                            {historyList.length === 0 ? (
+                              <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>No backups yet.</div>
+                            ) : (
+                              <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                {historyList.map((h, i) => {
+                                  const dt = new Date(h.timestamp)
+                                  const dateStr = dt.toLocaleDateString()
+                                  const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                  return (
+                                    <button key={i} onClick={() => handlePreviewHistory(h)} style={{
+                                      padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
+                                      background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
+                                    }} className="file-item-hover">
+                                      <RotateCcw size={12} color="var(--text-secondary)" />
+                                      <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
                       <button
                         onClick={() => setShowSidebar(!showSidebar)}
                         title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
@@ -2221,7 +2545,7 @@ export default function NotesView({
                         isSidebarOpen={showSidebar}
                         boardId={activeNote.id}
                         boardDir={getBoardTargetDir(activeNote.projectId, activeNote.isTrash)}
-                        boardFileName={getFileName(activeNote.title, activeNote.id, 'board')}
+                        boardFileName={activeNote.fileName || getFileName(activeNote.title, activeNote.id, 'board')}
                       />
                     </div>
                   </>

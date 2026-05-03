@@ -75,6 +75,8 @@ const api = {
     ipcRenderer.invoke('notes:listBackups', targetDir, originalFileName),
   readNoteBackup: (backupFilePath: string) =>
     ipcRenderer.invoke('notes:readBackup', backupFilePath),
+  restoreNoteBackup: (targetDir: string, originalFileName: string, backupFilePath: string) =>
+    ipcRenderer.invoke('notes:restoreBackup', targetDir, originalFileName, backupFilePath),
 
   // Boards File System
   readBoard: (dirPath: string, fileName: string) =>
@@ -88,8 +90,8 @@ const api = {
   listBoards: (dirPath: string) => ipcRenderer.invoke('boards:list', dirPath),
 
   // New cache-based board API
-  openBoard: (dirPath: string, fileName: string) =>
-    ipcRenderer.invoke('boards:open-board', dirPath, fileName),
+  openBoard: (dirPath: string, fileName: string, boardId?: string) =>
+    ipcRenderer.invoke('boards:open-board', dirPath, fileName, boardId),
   writeBoardJson: (boardId: string, json: string) =>
     ipcRenderer.invoke('boards:write-board-json', boardId, json),
   addBoardAsset: (boardId: string, assetId: string, assetData: string) =>
@@ -148,6 +150,10 @@ const api = {
     ipcRenderer.invoke('overview:save', projectPath, content),
 
   selectFile: () => ipcRenderer.invoke('app:selectFile'),
+  readTextFile: (filePath: string) => ipcRenderer.invoke('app:readTextFile', filePath),
+  selectBoardImportFile: () => ipcRenderer.invoke('boards:selectImportFile'),
+  importBoardFile: (sourcePath: string, targetDir: string, targetFileName: string) =>
+    ipcRenderer.invoke('boards:importBoardFile', sourcePath, targetDir, targetFileName),
   selectFolder: () => ipcRenderer.invoke('app:selectFolder'),
   openExternal: (url: string) => ipcRenderer.invoke('app:openExternal', url),
   openPath: (path: string) => ipcRenderer.invoke('app:openPath', path),

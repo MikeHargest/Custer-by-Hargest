@@ -22,6 +22,8 @@ interface SettingsModalProps {
   setTimerVolume: (volume: number) => void
   backupIntervalMinutes: number
   setBackupIntervalMinutes: (val: number) => void
+  boardBackupIntervalMinutes: number
+  setBoardBackupIntervalMinutes: (val: number) => void
   calendarTimezone: string
   setCalendarTimezone: (tz: string) => void
 }
@@ -44,6 +46,8 @@ export default function SettingsModal({
   setTimerVolume,
   backupIntervalMinutes,
   setBackupIntervalMinutes,
+  boardBackupIntervalMinutes,
+  setBoardBackupIntervalMinutes,
   calendarTimezone,
   setCalendarTimezone
 }: SettingsModalProps): React.ReactElement | null {
@@ -412,6 +416,42 @@ export default function SettingsModal({
                     </div>
 
                     <div style={{ padding: '1px 0', background: 'rgba(255,255,255,0.05)' }} />
+
+                    <div style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      padding: '16px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Board Backups
+                      </h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>Board Auto-Backup Interval</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Create backup snapshots of the active board at a fixed interval.</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={boardBackupIntervalMinutes}
+                            onChange={(e) => setBoardBackupIntervalMinutes(Math.max(1, parseInt(e.target.value) || 10))}
+                            style={{
+                              width: '50px',
+                              background: 'rgba(0,0,0,0.2)',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                              color: 'var(--text-primary)',
+                              borderRadius: '4px',
+                              padding: '4px 8px',
+                              fontSize: '13px'
+                            }}
+                          />
+                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>min</span>
+                        </div>
+                      </div>
+                    </div>
 
                     <div>
                       <h4
