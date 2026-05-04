@@ -2,7 +2,6 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   PlusCircle,
   Timer as TimerIcon,
-  Settings as SettingsIcon,
   Pin,
   PanelLeft,
   User,
@@ -19,7 +18,6 @@ import CalendarView from './components/CalendarView'
 import NotesView from './components/NotesView'
 import WelcomeScreen from './components/WelcomeScreen'
 import SettingsModal from './components/SettingsModal'
-import WorkspaceProfile from './components/WorkspaceProfile'
 import WindowResizeHandles from './components/WindowResizeHandles'
 import ProjectOverview from './components/ProjectOverview'
 import PipelineView from './components/PipelineView'
@@ -122,7 +120,17 @@ function App() {
   const [projects, setProjects] = useState<Project[]>([])
   const [timelineTasks, setTimelineTasks] = useState<TimelineTask[]>([])
   const [notes, setNotes] = useState<AppNote[]>([])
-  const [theme, setTheme] = useState<UITheme>(DEFAULT_THEME)
+  const [theme, setTheme] = useState<UITheme>(() => {
+    try {
+      const raw = localStorage.getItem('cluster-ui-theme-cache')
+      if (raw) {
+        const cached = JSON.parse(raw) as UITheme
+        // Merge with defaults so any missing keys fall back gracefully
+        return { ...DEFAULT_THEME, ...cached }
+      }
+    } catch { /* ignore */ }
+    return DEFAULT_THEME
+  })
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
   const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
@@ -131,12 +139,18 @@ function App() {
     'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline'
   >('overview')
   const [showSettings, setShowSettings] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
   const [showFPS, setShowFPS] = useState(false)
   const [showTaskCounts, setShowTaskCounts] = useState(false)
-  const [showColoredDots, setShowColoredDots] = useState(false)
+  const [showColoredDots, setShowColoredDots] = useState(() => {
+    try {
+      const v = localStorage.getItem('cluster-ui-colored-dots')
+      if (v !== null) return JSON.parse(v)
+    } catch { /* ignore */ }
+    return false
+  })
   const [useGPU, setUseGPU] = useState(true)
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
+  const [workspaceAvatarMap, setWorkspaceAvatarMap] = useState<Record<string, string>>({})
   const [isLoadingWorkspace, setIsLoadingWorkspace] = useState(true)
   const [isSyncingCalendar, setIsSyncingCalendar] = useState(false)
   const [timerVolume, setTimerVolume] = useState<number>(0.5)
@@ -454,6 +468,16 @@ function App() {
 
   const loadData = useCallback(async () => {
     const api = (window as any).api
+    // Load avatars in background; avatar loading must not block app bootstrap.
+    Promise.resolve(api.getStoreValue('workspace-avatar-map'))
+      .then((storedAvatarMap: unknown) => {
+        if (storedAvatarMap && typeof storedAvatarMap === 'object') {
+          setWorkspaceAvatarMap(storedAvatarMap as Record<string, string>)
+        }
+      })
+      .catch((error: unknown) => {
+        console.error('Failed to load workspace avatars from store:', error)
+      })
     const savedWorkspace = await api.getStoreValue('workspace-path')
     if (savedWorkspace) {
       setWorkspacePath(savedWorkspace)
@@ -571,7 +595,17 @@ function App() {
   // Load from store on mount
   useEffect((): void => {
     const sync = async (): Promise<void> => {
-      await loadData()
+      const loadingGuard = window.setTimeout(() => {
+        setIsLoadingWorkspace(false)
+      }, 5000)
+      try {
+        await loadData()
+      } catch (error) {
+        console.error('Failed to load app data:', error)
+        setIsLoadingWorkspace(false)
+      } finally {
+        window.clearTimeout(loadingGuard)
+      }
     }
     void sync()
   }, [loadData])
@@ -897,7 +931,21 @@ function App() {
     } else {
       root.style.setProperty('--timer-bg', DEFAULT_THEME.timerBg || '#171717')
     }
+
+    try {
+      localStorage.setItem('cluster-ui-theme-cache', JSON.stringify(theme))
+    } catch {
+      // Ignore cache write errors (e.g. storage restrictions).
+    }
   }, [theme])
+
+
+  // Cache showColoredDots so the next reload initializes correctly without icon flash
+  useEffect(() => {
+    try {
+      localStorage.setItem('cluster-ui-colored-dots', JSON.stringify(showColoredDots))
+    } catch { /* ignore */ }
+  }, [showColoredDots])
 
   // Save to workspace file when any data changes
   useEffect(() => {
@@ -1134,10 +1182,6 @@ function App() {
     return <MiniTimer timerId={miniTimerId} />
   }
 
-  if (isLoadingWorkspace) {
-    return <div style={{ background: 'var(--bg-color)', width: '100%', height: '100vh' }} />
-  }
-
   if (!workspacePath && !previousWorkspacePath) {
     return (
       <WelcomeScreen
@@ -1185,121 +1229,83 @@ function App() {
       ])
     }
 
+  const profileDisplayName = workspacePath ? workspacePath.split(/[\\/]/).pop() || 'No Workspace' : 'No Workspace'
+  const profileAvatarUrl = workspacePath ? workspaceAvatarMap[workspacePath] || null : null
+
+  const handleProfileAvatarChange = async (avatarPath: string | null) => {
+    if (!workspacePath) return
+    const nextMap = { ...workspaceAvatarMap }
+    if (avatarPath) {
+      nextMap[workspacePath] = avatarPath
+    } else {
+      delete nextMap[workspacePath]
+    }
+    setWorkspaceAvatarMap(nextMap)
+    await (window as any).api.setStoreValue('workspace-avatar-map', nextMap)
+  }
+
   return (
     <div className="app-container">
       <WindowResizeHandles />
-      <header 
-        className="header" 
-        style={{ 
-          paddingLeft: '302px' // Locked at 306px total offset (4px container + 302px)
-        }}
-      >
-        <div
-          className="header-left"
-          style={
-            {
-              position: 'absolute',
-              left: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              WebkitAppRegion: 'no-drag'
-            } as any
-          }
+      <header className="header">
+        {/* Profile trigger */}
+        <button
+          className="header-profile-trigger"
+          onClick={() => { setShowSettings(true); }}
+          title="Profile & Workspace"
         >
-          <div
+          <span className={`header-profile-avatar ${profileAvatarUrl ? 'has-avatar' : ''}`}>
+            {profileAvatarUrl ? (
+              <img className="header-profile-avatar-img" src={profileAvatarUrl} alt={profileDisplayName} />
+            ) : (
+              <User size={16} />
+            )}
+          </span>
+          <span className="header-profile-name">{profileDisplayName}</span>
+        </button>
+
+        <div className="header-divider" />
+
+        {/* Left actions: Bell + Search */}
+        <div ref={notificationRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <button
+            className="pin-btn"
+            onClick={() => setShowNotifications(!showNotifications)}
             style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px'
+              background: 'transparent',
+              border: 'none',
+              color: notifications.some((n) => !n.isRead) ? 'var(--accent)' : 'var(--text-secondary)',
+              position: 'relative'
             }}
           >
-            <button
-              className="pin-btn"
-              onClick={() => setShowSettings(true)}
-              title="Settings"
-              style={{ background: 'transparent', border: 'none' }}
-            >
-              <SettingsIcon size={18} />
-            </button>
-            <button
-              className="pin-btn"
-              onClick={() => setShowProfile(true)}
-              title="Profile & Workspace"
-              style={{ background: 'transparent', border: 'none' }}
-            >
-              <User size={18} />
-            </button>
-            {/* Notification Bell */}
-            <div 
-              ref={notificationRef}
-              style={{ position: 'relative', display: 'flex', alignItems: 'center' }}
-            >
-              <button
-                className={`header-btn ${showNotifications ? 'active' : ''}`}
-                onClick={() => setShowNotifications(!showNotifications)}
-                style={{
-                  background: showNotifications ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  border: 'none',
-                  color: notifications.some((n) => !n.isRead) ? 'var(--accent)' : 'var(--text-secondary)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  position: 'relative'
-                }}
-              >
-                <Bell size={18} />
-                {notifications.some((n) => !n.isRead) && (
-                  <span
-                    style={{
-                      position: 'absolute',
-                      top: '6px',
-                      right: '6px',
-                      width: '6px',
-                      height: '6px',
-                      background: 'var(--accent)',
-                      borderRadius: '50%',
-                      border: '2px solid var(--bg-color)'
-                    }}
-                  />
-                )}
-              </button>
-
-              {showNotifications && (
-                <NotificationCenter
-                  notifications={notifications}
-                  onMarkAsRead={(id) => {
-                    setNotifications((prev) =>
-                      prev.map((n) => (n.id === id ? { ...n, isRead: true } : n))
-                    )
-                  }}
-                  onMarkAllAsRead={() => {
-                    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))
-                  }}
-                  onClearAll={() => {
-                    setNotifications([])
-                    setShowNotifications(false)
-                  }}
-                  onClose={() => setShowNotifications(false)}
-                />
-              )}
-            </div>
-
-            <button
-              className="pin-btn"
-              onClick={() => setShowSearchModal(true)}
-              title="Global Search (Ctrl+K)"
-              style={{ background: 'transparent', border: 'none' }}
-            >
-              <Search size={18} />
-            </button>
-          </div>
+            <Bell size={18} />
+            {notifications.some((n) => !n.isRead) && (
+              <span style={{ position: 'absolute', top: '6px', right: '6px', width: '6px', height: '6px', background: 'var(--accent)', borderRadius: '50%', border: '2px solid var(--bg-color)' }} />
+            )}
+          </button>
+          {showNotifications && (
+            <NotificationCenter
+              notifications={notifications}
+              onMarkAsRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))}
+              onMarkAllAsRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))}
+              onClearAll={() => { setNotifications([]); setShowNotifications(false) }}
+              onClose={() => setShowNotifications(false)}
+            />
+          )}
         </div>
 
-        {/* View Toggle - Segmented Control Style */}
+        <button
+          className="pin-btn"
+          onClick={() => setShowSearchModal(true)}
+          title="Global Search (Ctrl+K)"
+          style={{ background: 'transparent', border: 'none' }}
+        >
+          <Search size={18} />
+        </button>
+
+        <div className="header-divider" />
+
+        {/* View Toggle */}
         <div className="view-toggle">
           {[
             { id: 'overview', label: 'Overview' },
@@ -1318,74 +1324,27 @@ function App() {
           ))}
         </div>
 
-        <div
-          className="header-right"
-          style={
-            {
-              position: 'absolute',
-              right: '10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px',
-              WebkitAppRegion: 'no-drag'
-            } as any
-          }
-        >
-          {/* Active Timer Indicator */}
+        {/* Right side */}
+        <div className="header-right">
           <HeaderTimer currentView={currentView} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                padding: '2px'
-              }}
-            >
-              <button
-                className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
-                onClick={toggleAlwaysOnTop}
-                title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
-                style={{
-                  background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  border: 'none',
-                  color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)'
-                }}
-              >
-                <Pin size={18} />
-              </button>
-            </div>
 
-            {/* Window controls */}
-            <div
-              className="window-controls-group"
-              style={{
-                display: 'flex',
-                gap: '8px',
-                alignItems: 'center'
-              }}
-            >
-              <button
-                className="window-control-btn minimize"
-                onClick={() => (window as any).api.minimizeWindow()}
-                title="Minimize"
-              >
-                <MinimizeIcon size={8} strokeWidth={4} />
-              </button>
-              <button
-                className="window-control-btn maximize"
-                onClick={() => (window as any).api.maximizeWindow()}
-                title="Maximize"
-              >
-                <MaximizeIcon size={8} strokeWidth={4} />
-              </button>
-              <button
-                className="window-control-btn close"
-                onClick={() => (window as any).api.closeWindow()}
-                title="Close"
-              >
-                <CloseIcon size={8} strokeWidth={4} />
-              </button>
-            </div>
+          <button
+            className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
+            onClick={toggleAlwaysOnTop}
+            title={isAlwaysOnTop ? 'Unpin window' : 'Always on top'}
+            style={{
+              background: isAlwaysOnTop ? 'rgba(255,255,255,0.08)' : 'transparent',
+              border: 'none',
+              color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)'
+            }}
+          >
+            <Pin size={18} />
+          </button>
+
+          <div className="window-controls-group">
+            <button className="window-control-btn minimize" onClick={() => (window as any).api.minimizeWindow()} title="Minimize"><MinimizeIcon size={8} strokeWidth={4} /></button>
+            <button className="window-control-btn maximize" onClick={() => (window as any).api.maximizeWindow()} title="Maximize"><MaximizeIcon size={8} strokeWidth={4} /></button>
+            <button className="window-control-btn close" onClick={() => (window as any).api.closeWindow()} title="Close"><CloseIcon size={8} strokeWidth={4} /></button>
           </div>
         </div>
       </header>
@@ -1418,13 +1377,6 @@ function App() {
           showColoredDots={showColoredDots}
         />
         <div className="main-content">
-          <WorkspaceProfile
-            isOpen={showProfile}
-            onClose={() => setShowProfile(false)}
-            workspacePath={workspacePath}
-            projectCount={allProjects.length}
-            onWorkspaceSelected={handleWorkspaceSelected}
-          />
 
           <div className="views-wrapper">
             {/* All views always rendered — hidden ones use display:none so timers keep running */}
@@ -1688,6 +1640,11 @@ function App() {
       <SettingsModal
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
+        workspacePath={workspacePath}
+        projectCount={allProjects.length}
+        onWorkspaceSelected={handleWorkspaceSelected}
+        avatarUrl={profileAvatarUrl}
+        onAvatarChange={handleProfileAvatarChange}
         theme={theme}
         setTheme={handleSetTheme}
         showFPS={showFPS}

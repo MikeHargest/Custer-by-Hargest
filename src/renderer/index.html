@@ -7,6 +7,25 @@
   <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
   <meta http-equiv="Content-Security-Policy"
     content="default-src 'self' 'unsafe-inline' 'unsafe-eval'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src * data: blob: file: local-file:; media-src * data: blob: file: local-file:; frame-src *;" />
+  <!-- Restore cached theme BEFORE first paint to prevent background flash on reload -->
+  <script>
+    try {
+      var raw = localStorage.getItem('cluster-ui-theme-cache');
+      if (raw) {
+        var c = JSON.parse(raw);
+        var r = document.documentElement;
+        if (c.bgColor) r.style.setProperty('--bg-color', c.bgColor);
+        if (c.cardBg) r.style.setProperty('--card-bg', c.cardBg);
+        if (c.accent) r.style.setProperty('--accent', c.accent);
+        if (c.textPrimary) r.style.setProperty('--text-primary', c.textPrimary);
+        if (c.boardAccent) r.style.setProperty('--board-accent', c.boardAccent);
+        if (c.boardBg) r.style.setProperty('--board-bg', c.boardBg);
+        if (c.calendarTaskBg) r.style.setProperty('--calendar-task-bg', c.calendarTaskBg);
+        if (c.calendarEventBg) r.style.setProperty('--calendar-event-bg', c.calendarEventBg);
+        if (c.timerBg) r.style.setProperty('--timer-bg', c.timerBg);
+      }
+    } catch (e) {}
+  </script>
 </head>
 
 <body>

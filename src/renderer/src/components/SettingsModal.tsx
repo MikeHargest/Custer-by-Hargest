@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info } from 'lucide-react'
+import { useState, useCallback, useEffect } from 'react'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus, ImagePlus, Trash2 } from 'lucide-react'
 import { UITheme, DEFAULT_THEME } from '../types'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'
@@ -26,6 +26,13 @@ interface SettingsModalProps {
   setBoardBackupIntervalMinutes: (val: number) => void
   calendarTimezone: string
   setCalendarTimezone: (tz: string) => void
+  // Profile props
+  workspacePath: string | null
+  projectCount: number
+  onWorkspaceSelected: (path: string) => void
+  avatarUrl: string | null
+  onAvatarChange: (avatarPath: string | null) => Promise<void>
+  initialTab?: 'profile' | 'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'calendar' | 'about'
 }
 
 export default function SettingsModal({
@@ -49,13 +56,17 @@ export default function SettingsModal({
   boardBackupIntervalMinutes,
   setBoardBackupIntervalMinutes,
   calendarTimezone,
-  setCalendarTimezone
+  setCalendarTimezone,
+  workspacePath,
+  projectCount,
+  onWorkspaceSelected,
+  avatarUrl,
+  onAvatarChange,
+  initialTab = 'profile'
 }: SettingsModalProps): React.ReactElement | null {
   const [activePicker, setActivePicker] = useState<keyof UITheme | null>(null)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'calendar' | 'about'>(
-    'general'
-  )
+  const [activeTab, setActiveTab] = useState<'profile' | 'general' | 'canvas' | 'projects' | 'shortcuts' | 'timers' | 'notes' | 'calendar' | 'about'>(initialTab)
 
   const handleUpdate = useCallback(
     (key: keyof UITheme, value: string): void => {
@@ -71,6 +82,75 @@ export default function SettingsModal({
   const handleOpenPicker = (key: keyof UITheme, rect: DOMRect): void => {
     setActivePicker(key)
     setPickerAnchor(rect)
+  }
+
+
+  // Profile helpers
+  const [folderSize, setFolderSize] = useState<string>('Calculating...')
+  const [isLoadingWs, setIsLoadingWs] = useState(false)
+  const [newWorkspaceName, setNewWorkspaceName] = useState('Cluster')
+
+  useEffect(() => {
+    if (isOpen) setActiveTab(initialTab)
+  }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'profile' && workspacePath) {
+      ;(window as any).api.getFolderSize(workspacePath)
+        .then((bytes: number) => {
+          if (bytes === 0) { setFolderSize('0 Bytes'); return }
+          const k = 1024, sizes = ['Bytes','KB','MB','GB','TB']
+          const i = Math.floor(Math.log(bytes) / Math.log(k))
+          setFolderSize(parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i])
+        })
+        .catch(() => setFolderSize('Error'))
+    }
+  }, [isOpen, activeTab, workspacePath])
+
+  const toFileUrl = (path: string): string => {
+    const normalized = path.replace(/\\/g, '/')
+    return `file://${normalized.startsWith('/') ? '' : '/'}${encodeURI(normalized)}`
+  }
+
+  const handleSelectAvatar = async (): Promise<void> => {
+    try {
+      const selectedPath = await (window as any).api.selectImageFile()
+      if (!selectedPath) return
+      await onAvatarChange(toFileUrl(selectedPath))
+    } catch (e) { console.error(e) }
+  }
+
+  const handleOpenExistingWs = async (): Promise<void> => {
+    setIsLoadingWs(true)
+    try {
+      const path = await (window as any).api.selectWorkspace()
+      if (path) {
+        await (window as any).api.setStoreValue('workspace-path', path)
+        onWorkspaceSelected(path)
+        onClose()
+      }
+    } finally { setIsLoadingWs(false) }
+  }
+
+  const handleCreateNewWs = async (): Promise<void> => {
+    setIsLoadingWs(true)
+    try {
+      const parentPath = await (window as any).api.selectWorkspace()
+      if (parentPath) {
+        const name = newWorkspaceName.trim() || 'Cluster'
+        const newPath = await (window as any).api.createWorkspace(parentPath, name)
+        if (newPath) {
+          await (window as any).api.setStoreValue('workspace-path', newPath)
+          onWorkspaceSelected(newPath)
+          onClose()
+        }
+      }
+    } finally { setIsLoadingWs(false) }
+  }
+
+  const handleOpenWorkspaceFolder = async (): Promise<void> => {
+    if (!workspacePath) return
+    try { await (window as any).api.openPath(workspacePath) } catch(e) { console.error(e) }
   }
 
   if (!isOpen) return null
@@ -97,8 +177,8 @@ export default function SettingsModal({
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'var(--card-bg)',
-          width: '750px',
-          height: '550px',
+          width: '890px',
+          height: '590px',
           borderRadius: 'var(--radius-lg)',
           boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
           border: '1px solid rgba(255,255,255,0.1)',
@@ -164,6 +244,45 @@ export default function SettingsModal({
                 letterSpacing: '0.05em'
               }}
             >
+              Workspace
+            </div>
+
+            {[
+              { id: 'profile', label: 'Profile', icon: <User size={16} /> },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)}
+                style={{
+                  padding: '10px 12px',
+                  borderRadius: '10px',
+                  fontSize: '13px',
+                  textAlign: 'left',
+                  background: activeTab === tab.id ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  color: activeTab === tab.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.2s',
+                  fontWeight: activeTab === tab.id ? 500 : 400
+                }}
+              >
+                {tab.icon} {tab.label}
+              </button>
+            ))}
+
+            <div
+              style={{
+                padding: '12px 12px 6px 12px',
+                fontSize: '10px',
+                fontWeight: 600,
+                color: 'var(--text-secondary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em'
+              }}
+            >
               App Settings
             </div>
 
@@ -204,6 +323,68 @@ export default function SettingsModal({
           {/* Content Area */}
           <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
             <AnimatePresence mode="wait">
+              {activeTab === 'profile' && (
+                <motion.div
+                  key="profile"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -10 }}
+                  transition={{ duration: 0.2 }}
+                  style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
+                >
+                  <div>
+                    <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', fontWeight: 600 }}>Profile</h3>
+                    <p style={{ margin: '0 0 20px 0', color: 'var(--text-secondary)', fontSize: '13px' }}>Manage your workspace and identity.</p>
+                  </div>
+
+                  {/* Avatar + Name */}
+                  <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <button onClick={handleSelectAvatar} title="Choose avatar" style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', border: avatarUrl ? '2px solid rgba(255,255,255,0.2)' : 'none', padding: 0, overflow: 'hidden', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'filter 0.2s' }} onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(1.15)')} onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}>
+                      {avatarUrl ? (<img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : (<User size={26} />)}
+                      <span style={{ position: 'absolute', right: '2px', bottom: '2px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImagePlus size={10} /></span>
+                    </button>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '18px', fontWeight: 600 }}>{workspacePath ? workspacePath.split(/[\\/]/).pop() : 'No Workspace'}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', marginTop: '2px', wordBreak: 'break-all' }}>{workspacePath}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                        {avatarUrl && (<button onClick={() => onAvatarChange(null)} style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '5px 10px', borderRadius: '8px', background: 'rgba(239,68,68,0.08)', color: 'var(--text-primary)', border: '1px solid rgba(239,68,68,0.2)', cursor: 'pointer', fontWeight: 600, fontSize: '12px' }}><Trash2 size={12} /> Remove</button>)}
+                        {workspacePath && (<button onClick={handleOpenWorkspaceFolder} title="Open workspace folder" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px', background: 'transparent', color: 'var(--text-secondary)', border: 'none', cursor: 'pointer' }} onMouseEnter={e => (e.currentTarget.style.color = 'var(--text-primary)')} onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-secondary)')}><FolderOpen size={16} /></button>)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}><HardDrive size={14} /> Workspace Size</div>
+                      <div style={{ fontSize: '16px', fontWeight: 600 }}>{folderSize}</div>
+                    </div>
+                    <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}><LayoutGrid size={14} /> Total Projects</div>
+                      <div style={{ fontSize: '16px', fontWeight: 600 }}>{projectCount}</div>
+                    </div>
+                  </div>
+
+                  {/* Switch workspace */}
+                  <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: 'var(--text-primary)' }}><FolderOpen size={16} /><span style={{ fontSize: '14px', fontWeight: 600 }}>Switch Workspace</span></div>
+                      <p style={{ fontSize: '12px', color: 'var(--text-secondary)', opacity: 0.6, margin: 0 }}>Load data from another existing directory.</p>
+                    </div>
+                    <button onClick={handleOpenExistingWs} disabled={isLoadingWs} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', color: 'var(--text-primary)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', transition: 'all 0.2s' }} onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.08)' }} onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}>Select Folder</button>
+                  </div>
+
+                  {/* Create new workspace */}
+                  <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}><FolderPlus size={16} /><span style={{ fontSize: '14px', fontWeight: 600 }}>Create New Workspace</span></div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input type="text" placeholder="Workspace name..." value={newWorkspaceName} onChange={e => setNewWorkspaceName(e.target.value)} disabled={isLoadingWs} style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '10px 14px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', transition: 'border-color 0.2s' }} onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')} onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')} />
+                      <button onClick={handleCreateNewWs} disabled={isLoadingWs || !newWorkspaceName.trim()} style={{ padding: '0 20px', borderRadius: '8px', background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', transition: 'filter 0.2s' }} onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(1.1)')} onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}>Create</button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {activeTab === 'general' && (
                 <motion.div
                   key="general"

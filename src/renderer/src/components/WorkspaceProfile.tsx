@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus } from 'lucide-react'
+import { X, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus, ImagePlus, Trash2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 interface WorkspaceProfileProps {
@@ -8,6 +8,8 @@ interface WorkspaceProfileProps {
   workspacePath: string | null
   projectCount: number
   onWorkspaceSelected: (path: string) => void
+  avatarUrl: string | null
+  onAvatarChange: (avatarPath: string | null) => Promise<void>
 }
 
 export default function WorkspaceProfile({
@@ -15,7 +17,9 @@ export default function WorkspaceProfile({
   onClose,
   workspacePath,
   projectCount,
-  onWorkspaceSelected
+  onWorkspaceSelected,
+  avatarUrl,
+  onAvatarChange
 }: WorkspaceProfileProps) {
   const [folderSize, setFolderSize] = useState<string>('Calculating...')
   const [isLoading, setIsLoading] = useState(false)
@@ -80,6 +84,32 @@ export default function WorkspaceProfile({
       }
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const toFileUrl = (path: string): string => {
+    const normalized = path.replace(/\\/g, '/')
+    return `file://${normalized.startsWith('/') ? '' : '/'}${encodeURI(normalized)}`
+  }
+
+  const handleSelectAvatar = async (): Promise<void> => {
+    try {
+      // @ts-ignore - preload api
+      const selectedPath = await window.api.selectImageFile()
+      if (!selectedPath) return
+      await onAvatarChange(toFileUrl(selectedPath))
+    } catch (error) {
+      console.error('Failed to select avatar:', error)
+    }
+  }
+
+  const handleOpenWorkspaceFolder = async (): Promise<void> => {
+    if (!workspacePath) return
+    try {
+      // @ts-ignore - preload api
+      await window.api.openPath(workspacePath)
+    } catch (error) {
+      console.error('Failed to open workspace folder:', error)
     }
   }
 
@@ -167,7 +197,9 @@ export default function WorkspaceProfile({
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div
+              <button
+                onClick={handleSelectAvatar}
+                title="Choose avatar"
                 style={{
                   width: '48px',
                   height: '48px',
@@ -176,15 +208,94 @@ export default function WorkspaceProfile({
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: 'white'
+                  color: 'white',
+                  border: avatarUrl ? '1px solid rgba(255,255,255,0.25)' : 'none',
+                  padding: 0,
+                  overflow: 'hidden',
+                  cursor: 'pointer',
+                  position: 'relative',
+                  flexShrink: 0
                 }}
               >
-                <User size={24} />
-              </div>
+                {avatarUrl ? (
+                  <img
+                    src={avatarUrl}
+                    alt={workspaceName}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }}
+                  />
+                ) : (
+                  <User size={24} />
+                )}
+                <span
+                  style={{
+                    position: 'absolute',
+                    right: '2px',
+                    bottom: '2px',
+                    width: '16px',
+                    height: '16px',
+                    borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  <ImagePlus size={10} />
+                </span>
+              </button>
               <div>
                 <div style={{ fontSize: '18px', fontWeight: 600 }}>{workspaceName}</div>
                 <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
                   {workspacePath}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
+                  {avatarUrl && (
+                    <button
+                      onClick={() => onAvatarChange(null)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        padding: '6px 10px',
+                        borderRadius: '8px',
+                        background: 'rgba(239,68,68,0.08)',
+                        color: 'var(--text-primary)',
+                        border: '1px solid rgba(239,68,68,0.2)',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '12px'
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      Remove
+                    </button>
+                  )}
+                  {workspacePath && (
+                    <button
+                      onClick={handleOpenWorkspaceFolder}
+                      title="Open workspace folder"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        padding: '4px',
+                        background: 'transparent',
+                        color: 'var(--text-secondary)',
+                        border: 'none',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--text-primary)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'var(--text-secondary)'
+                      }}
+                    >
+                      <FolderOpen size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>

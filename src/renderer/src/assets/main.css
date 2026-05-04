@@ -120,17 +120,18 @@ body {
 
 .header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  height: auto;
-  padding: 5px 16px;
+  padding: 0 10px 0 6px;
+  gap: 6px;
   flex-shrink: 0;
   position: relative;
   -webkit-app-region: drag;
   z-index: 100;
   background-color: var(--card-bg);
-  border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  height: 44px;
+  min-height: 44px;
 }
 
 /* All interactive elements inside the header opt out of drag */
@@ -141,6 +142,94 @@ body {
 .header .view-toggle,
 .window-control-btn {
   -webkit-app-region: no-drag;
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.header-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 4px 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+.header-profile-trigger:hover {
+  background: transparent;
+}
+
+.header-profile-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  color: var(--text-secondary);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  flex-shrink: 0;
+}
+
+.header-profile-avatar.has-avatar {
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.header-profile-avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.header-profile-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.header-profile-trigger:hover .header-profile-avatar {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+}
+
+.header-profile-trigger:hover .header-profile-name {
+  color: var(--text-primary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+
+@media (max-width: 1100px) {
+  .header-profile-name {
+    display: none;
+  }
 }
 
 .window-controls-group {
