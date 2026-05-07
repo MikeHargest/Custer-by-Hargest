@@ -25,8 +25,8 @@ interface SettingsModalProps {
   setBackupIntervalMinutes: (val: number) => void
   boardBackupIntervalMinutes: number
   setBoardBackupIntervalMinutes: (val: number) => void
-  enableBoardBackups: boolean
-  setEnableBoardBackups: (val: boolean) => void
+  disableBoardBackups: boolean
+  setDisableBoardBackups: (val: boolean) => void
   enableBoardAutosave: boolean
   setEnableBoardAutosave: (val: boolean) => void
   calendarTimezone: string
@@ -60,6 +60,8 @@ export default function SettingsModal({
   setBackupIntervalMinutes,
   boardBackupIntervalMinutes,
   setBoardBackupIntervalMinutes,
+  disableBoardBackups,
+  setDisableBoardBackups,
   enableBoardAutosave,
   setEnableBoardAutosave,
   calendarTimezone,
@@ -815,42 +817,55 @@ export default function SettingsModal({
                           />
                         </button>
                       </div>
-                    </div>
 
-                    <div style={{
-                      background: '#1a1a1a',
-                      padding: '16px',
-                      borderRadius: 'var(--radius-lg)',
-                      border: '1px solid rgba(255,255,255,0.05)'
-                    }}>
-                      <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        Board Backups
-                      </h4>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ padding: '1px 0', background: 'rgba(255,255,255,0.05)', margin: '16px 0' }} />
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setDisableBoardBackups(!disableBoardBackups)}
+                      >
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 500 }}>Board Auto-Backup Interval</div>
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Create backup snapshots of the active board at a fixed interval.</div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <input
-                            type="number"
-                            min="1"
-                            max="60"
-                            value={boardBackupIntervalMinutes}
-                            onChange={(e) => setBoardBackupIntervalMinutes(Math.max(1, parseInt(e.target.value) || 10))}
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                            Отключить бекапы
+                          </div>
+                          <div
                             style={{
-                              width: '50px',
-                              background: '#0a0a0a',
-                              border: '1px solid rgba(255,255,255,0.08)',
-                              borderRadius: '6px',
-                              padding: '4px 8px',
-                              color: 'var(--text-primary)',
-                              fontSize: '12px',
-                              outline: 'none'
+                              fontSize: '11px',
+                              color: 'var(--text-secondary)',
+                              marginTop: '2px'
+                            }}
+                          >
+                            Режим только ручных сохранений. Автоматические копии при переключении досок создаваться не будут.
+                          </div>
+                        </div>
+                        <button
+                          style={{
+                            width: '36px',
+                            height: '20px',
+                            borderRadius: '10px',
+                            background: disableBoardBackups ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            position: 'relative',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <motion.div
+                            animate={{ x: disableBoardBackups ? 16 : 2 }}
+                            style={{
+                              width: '14px',
+                              height: '14px',
+                              background: '#fff',
+                              borderRadius: '50%',
+                              position: 'absolute',
+                              top: '3px'
                             }}
                           />
-                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>min</span>
-                        </div>
+                        </button>
                       </div>
                     </div>
 

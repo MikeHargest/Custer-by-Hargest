@@ -1,28 +1,59 @@
 # Dependencies
 node_modules/
 
-# Production/Build
+# Build outputs (Electron/Vite)
 dist/
+dist-ssr/
 out/
 build/
+release/
+.vite/
+.turbo/
+coverage/
 *.exe
 *.dmg
 *.AppImage
+*.deb
+*.snap
 
-# IDE/Tools
-.vscode/
-.eslintcache
+# TypeScript / ESLint cache
 *.tsbuildinfo
+.eslintcache
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs / runtime dumps
+*.log
+*.log.*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.pid
+*.seed
+*.pid.lock
+
+# Test artifacts
+.nyc_output/
+playwright-report/
+test-results/
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.bak
 .editorconfig.bak
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log*
-
-# Antigravity/Agent
+# Project-local agent/debug artifacts
 .gemini/
 errors.txt
 tmp_refactor.js

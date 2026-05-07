@@ -53,6 +53,7 @@ import { Virtuoso } from 'react-virtuoso'
 import { AppNote, Project } from '../types'
 import ColorPicker from './ColorPicker'
 import BoardsView from './boards/BoardsView'
+import { shouldCreateBackup } from '../utils/backupManager'
 
 interface NotesViewProps {
   notes: AppNote[]
@@ -68,6 +69,7 @@ interface NotesViewProps {
   setCurrentView: (view: any) => void
   backupIntervalMinutes?: number
   boardBackupIntervalMinutes?: number
+  disableBoardBackups?: boolean
   enableBoardAutosave?: boolean
   isSidebarOpen: boolean
   onToggleSidebar: () => void
@@ -115,6 +117,7 @@ export default function NotesView({
   setCurrentView,
   backupIntervalMinutes = 10,
   boardBackupIntervalMinutes = 10,
+  disableBoardBackups = false,
   enableBoardAutosave = false,
   isSidebarOpen,
   onToggleSidebar
@@ -381,13 +384,38 @@ export default function NotesView({
   // BACKUP SYSTEM
   const createBackupSnapshot = useCallback(async (
     noteToBackup: AppNote,
-    reason: 'interval' | 'switch' | 'restore-preflight' = 'interval'
+    reason: 'interval' | 'switch' | 'manual' | 'restore-preflight' = 'interval'
   ) => {
     const isBoard = noteToBackup.type === 'board'
-    // const noteProjectId = noteToBackup.projectId || 'default'
-    // const _isTrash = noteToBackup.isTrash || noteProjectId === 'trash'
-    // const _pId = noteProjectId === 'trash' ? 'default' : noteProjectId
+    
+    // Check if we should create a backup using central logic
+    const lastHash = isBoard 
+      ? lastBoardBackupHashRef.current[noteToBackup.id] || ''
+      : lastBackedUpContentRef.current[noteToBackup.id] || ''
+    
+    const currentHash = isBoard 
+      ? buildBoardPayload(noteToBackup) 
+      : noteToBackup.content || ''
 
+    const lastBackupAt = isBoard 
+      ? lastBoardBackupAtRef.current[noteToBackup.id] || 0
+      : 0 // Notes don't use cooldown currently, but we could add it
+
+    const config = {
+      backupIntervalMinutes,
+      boardBackupIntervalMinutes,
+      disableBoardBackups
+    }
+
+    if (!shouldCreateBackup(noteToBackup, reason, config, lastBackupAt, lastHash, currentHash)) {
+      // Even if skipping backup, we might need to flush board to disk on switch
+      if (isBoard && reason === 'switch') {
+        await flushBoardToDisk(noteToBackup)
+      }
+      return
+    }
+
+    // Prepare target directory
     let targetDir: string
     if (isBoard) {
       targetDir = getBoardTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
@@ -395,33 +423,9 @@ export default function NotesView({
       targetDir = getNoteTargetDir(noteToBackup.projectId, noteToBackup.isTrash)
     }
 
-    // For markdown notes, check if content changed.
-    if (!isBoard) {
-      const content = noteToBackup.content || ''
-      if (lastBackedUpContentRef.current[noteToBackup.id] === content) {
-        return // No changes
-      }
-    }
-
-    if (isBoard) {
-      const boardHash = buildBoardPayload(noteToBackup)
-      const previousHash = lastBoardBackupHashRef.current[noteToBackup.id]
-      const hasChanged = previousHash !== boardHash
-      const minIntervalMs = Math.max(1, boardBackupIntervalMinutes) * 60 * 1000
-      const lastBackupAt = lastBoardBackupAtRef.current[noteToBackup.id] || 0
-      const now = Date.now()
-      const inCooldown = now - lastBackupAt < minIntervalMs
-      const forceBackup = reason === 'restore-preflight'
-
-      // Always flush latest board state on switch/restore to avoid data loss.
-      if (reason !== 'interval') {
-        await flushBoardToDisk(noteToBackup)
-      }
-
-      // Skip noisy board backups unless forced or we have meaningful new state outside cooldown.
-      if (!forceBackup && (!hasChanged || inCooldown)) {
-        return
-      }
+    // Always flush latest board state on switch/restore/manual to avoid data loss.
+    if (isBoard && reason !== 'interval') {
+      await flushBoardToDisk(noteToBackup)
     }
 
     const ext = isBoard ? 'board' : 'md'
@@ -433,16 +437,27 @@ export default function NotesView({
           __backupReason: reason
         }
       : noteToBackup
+
     // @ts-ignore
     const success = await window.api.createNoteBackup(targetDir, backupPayload, fileName)
-    if (success && !isBoard) {
-      lastBackedUpContentRef.current[noteToBackup.id] = noteToBackup.content || ''
+    
+    if (success) {
+      if (isBoard) {
+        lastBoardBackupAtRef.current[noteToBackup.id] = Date.now()
+        lastBoardBackupHashRef.current[noteToBackup.id] = currentHash
+      } else {
+        lastBackedUpContentRef.current[noteToBackup.id] = currentHash
+      }
     }
-    if (success && isBoard) {
-      lastBoardBackupAtRef.current[noteToBackup.id] = Date.now()
-      lastBoardBackupHashRef.current[noteToBackup.id] = buildBoardPayload(noteToBackup)
-    }
-  }, [workspacePath, projects, boardBackupIntervalMinutes, buildBoardPayload, flushBoardToDisk])
+  }, [
+    backupIntervalMinutes,
+    boardBackupIntervalMinutes,
+    disableBoardBackups,
+    buildBoardPayload,
+    flushBoardToDisk,
+    getBoardTargetDir,
+    getNoteTargetDir
+  ])
 
   // Periodic Backup Timer
   useEffect(() => {

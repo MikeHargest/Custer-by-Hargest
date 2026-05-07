@@ -158,7 +158,14 @@ function App() {
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
   const [backupIntervalMinutes, setBackupIntervalMinutes] = useState(10)
   const [boardBackupIntervalMinutes, setBoardBackupIntervalMinutes] = useState(10)
-  const [enableBoardBackups, setEnableBoardBackups] = useState(true)
+  const [disableBoardBackups, setDisableBoardBackups] = useState(() => {
+    try {
+      const saved = localStorage.getItem('cluster-ui-disable-board-backups')
+      return saved ? JSON.parse(saved) : false
+    } catch {
+      return false
+    }
+  })
   const [enableBoardAutosave, setEnableBoardAutosave] = useState(false)
   const [calendarTimezone, setCalendarTimezone] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return 'UTC' }
@@ -271,6 +278,10 @@ function App() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showNotifications])
+
+  useEffect(() => {
+    localStorage.setItem('cluster-ui-disable-board-backups', JSON.stringify(disableBoardBackups))
+  }, [disableBoardBackups])
 
   const allProjects = useMemo((): Project[] => {
     const flat: Project[] = []
@@ -521,8 +532,6 @@ function App() {
           setBackupIntervalMinutes(workspaceData.backupIntervalMinutes)
         if (workspaceData.boardBackupIntervalMinutes !== undefined)
           setBoardBackupIntervalMinutes(workspaceData.boardBackupIntervalMinutes)
-        if (workspaceData.enableBoardBackups !== undefined)
-          setEnableBoardBackups(workspaceData.enableBoardBackups)
         if (workspaceData.enableBoardAutosave !== undefined)
           setEnableBoardAutosave(workspaceData.enableBoardAutosave)
         if (workspaceData.showColoredDots !== undefined)
@@ -973,7 +982,6 @@ function App() {
         hiddenTimelineProjectIds,
         backupIntervalMinutes,
         boardBackupIntervalMinutes,
-        enableBoardBackups,
         enableBoardAutosave,
         showColoredDots,
         isCleanedV1: true // Mark as clean
@@ -1487,7 +1495,7 @@ function App() {
                 setCurrentView={setCurrentView}
                 backupIntervalMinutes={backupIntervalMinutes}
                 boardBackupIntervalMinutes={boardBackupIntervalMinutes}
-                enableBoardBackups={enableBoardBackups}
+                disableBoardBackups={disableBoardBackups}
                 isSidebarOpen={isSidebarOpen}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
@@ -1679,8 +1687,8 @@ function App() {
         setBackupIntervalMinutes={setBackupIntervalMinutes}
         boardBackupIntervalMinutes={boardBackupIntervalMinutes}
         setBoardBackupIntervalMinutes={setBoardBackupIntervalMinutes}
-        enableBoardBackups={enableBoardBackups}
-        setEnableBoardBackups={setEnableBoardBackups}
+        disableBoardBackups={disableBoardBackups}
+        setDisableBoardBackups={setDisableBoardBackups}
         enableBoardAutosave={enableBoardAutosave}
         setEnableBoardAutosave={setEnableBoardAutosave}
                 calendarTimezone={calendarTimezone}
