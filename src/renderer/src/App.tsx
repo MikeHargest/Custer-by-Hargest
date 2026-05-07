@@ -158,6 +158,8 @@ function App() {
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
   const [backupIntervalMinutes, setBackupIntervalMinutes] = useState(10)
   const [boardBackupIntervalMinutes, setBoardBackupIntervalMinutes] = useState(10)
+  const [enableBoardBackups, setEnableBoardBackups] = useState(true)
+  const [enableBoardAutosave, setEnableBoardAutosave] = useState(false)
   const [calendarTimezone, setCalendarTimezone] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return 'UTC' }
   })
@@ -519,6 +521,10 @@ function App() {
           setBackupIntervalMinutes(workspaceData.backupIntervalMinutes)
         if (workspaceData.boardBackupIntervalMinutes !== undefined)
           setBoardBackupIntervalMinutes(workspaceData.boardBackupIntervalMinutes)
+        if (workspaceData.enableBoardBackups !== undefined)
+          setEnableBoardBackups(workspaceData.enableBoardBackups)
+        if (workspaceData.enableBoardAutosave !== undefined)
+          setEnableBoardAutosave(workspaceData.enableBoardAutosave)
         if (workspaceData.showColoredDots !== undefined)
           setShowColoredDots(workspaceData.showColoredDots)
 
@@ -967,6 +973,8 @@ function App() {
         hiddenTimelineProjectIds,
         backupIntervalMinutes,
         boardBackupIntervalMinutes,
+        enableBoardBackups,
+        enableBoardAutosave,
         showColoredDots,
         isCleanedV1: true // Mark as clean
       }
@@ -992,6 +1000,7 @@ function App() {
     hiddenTimelineProjectIds,
     backupIntervalMinutes,
     boardBackupIntervalMinutes,
+    enableBoardAutosave,
     showColoredDots,
     isLoadingWorkspace
   ])
@@ -1307,6 +1316,14 @@ function App() {
 
         {/* View Toggle */}
         <div className="view-toggle">
+          {selectedProject && (
+            <div
+              className="view-toggle-indicator"
+              style={{
+                backgroundColor: selectedProject.color || 'var(--accent)'
+              }}
+            />
+          )}
           {[
             { id: 'overview', label: 'Overview' },
             { id: 'pipeline', label: 'Pipeline' },
@@ -1319,7 +1336,7 @@ function App() {
               className={`view-tab ${currentView === view.id ? 'active' : ''}`}
               onClick={() => setCurrentView(view.id as any)}
             >
-              {view.label}
+              <span className="view-tab-label">{view.label}</span>
             </button>
           ))}
         </div>
@@ -1470,6 +1487,7 @@ function App() {
                 setCurrentView={setCurrentView}
                 backupIntervalMinutes={backupIntervalMinutes}
                 boardBackupIntervalMinutes={boardBackupIntervalMinutes}
+                enableBoardBackups={enableBoardBackups}
                 isSidebarOpen={isSidebarOpen}
                 onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
@@ -1661,7 +1679,11 @@ function App() {
         setBackupIntervalMinutes={setBackupIntervalMinutes}
         boardBackupIntervalMinutes={boardBackupIntervalMinutes}
         setBoardBackupIntervalMinutes={setBoardBackupIntervalMinutes}
-        calendarTimezone={calendarTimezone}
+        enableBoardBackups={enableBoardBackups}
+        setEnableBoardBackups={setEnableBoardBackups}
+        enableBoardAutosave={enableBoardAutosave}
+        setEnableBoardAutosave={setEnableBoardAutosave}
+                calendarTimezone={calendarTimezone}
         setCalendarTimezone={setCalendarTimezone}
         onSaveThemeAsDefault={async () => {
           // @ts-ignore

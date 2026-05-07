@@ -146,10 +146,10 @@ body {
 
 .header-divider {
   width: 1px;
-  height: 20px;
-  background: rgba(255, 255, 255, 0.08);
+  height: 100%;
+  background: transparent;
   flex-shrink: 0;
-  margin: 0 2px;
+  margin: 0 8px;
 }
 
 .header-profile-trigger {
@@ -227,9 +227,7 @@ body {
 }
 
 @media (max-width: 1100px) {
-  .header-profile-name {
-    display: none;
-  }
+  /* removed .header-profile-name hiding rule */
 }
 
 .window-controls-group {
@@ -327,11 +325,24 @@ body {
 .view-toggle {
   display: flex;
   align-items: center;
-  background: #1b1b1b;
+  background: transparent;
   border: none;
   padding: 2px;
   border-radius: 10px;
-  gap: 2px;
+  gap: 4px;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.view-toggle-indicator {
+  position: absolute;
+  left: -14px;
+  width: 6px;
+  height: 12px;
+  border-radius: 3px;
+  transition: background-color 0.3s ease, opacity 0.3s ease;
 }
 
 .view-tab {
@@ -339,7 +350,7 @@ body {
   border: 1px solid transparent;
   color: var(--text-secondary);
   padding: 0 12px;
-  width: 72px;
+  width: 84px;
   height: 28px;
   display: flex;
   align-items: center;
@@ -347,9 +358,14 @@ body {
   border-radius: 7px;
   cursor: pointer;
   font-size: 12px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  font-weight: 500;
+  transition: background 0.2s, color 0.2s, opacity 0.2s;
+  font-weight: 600;
   opacity: 0.7;
+}
+
+.view-tab-label {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: inline-block;
 }
 
 .view-tab:hover {
@@ -359,13 +375,17 @@ body {
 }
 
 .view-tab.active {
-  background: var(--card-bg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: 1px solid var(--accent);
   color: var(--text-primary);
   font-weight: 600;
   opacity: 1;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: none;
   border-radius: 7px;
+}
+
+.view-tab.active .view-tab-label {
+  transform: scale(1.05);
 }
 
 .pin-btn:active {

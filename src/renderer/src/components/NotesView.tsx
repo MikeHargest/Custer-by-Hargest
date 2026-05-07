@@ -22,6 +22,7 @@ import {
   ChevronDown,
   History,
   RotateCcw,
+  Layers,
   Presentation,
   Pencil,
   Save,
@@ -67,6 +68,7 @@ interface NotesViewProps {
   setCurrentView: (view: any) => void
   backupIntervalMinutes?: number
   boardBackupIntervalMinutes?: number
+  enableBoardAutosave?: boolean
   isSidebarOpen: boolean
   onToggleSidebar: () => void
 }
@@ -113,6 +115,7 @@ export default function NotesView({
   setCurrentView,
   backupIntervalMinutes = 10,
   boardBackupIntervalMinutes = 10,
+  enableBoardAutosave = false,
   isSidebarOpen,
   onToggleSidebar
 }: NotesViewProps): React.ReactElement {
@@ -133,6 +136,12 @@ export default function NotesView({
   const NonInclusiveLink = Link.extend({
     inclusive: false
   })
+
+  const handleToolbarWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY
+    }
+  }
 
   const activeProjectId = selectedProjectId || 'default'
   const [showTrash, setShowTrash] = useState(false)
@@ -170,8 +179,15 @@ export default function NotesView({
   const [previewContent, setPreviewContent] = useState<string | null>(null)
   const [historyList, setHistoryList] = useState<any[]>([])
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
-  const [boardHistoryMenuPos, setBoardHistoryMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const [boardHistoryMenuPos, setBoardHistoryMenuPos] = useState<{ top: number; left: number } | null>(null)
   const boardHistoryButtonRef = useRef<HTMLDivElement | null>(null)
+
+  // Board Versions State
+  const [boardVersions, setBoardVersions] = useState<any[]>([])
+  const [showBoardVersionsDropdown, setShowBoardVersionsDropdown] = useState(false)
+  const [boardVersionsMenuPos, setBoardVersionsMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const boardVersionsButtonRef = useRef<HTMLDivElement | null>(null)
+  const notesHistoryButtonRef = useRef<HTMLDivElement | null>(null)
   const lastBackedUpContentRef = useRef<Record<string, string>>({})
   const lastBoardBackupAtRef = useRef<Record<string, number>>({})
   const lastBoardBackupHashRef = useRef<Record<string, string>>({})
@@ -243,6 +259,58 @@ export default function NotesView({
     },
     [projects, workspacePath]
   )
+
+  const handleManualSave = useCallback(async () => {
+    if (!activeNoteId) return
+    const currentNote = notesRef.current.find((n) => n.id === activeNoteId)
+    if (!currentNote) return
+
+    if (saveTimers.current[activeNoteId]) {
+      clearTimeout(saveTimers.current[activeNoteId])
+      delete saveTimers.current[activeNoteId]
+    }
+
+    setSaveStatus('saving')
+
+    const type = currentNote.type || 'markdown'
+    const isBoard = type === 'board'
+    let targetDir = isBoard
+      ? getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      : getNoteTargetDir(currentNote.projectId, currentNote.isTrash)
+
+    if (!targetDir) {
+      setSaveStatus('saved')
+      return
+    }
+
+    const ext = isBoard ? 'board' : 'md'
+    const fileName = currentNote.fileName || getFileName(currentNote.title, activeNoteId, ext)
+
+    if (isBoard) {
+      // Write cache then pack
+      let boardPayload = boardContentRef.current[activeNoteId] || currentNote.content || '{}'
+      try {
+        const parsedContent = JSON.parse(boardPayload)
+        boardPayload = JSON.stringify({
+          ...parsedContent,
+          id: currentNote.id,
+          title: currentNote.title,
+          projectId: currentNote.projectId,
+          type: 'board'
+        })
+      } catch (e) { }
+
+      // @ts-ignore
+      const ok = await window.api.writeBoardJson(activeNoteId, boardPayload)
+      // @ts-ignore
+      if (ok) await window.api.packBoard(activeNoteId, targetDir, fileName)
+    } else {
+      // @ts-ignore
+      await window.api.saveNote(targetDir, fileName, currentNote)
+    }
+
+    setSaveStatus('saved')
+  }, [activeNoteId, getBoardTargetDir, getNoteTargetDir])
   // FLUSH ON CLOSE: Synchronously save all pending changes when the app quits or window is closed
   useEffect(() => {
     const handleBeforeUnload = () => {
@@ -409,19 +477,122 @@ export default function NotesView({
     setSaveStatus('saved') // Reset save state on note switch
     setShowHistoryDropdown(false)
     setBoardHistoryMenuPos(null)
+    setShowBoardVersionsDropdown(false)
+    setBoardVersionsMenuPos(null)
   }, [activeNoteId, createBackupSnapshot])
 
   useEffect(() => {
-    if (!showHistoryDropdown) return
+    if (!showHistoryDropdown && !showBoardVersionsDropdown) return
     const onDocPointerDown = (e: MouseEvent): void => {
       const target = e.target as HTMLElement
-      if (target.closest('[data-history-menu-root="true"]') || target.closest('[data-history-menu-button="true"]')) return
+      if (
+        target.closest('[data-history-menu-root="true"]') ||
+        target.closest('[data-history-menu-button="true"]') ||
+        target.closest('[data-versions-menu-root="true"]') ||
+        target.closest('[data-versions-menu-button="true"]')
+      )
+        return
       setShowHistoryDropdown(false)
       setBoardHistoryMenuPos(null)
+      setShowBoardVersionsDropdown(false)
+      setBoardVersionsMenuPos(null)
     }
     document.addEventListener('mousedown', onDocPointerDown)
     return () => document.removeEventListener('mousedown', onDocPointerDown)
-  }, [showHistoryDropdown])
+  }, [showHistoryDropdown, showBoardVersionsDropdown])
+
+  const handleLoadBoardVersions = async () => {
+    if (!activeNoteId) return
+    const currentNote = notesRef.current.find((n) => n.id === activeNoteId)
+    if (!currentNote || currentNote.type !== 'board') return
+
+    const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+    const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
+
+    // @ts-ignore
+    const versions = await window.api.listBoardVersions(targetDir, fileName)
+    setBoardVersions(versions)
+    setShowBoardVersionsDropdown((prev) => !prev)
+  }
+
+  const handleAddBoardSave = async () => {
+    if (!activeNoteId) return
+    const currentNote = notesRef.current.find((n) => n.id === activeNoteId)
+    if (!currentNote || currentNote.type !== 'board') return
+
+    // Save current to main file first
+    await handleManualSave()
+
+    const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+    const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
+
+    // @ts-ignore
+    const success = await window.api.createBoardVersion(targetDir, fileName)
+    if (success) {
+      // @ts-ignore
+      window.api.showNotification('Version Created', `New version of "${currentNote.title}" saved.`)
+      // Refresh list
+      // @ts-ignore
+      const versions = await window.api.listBoardVersions(targetDir, fileName)
+      setBoardVersions(versions)
+    }
+  }
+
+  const handleRestoreBoardVersion = async (versionPath: string) => {
+    if (!activeNoteId) return
+    const currentNote = notesRef.current.find((n) => n.id === activeNoteId)
+    if (!currentNote || currentNote.type !== 'board') return
+
+    const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+    const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
+
+    // @ts-ignore
+    const success = await window.api.restoreBoardVersion(targetDir, fileName, versionPath)
+    if (success) {
+      // @ts-ignore
+      window.api.showNotification('Version Restored', `Board "${currentNote.title}" has been restored.`)
+      // Reload board content
+      // @ts-ignore
+      const newContent = await window.api.openBoard(targetDir, fileName, currentNote.id)
+      setBoardContent((prev) => ({ ...prev, [currentNote.id]: newContent }))
+      setShowBoardVersionsDropdown(false)
+      setBoardVersionsMenuPos(null)
+    }
+  }
+
+  const handleDeleteBoardVersion = async (versionPath: string) => {
+    // @ts-ignore
+    const success = await window.api.deleteBoardVersion(versionPath)
+    if (success) {
+      const activeId = activeNoteIdRef.current
+      if (!activeId) return
+      const currentNote = notesRef.current.find((n) => n.id === activeId)
+      if (!currentNote) return
+      const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
+      // @ts-ignore
+      const versions = await window.api.listBoardVersions(targetDir, fileName)
+      setBoardVersions(versions)
+    }
+  }
+
+  // Ctrl+S listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault()
+        // Force blur current element to ensure state is flushed
+        if (document.activeElement instanceof HTMLElement) {
+          document.activeElement.blur()
+        }
+        // Increase delay to 150ms to ensure all sub-components (like text editor) 
+        // and debounced syncs in BoardsView have finished their work.
+        setTimeout(() => handleManualSave(), 150)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [handleManualSave])
 
   const handleLoadHistory = async () => {
     if (!activeNoteId) return
@@ -506,6 +677,14 @@ export default function NotesView({
     handleUpdateNoteRef.current(currentNote.id, { content: newContent })
   }
 
+  const handleDeleteBackup = async (backupItem: any) => {
+    // @ts-ignore
+    const ok = await window.api.deleteNoteBackup(backupItem.path)
+    if (ok) {
+      setHistoryList(prev => prev.filter(h => h.path !== backupItem.path))
+    }
+  }
+
   const handleUpdateNote = useCallback(
     (id: string, updates: Partial<AppNote>): void => {
       // Apply updates to React state immediately to ensure "total saving" and avoid data loss on switch
@@ -521,6 +700,13 @@ export default function NotesView({
       // Save content logic (Renaming is now handled separately by handleTitleBlur)
       if (updates.content !== undefined) {
         setSaveStatus('unsaved')
+
+        // Conditional Auto-Save for Boards
+        const currentNote = notesRef.current.find(n => n.id === id)
+        if (currentNote?.type === 'board' && !enableBoardAutosave) {
+          return // Manual save only unless enabled in settings
+        }
+
         if (saveTimers.current[id]) clearTimeout(saveTimers.current[id])
         saveTimers.current[id] = setTimeout(
           async (): Promise<void> => {
@@ -581,57 +767,6 @@ export default function NotesView({
     [workspacePath, projects, setNotes, getBoardTargetDir, getNoteTargetDir]
   )
 
-  const handleManualSave = useCallback(async () => {
-    if (!activeNoteId) return
-    const currentNote = notesRef.current.find((n) => n.id === activeNoteId)
-    if (!currentNote) return
-
-    if (saveTimers.current[activeNoteId]) {
-      clearTimeout(saveTimers.current[activeNoteId])
-      delete saveTimers.current[activeNoteId]
-    }
-
-    setSaveStatus('saving')
-
-    const type = currentNote.type || 'markdown'
-    const isBoard = type === 'board'
-    let targetDir = isBoard
-      ? getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
-      : getNoteTargetDir(currentNote.projectId, currentNote.isTrash)
-
-    if (!targetDir) {
-      setSaveStatus('saved')
-      return
-    }
-
-    const ext = isBoard ? 'board' : 'md'
-    const fileName = currentNote.fileName || getFileName(currentNote.title, activeNoteId, ext)
-
-    if (isBoard) {
-      // Write cache then pack
-      let boardPayload = currentNote.content || '{}'
-      try {
-        const parsedContent = JSON.parse(boardPayload)
-        boardPayload = JSON.stringify({
-          ...parsedContent,
-          id: currentNote.id,
-          title: currentNote.title,
-          projectId: currentNote.projectId,
-          type: 'board'
-        })
-      } catch (e) { }
-
-      // @ts-ignore
-      const ok = await window.api.writeBoardJson(activeNoteId, boardPayload)
-      // @ts-ignore
-      if (ok) await window.api.packBoard(activeNoteId, targetDir, fileName)
-    } else {
-      // @ts-ignore
-      await window.api.saveNote(targetDir, fileName, currentNote)
-    }
-
-    setSaveStatus('saved')
-  }, [activeNoteId, getBoardTargetDir, getNoteTargetDir])
 
   const activeNote = notes.find((n) => n.id === activeNoteId)
   const activeNoteProjectColor = React.useMemo(() => {
@@ -1601,13 +1736,68 @@ export default function NotesView({
 
   const handleBoardChange = useCallback(
     (content: string): void => {
-      if (activeNote) {
-        // Track board content separately without triggering full note re-save
-        setBoardContent(prev => ({ ...prev, [activeNote.id]: content }))
-        handleUpdateNote(activeNote.id, { content })
-      }
+      if (!activeNote) return
+
+      const noteId = activeNote.id
+
+      // Track board content separately without triggering full note re-save
+      setBoardContent(prev => {
+        const next = { ...prev, [noteId]: content }
+        boardContentRef.current = next
+        return next
+      })
+      // Update the main notes array too, so handleManualSave sees it
+      setNotes((prev) =>
+        prev.map((n) => {
+          if (n.id === noteId) {
+            return { ...n, content, lastModified: Date.now() }
+          }
+          return n
+        })
+      )
+
+      // --- Persist to disk (debounced, 1 s) ---
+      // Without this, the board data only lives in memory and is lost on reload
+      // unless the user manually saves (Ctrl+S) or switches boards.
+      if (saveTimers.current[noteId]) clearTimeout(saveTimers.current[noteId])
+      saveTimers.current[noteId] = setTimeout(async () => {
+        const currentNote = notesRef.current.find(n => n.id === noteId)
+        if (!currentNote || currentNote.type !== 'board') {
+          delete saveTimers.current[noteId]
+          return
+        }
+
+        const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+        if (!targetDir) { delete saveTimers.current[noteId]; return }
+
+        const fileName = currentNote.fileName || getFileName(currentNote.title, noteId, 'board')
+
+        // Use latest content from ref to avoid stale closure
+        let boardPayload = boardContentRef.current[noteId] || content || '{}'
+        try {
+          const parsedContent = JSON.parse(boardPayload)
+          boardPayload = JSON.stringify({
+            ...parsedContent,
+            id: currentNote.id,
+            title: currentNote.title,
+            projectId: currentNote.projectId,
+            type: 'board'
+          })
+        } catch (e) { /* keep boardPayload as-is if unparseable */ }
+
+        // @ts-ignore
+        const ok = await window.api.writeBoardJson(noteId, boardPayload)
+        if (ok) {
+          // @ts-ignore
+          await window.api.packBoard(noteId, targetDir, fileName)
+        } else {
+          console.error('[handleBoardChange] writeBoardJson failed, skipping packBoard')
+        }
+
+        delete saveTimers.current[noteId]
+      }, 1000)
     },
-    [activeNote, handleUpdateNote]
+    [activeNote, setNotes, getBoardTargetDir]
   )
 
   // Open board: unpack from .board archive into cache when switching to a board
@@ -1719,7 +1909,7 @@ export default function NotesView({
       }
 
       for (const sub of subprojects) {
-        traverse(sub.id, level + 1, false)
+        traverse(sub.id, isRoot ? 0 : level + 1, false)
       }
     }
 
@@ -1775,6 +1965,13 @@ export default function NotesView({
           display: flex;
           align-items: center;
           position: relative;
+        }
+        .toolbar-scroll-container::-webkit-scrollbar {
+          display: none;
+        }
+        .toolbar-scroll-container {
+          scrollbar-width: none;
+          -ms-overflow-style: none;
         }
         .document-guide {
           position: absolute;
@@ -2064,7 +2261,7 @@ export default function NotesView({
                 </div>
               </div>
 
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, paddingTop: '4px' }}>
                 {filteredNotes.length === 0 ? (
                   <div
                     style={{
@@ -2081,7 +2278,7 @@ export default function NotesView({
                     className="custom-scrollbar"
                     style={{ flex: 1 }}
                     data={flattenedNotesList}
-                    itemContent={(_, item) => {
+                    itemContent={(index, item) => {
                       if (item.type === 'project') {
                         const { project, level } = item
                         return (
@@ -2090,14 +2287,14 @@ export default function NotesView({
                               fontSize: '11px',
                               textTransform: 'uppercase',
                               color: project.color || 'var(--text-secondary)',
-                              marginTop: '16px',
-                              marginBottom: '0px',
-                              paddingLeft: `${16 + level * 12}px`,
+                              marginTop: index === 0 ? '4px' : '8px',
+                              marginBottom: '8px',
+                              paddingLeft: `${12 + level * 12}px`,
                               opacity: 0.8,
                               fontWeight: 600,
                               letterSpacing: '0.05em',
-                              borderBottom: '1px solid rgba(255,255,255,0.05)',
-                              paddingBottom: '6px'
+                              borderTop: index === 0 ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                              paddingTop: index === 0 ? '0px' : '8px'
                             }}
                           >
                             {project.name}
@@ -2130,18 +2327,17 @@ export default function NotesView({
                               })
                             }}
                             style={{
-                              padding: `8px 12px 8px ${12 + renderLevel * 16}px`,
-                              borderBottom: dragTargetId === note.id ? '2px solid var(--accent)' : '1px solid rgba(255,255,255,0.03)',
+                              margin: '0 4px',
+                              borderRadius: '6px',
+                              padding: `4px 12px 4px ${12 + renderLevel * 12}px`,
+                              borderBottom: dragTargetId === note.id ? '2px solid var(--accent)' : '1px solid transparent',
                               background: isActive ? 'rgba(255,255,255,0.06)' : 'transparent',
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
                               gap: '6px',
                               transition: 'all 0.15s',
-                              position: 'relative',
-                              borderRight: isActive
-                                ? `3px solid ${projectColor}`
-                                : '3px solid transparent'
+                              position: 'relative'
                             }}
                           >
                             {/* Toggle arrow for notes with children */}
@@ -2460,7 +2656,7 @@ export default function NotesView({
                             if (!rect) return
                             setBoardHistoryMenuPos({
                               top: rect.bottom + 8,
-                              right: Math.max(8, window.innerWidth - rect.right)
+                              left: rect.left
                             })
                             handleLoadHistory()
                           }} title="Board Backup History">
@@ -2471,7 +2667,7 @@ export default function NotesView({
                           <div data-history-menu-root="true" style={{
                             position: 'fixed',
                             top: `${boardHistoryMenuPos.top}px`,
-                            right: `${boardHistoryMenuPos.right}px`,
+                            left: `${boardHistoryMenuPos.left}px`,
                             zIndex: 2147483000,
                             background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
                             borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
@@ -2494,6 +2690,144 @@ export default function NotesView({
                                       <RotateCcw size={12} color="var(--text-secondary)" />
                                       <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
                                     </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* BOARD VERSIONS MENU */}
+                      <div style={{ position: 'relative' }}>
+                        <div data-versions-menu-button="true" ref={boardVersionsButtonRef}>
+                          <ToolbarButton
+                            onClick={() => {
+                            if (showBoardVersionsDropdown) {
+                              setShowBoardVersionsDropdown(false)
+                              setBoardVersionsMenuPos(null)
+                              return
+                            }
+                            const rect = boardVersionsButtonRef.current?.getBoundingClientRect()
+                            if (!rect) return
+                            setBoardVersionsMenuPos({
+                               top: rect.bottom + 8,
+                               left: rect.left
+                             })
+                             handleLoadBoardVersions()
+                           }} title="Board Versions">
+                             <Layers size={16} />
+                           </ToolbarButton>
+                         </div>
+                         {showBoardVersionsDropdown && boardVersionsMenuPos && (
+                           <div
+                             data-versions-menu-root="true"
+                             style={{
+                             position: 'fixed',
+                             top: `${boardVersionsMenuPos.top}px`,
+                             left: `${boardVersionsMenuPos.left}px`,
+                             zIndex: 2147483000,
+                            background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '240px',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px 6px', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '8px' }}>
+                              <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: 600 }}>VERSIONS</span>
+                              <button
+                                onClick={handleAddBoardSave}
+                                style={{
+                                  background: 'var(--accent)',
+                                  color: 'white',
+                                  border: 'none',
+                                  borderRadius: '4px',
+                                  padding: '2px 8px',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                ADD SAVE
+                              </button>
+                            </div>
+
+                            {boardVersions.length === 0 ? (
+                              <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)', textAlign: 'center' }}>No versions yet.</div>
+                            ) : (
+                              <div style={{ maxHeight: '250px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                {boardVersions.map((v, i) => {
+                                  const dt = new Date(v.mtime)
+                                  const dateStr = dt.toLocaleDateString()
+                                  const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                  return (
+                                    <div
+                                      key={i}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '4px',
+                                        padding: '2px 4px',
+                                        borderRadius: '4px',
+                                        background: 'rgba(255,255,255,0.03)'
+                                      }}
+                                    >
+                                      <button
+                                        onClick={() => {
+                                          handleRestoreBoardVersion(v.path)
+                                        }}
+                                        style={{
+                                          flex: 1,
+                                          padding: '6px 8px',
+                                          fontSize: '12px',
+                                          cursor: 'pointer',
+                                          borderRadius: '4px',
+                                          display: 'flex',
+                                          flexDirection: 'column',
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: 'var(--text-primary)',
+                                          textAlign: 'left',
+                                          outline: 'none'
+                                        }}
+                                        className="file-item-hover"
+                                      >
+                                        <span style={{ fontWeight: 600 }}>{v.name}</span>
+                                        <span style={{ fontSize: '10px', opacity: 0.5 }}>{dateStr} {timeStr}</span>
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleRestoreBoardVersion(v.path)}
+                                        title="Restore this version as main"
+                                        style={{
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: 'var(--text-secondary)',
+                                          padding: '6px',
+                                          cursor: 'pointer',
+                                          borderRadius: '4px'
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+                                      >
+                                        <RotateCcw size={14} />
+                                      </button>
+
+                                      <button
+                                        onClick={() => handleDeleteBoardVersion(v.path)}
+                                        title="Delete version"
+                                        style={{
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: 'rgba(255,255,255,0.2)',
+                                          padding: '6px',
+                                          cursor: 'pointer',
+                                          borderRadius: '4px'
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   )
                                 })}
                               </div>
@@ -2554,7 +2888,7 @@ export default function NotesView({
                     {/* Toolbar at top */}
                     <div
                       style={{
-                        padding: '0 10px',
+                        padding: '0 15px',
                         borderBottom: '1px solid rgba(255,255,255,0.05)',
                         display: 'flex',
                         alignItems: 'center',
@@ -2617,44 +2951,67 @@ export default function NotesView({
                         <ArrowLeft size={18} />
                       </button>
                       <div
-                        className="centered-container"
-                        style={{ gap: '8px', flexWrap: 'wrap', flex: 1 }}
-                      >
-                        <div style={{ position: 'relative' }}>
-                          <ToolbarButton onClick={() => { handleLoadHistory() }} title="Version History">
-                            <History size={16} />
-                          </ToolbarButton>
-                          {showHistoryDropdown && (
-                            <div style={{
-                              position: 'absolute', top: '100%', left: 0, marginTop: '8px', zIndex: 100,
-                              background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
-                              borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
-                              boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
-                            }}>
-                              <div style={{ padding: '0 4px 6px', fontSize: '11px', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '4px' }}>Version History</div>
-                              {historyList.length === 0 ? (
-                                <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>No backups yet.</div>
-                              ) : (
-                                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                  {historyList.map((h, i) => {
-                                    const dt = new Date(h.timestamp)
-                                    const dateStr = dt.toLocaleDateString()
-                                    const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                    return (
-                                      <button key={i} onClick={() => handlePreviewHistory(h)} style={{
-                                        padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
-                                        background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
-                                      }} className="file-item-hover">
-                                        <RotateCcw size={12} color="var(--text-secondary)" />
-                                        <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
-                                      </button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
+                           className="centered-container toolbar-scroll-container"
+                           onWheel={handleToolbarWheel}
+                           style={{
+                             gap: '8px',
+                             flexWrap: 'nowrap',
+                             flex: 1,
+                             overflowX: 'auto',
+                             justifyContent: 'flex-start'
+                           }}
+                         >
+                        <div style={{ position: 'relative' }} ref={notesHistoryButtonRef}>
+                          <ToolbarButton onClick={() => {
+                            if (showHistoryDropdown) {
+                              setShowHistoryDropdown(false)
+                              setBoardHistoryMenuPos(null)
+                              return
+                            }
+                            const rect = notesHistoryButtonRef.current?.getBoundingClientRect()
+                            if (!rect) return
+                            setBoardHistoryMenuPos({
+                               top: rect.bottom + 8,
+                               left: rect.left
+                             })
+                             handleLoadHistory()
+                           }} title="Version History">
+                             <History size={16} />
+                           </ToolbarButton>
+                         </div>
+                         {showHistoryDropdown && boardHistoryMenuPos && (
+                           <div style={{
+                             position: 'fixed',
+                             top: `${boardHistoryMenuPos.top}px`,
+                             left: `${boardHistoryMenuPos.left}px`,
+                             zIndex: 1000,
+                            background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
+                            borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
+                            boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
+                          }}>
+                            <div style={{ padding: '0 4px 6px', fontSize: '11px', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '4px' }}>Version History</div>
+                            {historyList.length === 0 ? (
+                              <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>No backups yet.</div>
+                            ) : (
+                              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                {historyList.map((h, i) => {
+                                  const dt = new Date(h.timestamp)
+                                  const dateStr = dt.toLocaleDateString()
+                                  const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                  return (
+                                    <button key={i} onClick={() => handlePreviewHistory(h)} style={{
+                                      padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
+                                      background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
+                                    }} className="file-item-hover">
+                                      <RotateCcw size={12} color="var(--text-secondary)" />
+                                      <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div style={{ position: 'relative' }}>
                           <ToolbarButton
                             onClick={handleManualSave}
@@ -2684,7 +3041,8 @@ export default function NotesView({
                             width: '1px',
                             height: '20px',
                             background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px'
+                            margin: '0 4px',
+                            flexShrink: 0
                           }}
                         />
                         <ToolbarButton onClick={() => applyFormatting('bold')} title="Bold">
@@ -2711,7 +3069,8 @@ export default function NotesView({
                             width: '1px',
                             height: '20px',
                             background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px'
+                            margin: '0 4px',
+                            flexShrink: 0
                           }}
                         />
 
@@ -2741,7 +3100,8 @@ export default function NotesView({
                             width: '1px',
                             height: '20px',
                             background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px'
+                            margin: '0 4px',
+                            flexShrink: 0
                           }}
                         />
 
@@ -2760,7 +3120,8 @@ export default function NotesView({
                             width: '1px',
                             height: '20px',
                             background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px'
+                            margin: '0 4px',
+                            flexShrink: 0
                           }}
                         />
 
@@ -2782,7 +3143,8 @@ export default function NotesView({
                             width: '1px',
                             height: '20px',
                             background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px'
+                            margin: '0 4px',
+                            flexShrink: 0
                           }}
                         />
 
@@ -2841,7 +3203,8 @@ export default function NotesView({
                         flexDirection: 'column',
                         background: 'transparent',
                         overflowY: 'scroll',
-                        position: 'relative'
+                        position: 'relative',
+                        padding: '15px'
                       }}
                     >
                       <div
@@ -3388,7 +3751,8 @@ function ToolbarButton({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: '0px',
-        transition: 'all 0.2s'
+        transition: 'all 0.2s',
+        flexShrink: 0
       }}
       onMouseEnter={(e): void => {
         e.currentTarget.style.background = 'rgba(255,255,255,0.05)'

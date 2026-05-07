@@ -129,6 +129,12 @@ export interface UITheme {
   timerBg?: string
 }
 
+export interface ThemePreset {
+  id: string
+  name: string
+  theme: UITheme
+}
+
 export interface AppEvent {
   id: string
   title: string

@@ -94,6 +94,17 @@ const SelectionUI = React.memo(({
   const halfW = (element.width || 0) / 2
   const halfH = (element.height || 0) / 2
 
+  const sizeLabelStyle = new PIXI.TextStyle({
+    fill: accentColor,
+    fontSize: 12 / viewport.scale,
+    fontWeight: '600',
+    fontFamily: 'Inter, sans-serif'
+  })
+
+  const widthText = Math.round(element.width || 0)
+  const heightText = Math.round(element.height || 0)
+  const sizeText = `${widthText} × ${heightText}`
+
   const handles = [
     { id: 'top-left', x: -halfW, y: -halfH, cursor: 'nwse-resize' },
     { id: 'top', x: 0, y: -halfH, cursor: 'ns-resize' },
@@ -172,6 +183,14 @@ const SelectionUI = React.memo(({
           )
         })}
       </Container>
+
+      {/* Size Label */}
+      <Text
+        text={sizeText}
+        style={sizeLabelStyle}
+        anchor={{ x: 0.5, y: 0 }}
+        y={halfH + 12 / viewport.scale}
+      />
     </Container>
   )
 })
@@ -538,11 +557,23 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
           ) : element.type === 'path' ? (
             <Graphics draw={(g: PIXI.Graphics) => {
               g.clear(); if (!element.points?.length) return
-              const pts = element.points as any[], color = parseColor(element.color), size = element.size || 2
+              const pts = element.points as any[], color = parseColor(element.color), size = element.size || 0
+              const alpha = element.opacity ?? 1
+              const fillColor = element.fillColor && element.fillColor !== 'transparent' ? parseColor(element.fillColor) : null
+              const fillAlpha = element.fillOpacity ?? 1
+
               const sx = (element.width || 0) / (element.baseWidth || element.width || 1), sy = (element.height || 0) / (element.baseHeight || element.height || 1)
               const render = () => { if (pts.length > 1) { g.moveTo(pts[0].x * sx, pts[0].y * sy); for (let i = 1; i < pts.length - 1; i++) { const xc = (pts[i].x * sx + pts[i + 1].x * sx) / 2, yc = (pts[i].y * sy + pts[i + 1].y * sy) / 2; g.quadraticCurveTo(pts[i].x * sx, pts[i].y * sy, xc, yc) } g.lineTo(pts[pts.length - 1].x * sx, pts[pts.length - 1].y * sy) } }
-              const scaledSize = Math.max(size * viewport.scale, 1.5) / viewport.scale;
-              render(); g.stroke({ width: Math.max(24 / viewport.scale, scaledSize + 10 / viewport.scale), color, alpha: 0 }); render(); g.stroke({ width: scaledSize, color, alpha: 1 })
+              
+              if (fillColor !== null) {
+                render()
+                g.fill({ color: fillColor, alpha: fillAlpha })
+              }
+
+              if (size > 0) {
+                const scaledSize = Math.max(size * viewport.scale, 1.5) / viewport.scale;
+                render(); g.stroke({ width: Math.max(24 / viewport.scale, scaledSize + 10 / viewport.scale), color, alpha: 0 }); render(); g.stroke({ width: scaledSize, color, alpha })
+              }
             }} />
           ) : element.type === 'rect' ? (
             <Graphics
@@ -551,12 +582,12 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
                 g.rect(-(element.width || 0) / 2, -(element.height || 0) / 2, (element.width || 0), (element.height || 0))
                 g.fill({
                   color: element.color === 'transparent' ? 0 : parseColor(element.color),
-                  alpha: element.color === 'transparent' ? 0 : 1
+                  alpha: element.color === 'transparent' ? 0 : (element.opacity ?? 1)
                 })
                 if ((element.strokeWidth || 0) > 0) {
-                  const scaledStroke = Math.max((element.strokeWidth || 1) * viewport.scale, 0.5) / viewport.scale
+                  const scaledStroke = Math.max((element.strokeWidth || 1) * viewport.scale, 1.5) / viewport.scale
                   // @ts-ignore - stroke API
-                  g.stroke({ width: scaledStroke, color: parseColor(element.strokeColor) })
+                  g.stroke({ width: scaledStroke, color: parseColor(element.strokeColor), alpha: element.strokeOpacity ?? 1 })
                 }
                 g.hitArea = new PIXI.Rectangle(
                   -(element.width || 0) / 2,
@@ -567,10 +598,9 @@ const ElementItem: React.FC<ElementItemProps> = React.memo(
               }}
             />
           ) : element.type === 'text' ? (
-            <Container>
+            <Container alpha={isEditing ? 0 : (element.opacity ?? 1)}>
               <Text
                 ref={textRef}
-                alpha={isEditing ? 0 : 1}
                 text={(element.text || '') + '\u200B'}
                 x={element.textAlign === 'center' ? 0 : element.textAlign === 'right' ? ((element.width || 0) / 2 - ((element.fontSize || 24) * 0.25)) : (-(element.width || 0) / 2 + ((element.fontSize || 24) * 0.25))}
                 y={-(element.height || 0) / 2 + ((element.fontSize || 24) * 0.25)}

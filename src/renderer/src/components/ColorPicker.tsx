@@ -53,7 +53,18 @@ function rgbToHsb(r: number, g: number, b: number): [number, number, number] {
 }
 
 function hexToRgb(hex: string): [number, number, number] | null {
-  const m = hex.replace('#', '').match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
+  if (!hex) return null
+  if (hex === 'transparent') return [255, 255, 255] // Default to white for transparent base
+  
+  const clean = hex.replace('#', '')
+  if (clean.length === 3) {
+    const r = parseInt(clean[0] + clean[0], 16)
+    const g = parseInt(clean[1] + clean[1], 16)
+    const b = parseInt(clean[2] + clean[2], 16)
+    return [r, g, b]
+  }
+  
+  const m = clean.match(/^([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i)
   if (!m) return null
   return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
 }
@@ -101,11 +112,9 @@ export default function ColorPicker({
     }
 
     const mouseMoveHandler = (e: MouseEvent): void => {
-      if (!popupRef.current) return
+      if (!popupRef.current || inline) return
       const rect = popupRef.current.getBoundingClientRect()
       const threshold = 150 // Distance in pixels
-
-      if (inline) return
 
       const dist = Math.sqrt(
         Math.pow(Math.max(0, rect.left - e.clientX, e.clientX - rect.right), 2) +
@@ -139,18 +148,29 @@ export default function ColorPicker({
   // Sync with color prop changes from outside (e.g. from Settings modal)
   useEffect(() => {
     // Only update if it's actually different from our current internal state
-    const currentHexStr = currentHex()
-    if (color.toUpperCase() !== currentHexStr.toUpperCase()) {
-      const rgb = hexToRgb(color)
-      if (rgb) {
-        const [h, s, b] = rgbToHsb(...rgb)
-        setHue(h)
-        setSat(s)
-        setBright(b)
-        setHexInput(color.toUpperCase())
-      }
+    const [curR, curG, curB] = hsbToRgb(hue, sat, bright)
+    const currentHexStr = rgbToHex(curR, curG, curB)
+    
+    const targetHex = color.startsWith('#') ? color : '#' + color
+    
+    // Normalize both for comparison (handles #FFF vs #FFFFFF)
+    const targetRgb = hexToRgb(targetHex)
+    const currentRgb = [curR, curG, curB]
+    
+    if (targetRgb && (
+        targetRgb[0] !== currentRgb[0] || 
+        targetRgb[1] !== currentRgb[1] || 
+        targetRgb[2] !== currentRgb[2])) {
+        
+      const [h, s, b] = rgbToHsb(...targetRgb)
+      setHue(h)
+      setSat(s)
+      setBright(b)
+      setHexInput(rgbToHex(...targetRgb))
     }
-  }, [color, currentHex])
+    // We intentionally omit hue, sat, bright from dependencies to avoid infinite loops
+    // We only want to sync when the 'color' prop changes from the parent
+  }, [color])
 
   const onChangeRef = useRef(onChange)
   useEffect(() => {
@@ -158,35 +178,14 @@ export default function ColorPicker({
   }, [onChange])
 
   const handleColorUpdate = useCallback((h: number, s: number, b: number) => {
+    setHue(h)
+    setSat(s)
+    setBright(b)
     const [r, g, bVal] = hsbToRgb(h, s, b)
     const hex = rgbToHex(r, g, bVal)
     setHexInput(hex)
     onChangeRef.current(hex)
   }, [])
-
-  // ===== Slider drag logic =====
-  // 1) Update local UI immediately for 60fps smoothness
-  const applyRatioLocal = useCallback(
-    (channel: 'h' | 's' | 'b', ratio: number) => {
-      const clamped = Math.max(0, Math.min(1, ratio))
-      let newH = hue
-      let newS = sat
-      let newB = bright
-
-      if (channel === 'h') {
-        newH = Math.round(clamped * 360)
-        setHue(newH)
-      } else if (channel === 's') {
-        newS = Math.round(clamped * 100)
-        setSat(newS)
-      } else {
-        newB = Math.round(clamped * 100)
-        setBright(newB)
-      }
-      return { newH, newS, newB }
-    },
-    [hue, sat, bright]
-  )
 
   const throttleRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -199,23 +198,32 @@ export default function ColorPicker({
 
       // Immediately jump thumb to click position, and update globally
       const x = Math.max(0, Math.min(e.clientX - rect.left, rect.width))
-      const initVals = applyRatioLocal(channel, x / rect.width)
-      handleColorUpdate(initVals.newH, initVals.newS, initVals.newB)
+      const initRatio = x / rect.width
+      
+      let newH = hue, newS = sat, newB = bright
+      if (channel === 'h') newH = Math.round(initRatio * 360)
+      else if (channel === 's') newS = Math.round(initRatio * 100)
+      else newB = Math.round(initRatio * 100)
+      
+      handleColorUpdate(newH, newS, newB)
 
       const onMove = (ev: MouseEvent): void => {
         ev.preventDefault()
         const r = track.getBoundingClientRect()
         const mx = Math.max(0, Math.min(ev.clientX - r.left, r.width))
+        const ratio = mx / r.width
 
-        // Update local state instantly so the thumb moves smoothly
-        const result = applyRatioLocal(channel, mx / r.width)
+        let mH = hue, mS = sat, mB = bright
+        if (channel === 'h') mH = Math.round(ratio * 360)
+        else if (channel === 's') mS = Math.round(ratio * 100)
+        else mB = Math.round(ratio * 100)
 
         // Throttle global app update (onChange) to save CPU/prevent heavy renders
         if (!throttleRef.current) {
           throttleRef.current = setTimeout(() => {
-            handleColorUpdate(result.newH, result.newS, result.newB)
+            handleColorUpdate(mH, mS, mB)
             throttleRef.current = null
-          }, 32) // ~30 times a second for global updates while dragging
+          }, 32)
         }
       }
       const onUp = (ev: MouseEvent): void => {
@@ -226,8 +234,14 @@ export default function ColorPicker({
         }
         const r = track.getBoundingClientRect()
         const mx = Math.max(0, Math.min(ev.clientX - r.left, r.width))
-        const finalResult = applyRatioLocal(channel, mx / r.width)
-        handleColorUpdate(finalResult.newH, finalResult.newS, finalResult.newB)
+        const finalRatio = mx / r.width
+
+        let fH = hue, fS = sat, fB = bright
+        if (channel === 'h') fH = Math.round(finalRatio * 360)
+        else if (channel === 's') fS = Math.round(finalRatio * 100)
+        else fB = Math.round(finalRatio * 100)
+        
+        handleColorUpdate(fH, fS, fB)
 
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
@@ -235,7 +249,7 @@ export default function ColorPicker({
       document.addEventListener('mousemove', onMove)
       document.addEventListener('mouseup', onUp)
     },
-    [applyRatioLocal, handleColorUpdate]
+    [hue, sat, bright, handleColorUpdate]
   )
 
   // Handle hex input

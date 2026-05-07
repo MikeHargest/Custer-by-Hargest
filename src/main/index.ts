@@ -997,6 +997,18 @@ ipcMain.handle('notes:restoreBackup', async (_, targetDir: string, originalFileN
   }
 })
 
+ipcMain.handle('notes:deleteBackup', async (_, backupFilePath: string) => {
+  try {
+    if (fs.existsSync(backupFilePath)) {
+      fs.unlinkSync(backupFilePath)
+    }
+    return true
+  } catch (e) {
+    console.error('Failed to delete backup:', e)
+    return false
+  }
+})
+
 ipcMain.handle('notes:delete', async (_, dirPath: string, fileName: string) => {
   try {
     const filePath = join(dirPath, fileName)
@@ -1575,6 +1587,104 @@ ipcMain.handle('boards:pack-board', async (_, boardId: string, dirPath: string, 
     return true
   } catch (error) {
     console.error('boards:pack-board error:', error)
+    return false
+  }
+})
+
+/**
+ * boards:list-versions
+ */
+ipcMain.handle('boards:list-versions', async (_, dirPath: string, fileName: string) => {
+  try {
+    const versionsDir = join(dirPath, fileName + '.versions')
+    if (!fs.existsSync(versionsDir)) return []
+
+    const files = fs.readdirSync(versionsDir)
+    const versions = files
+      .filter((f) => f.endsWith('.board') || f.endsWith('.ibo'))
+      .map((f) => {
+        const stats = fs.statSync(join(versionsDir, f))
+        return {
+          name: f,
+          path: join(versionsDir, f),
+          mtime: stats.mtimeMs,
+          size: stats.size
+        }
+      })
+      .sort((a, b) => b.mtime - a.mtime)
+
+    return versions
+  } catch (error) {
+    console.error('boards:list-versions error:', error)
+    return []
+  }
+})
+
+/**
+ * boards:create-version
+ */
+ipcMain.handle('boards:create-version', async (_, dirPath: string, fileName: string) => {
+  try {
+    const sourcePath = join(dirPath, fileName)
+    if (!fs.existsSync(sourcePath)) return false
+
+    const versionsDir = join(dirPath, fileName + '.versions')
+    if (!fs.existsSync(versionsDir)) fs.mkdirSync(versionsDir, { recursive: true })
+
+    // Find next version number
+    const files = fs.readdirSync(versionsDir)
+    let maxV = 0
+    const vRegex = /v(\d+)\.board$/i
+    files.forEach((f) => {
+      const match = f.match(vRegex)
+      if (match) {
+        const v = parseInt(match[1])
+        if (v > maxV) maxV = v
+      }
+    })
+
+    const newVersionName = `v${maxV + 1}.board`
+    const destPath = join(versionsDir, newVersionName)
+
+    await fs.promises.copyFile(sourcePath, destPath)
+    return true
+  } catch (error) {
+    console.error('boards:create-version error:', error)
+    return false
+  }
+})
+
+/**
+ * boards:restore-version
+ */
+ipcMain.handle('boards:restore-version', async (_, dirPath: string, fileName: string, versionPath: string) => {
+  try {
+    const targetPath = join(dirPath, fileName)
+    if (!fs.existsSync(versionPath)) return false
+
+    // Optional: create a backup of current before restoring? User didn't ask but it's safer.
+    // user said: "этот файл будут выбран как основной"
+
+    await fs.promises.copyFile(versionPath, targetPath)
+    return true
+  } catch (error) {
+    console.error('boards:restore-version error:', error)
+    return false
+  }
+})
+
+/**
+ * boards:delete-version
+ */
+ipcMain.handle('boards:delete-version', async (_, versionPath: string) => {
+  try {
+    if (fs.existsSync(versionPath)) {
+      await fs.promises.unlink(versionPath)
+      return true
+    }
+    return false
+  } catch (error) {
+    console.error('boards:delete-version error:', error)
     return false
   }
 })

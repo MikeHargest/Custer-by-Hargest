@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus, ImagePlus, Trash2 } from 'lucide-react'
-import { UITheme, DEFAULT_THEME } from '../types'
+import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus, ImagePlus, Trash2, Check } from 'lucide-react'
+import { UITheme, DEFAULT_THEME, ThemePreset } from '../types'
+import { v4 as uuidv4 } from 'uuid'
 import { motion, AnimatePresence } from 'framer-motion'
 import ColorPicker from './ColorPicker'
 
@@ -24,6 +25,10 @@ interface SettingsModalProps {
   setBackupIntervalMinutes: (val: number) => void
   boardBackupIntervalMinutes: number
   setBoardBackupIntervalMinutes: (val: number) => void
+  enableBoardBackups: boolean
+  setEnableBoardBackups: (val: boolean) => void
+  enableBoardAutosave: boolean
+  setEnableBoardAutosave: (val: boolean) => void
   calendarTimezone: string
   setCalendarTimezone: (tz: string) => void
   // Profile props
@@ -55,6 +60,8 @@ export default function SettingsModal({
   setBackupIntervalMinutes,
   boardBackupIntervalMinutes,
   setBoardBackupIntervalMinutes,
+  enableBoardAutosave,
+  setEnableBoardAutosave,
   calendarTimezone,
   setCalendarTimezone,
   workspacePath,
@@ -78,6 +85,40 @@ export default function SettingsModal({
   const handleReset = useCallback((): void => {
     setTheme(DEFAULT_THEME)
   }, [setTheme])
+
+  // Theme Presets state
+  const [presets, setPresets] = useState<ThemePreset[]>(() => {
+    try {
+      const saved = localStorage.getItem('cluster-ui-theme-presets')
+      return saved ? JSON.parse(saved) : []
+    } catch {
+      return []
+    }
+  })
+  const [newPresetName, setNewPresetName] = useState('')
+
+  useEffect(() => {
+    localStorage.setItem('cluster-ui-theme-presets', JSON.stringify(presets))
+  }, [presets])
+
+  const handleSavePreset = () => {
+    if (!newPresetName.trim()) return
+    const newPreset: ThemePreset = {
+      id: uuidv4(),
+      name: newPresetName.trim(),
+      theme: { ...theme }
+    }
+    setPresets(prev => [...prev, newPreset])
+    setNewPresetName('')
+  }
+
+  const handleDeletePreset = (id: string) => {
+    setPresets(prev => prev.filter(p => p.id !== id))
+  }
+
+  const handleApplyPreset = (presetTheme: UITheme) => {
+    setTheme({ ...DEFAULT_THEME, ...presetTheme })
+  }
 
   const handleOpenPicker = (key: keyof UITheme, rect: DOMRect): void => {
     setActivePicker(key)
@@ -176,7 +217,7 @@ export default function SettingsModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: 'var(--card-bg)',
+          background: '#0F0F0F',
           width: '890px',
           height: '590px',
           borderRadius: 'var(--radius-lg)',
@@ -188,45 +229,13 @@ export default function SettingsModal({
           cursor: 'default'
         }}
       >
-        {/* Header */}
-        <div
-          style={{
-            padding: '16px 20px',
-            borderBottom: '1px solid rgba(255,255,255,0.05)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Settings size={18} style={{ color: 'var(--text-secondary)' }} />
-            <h2
-              style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}
-            >
-              Settings
-            </h2>
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex'
-            }}
-          >
-            <X size={18} />
-          </button>
-        </div>
-
         {/* Layout Body */}
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
           {/* Sidebar */}
           <div
             style={{
               width: '200px',
-              background: 'rgba(0,0,0,0.15)',
+              background: '#0F0F0F',
               borderRight: '1px solid rgba(255,255,255,0.05)',
               padding: '20px 10px',
               display: 'flex',
@@ -321,7 +330,7 @@ export default function SettingsModal({
           </div>
 
           {/* Content Area */}
-          <div style={{ flex: 1, padding: '30px', overflowY: 'auto' }}>
+          <div style={{ flex: 1, padding: '30px', overflowY: 'auto', background: '#0F0F0F' }}>
             <AnimatePresence mode="wait">
               {activeTab === 'profile' && (
                 <motion.div
@@ -338,7 +347,7 @@ export default function SettingsModal({
                   </div>
 
                   {/* Avatar + Name */}
-                  <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '16px' }}>
+                  <div style={{ padding: '20px', background: '#1a1a1a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <button onClick={handleSelectAvatar} title="Choose avatar" style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', border: avatarUrl ? '2px solid rgba(255,255,255,0.2)' : 'none', padding: 0, overflow: 'hidden', cursor: 'pointer', position: 'relative', flexShrink: 0, transition: 'filter 0.2s' }} onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(1.15)')} onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}>
                       {avatarUrl ? (<img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />) : (<User size={26} />)}
                       <span style={{ position: 'absolute', right: '2px', bottom: '2px', width: '18px', height: '18px', borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><ImagePlus size={10} /></span>
@@ -355,18 +364,18 @@ export default function SettingsModal({
 
                   {/* Stats */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ padding: '14px 16px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}><HardDrive size={14} /> Workspace Size</div>
                       <div style={{ fontSize: '16px', fontWeight: 600 }}>{folderSize}</div>
                     </div>
-                    <div style={{ padding: '14px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ padding: '14px 16px', background: '#1a1a1a', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase' }}><LayoutGrid size={14} /> Total Projects</div>
                       <div style={{ fontSize: '16px', fontWeight: 600 }}>{projectCount}</div>
                     </div>
                   </div>
 
                   {/* Switch workspace */}
-                  <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
+                  <div style={{ padding: '16px 20px', background: '#1a1a1a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', color: 'var(--text-primary)' }}><FolderOpen size={16} /><span style={{ fontSize: '14px', fontWeight: 600 }}>Switch Workspace</span></div>
                       <p style={{ fontSize: '12px', color: 'var(--text-secondary)', opacity: 0.6, margin: 0 }}>Load data from another existing directory.</p>
@@ -375,10 +384,10 @@ export default function SettingsModal({
                   </div>
 
                   {/* Create new workspace */}
-                  <div style={{ padding: '16px 20px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ padding: '16px 20px', background: '#1a1a1a', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.04)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)' }}><FolderPlus size={16} /><span style={{ fontSize: '14px', fontWeight: 600 }}>Create New Workspace</span></div>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <input type="text" placeholder="Workspace name..." value={newWorkspaceName} onChange={e => setNewWorkspaceName(e.target.value)} disabled={isLoadingWs} style={{ flex: 1, background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '10px 14px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', transition: 'border-color 0.2s' }} onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')} onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')} />
+                      <input type="text" placeholder="Workspace name..." value={newWorkspaceName} onChange={e => setNewWorkspaceName(e.target.value)} disabled={isLoadingWs} style={{ flex: 1, background: '#0a0a0a', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', padding: '10px 14px', color: 'var(--text-primary)', fontSize: '13px', outline: 'none', transition: 'border-color 0.2s' }} onFocus={e => (e.currentTarget.style.borderColor = 'var(--accent)')} onBlur={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)')} />
                       <button onClick={handleCreateNewWs} disabled={isLoadingWs || !newWorkspaceName.trim()} style={{ padding: '0 20px', borderRadius: '8px', background: 'var(--accent)', color: 'white', border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '13px', transition: 'filter 0.2s' }} onMouseEnter={e => (e.currentTarget.style.filter = 'brightness(1.1)')} onMouseLeave={e => (e.currentTarget.style.filter = 'brightness(1)')}>Create</button>
                     </div>
                   </div>
@@ -487,6 +496,129 @@ export default function SettingsModal({
                           onOpenPicker={(rect) => handleOpenPicker(key, rect)}
                         />
                       ))}
+                  </div>
+
+                  {/* Theme Presets Section */}
+                  <div style={{ marginTop: '32px' }}>
+                    <h4
+                      style={{
+                        margin: '0 0 16px 0',
+                        fontSize: '14px',
+                        color: 'var(--text-secondary)',
+                        fontWeight: 500
+                      }}
+                    >
+                      Theme Presets
+                    </h4>
+
+                    <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+                      <input
+                        type="text"
+                        placeholder="Preset name..."
+                        value={newPresetName}
+                        onChange={(e) => setNewPresetName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSavePreset()}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(0,0,0,0.2)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: 'var(--text-primary)',
+                          borderRadius: '8px',
+                          padding: '8px 12px',
+                          fontSize: '13px',
+                          outline: 'none'
+                        }}
+                      />
+                      <button
+                        onClick={handleSavePreset}
+                        disabled={!newPresetName.trim()}
+                        style={{
+                          background: 'var(--accent)',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '0 16px',
+                          fontSize: '13px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          opacity: newPresetName.trim() ? 1 : 0.5
+                        }}
+                      >
+                        Save Current
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                      {presets.map((preset) => (
+                        <div
+                          key={preset.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 12px',
+                            background: 'rgba(255,255,255,0.03)',
+                            borderRadius: '10px',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px',
+                              cursor: 'pointer',
+                              flex: 1
+                            }}
+                            onClick={() => handleApplyPreset(preset.theme)}
+                          >
+                            <div
+                              style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '50%',
+                                background: preset.theme.accent
+                              }}
+                            />
+                            <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                              {preset.name}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleDeletePreset(preset.id)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--text-secondary)',
+                              padding: '4px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              borderRadius: '4px'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-secondary)')}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      {presets.length === 0 && (
+                        <div
+                          style={{
+                            gridColumn: '1 / -1',
+                            textAlign: 'center',
+                            padding: '20px',
+                            color: 'var(--text-secondary)',
+                            fontSize: '12px',
+                            border: '1px dashed rgba(255,255,255,0.05)',
+                            borderRadius: '10px'
+                          }}
+                        >
+                          No saved presets yet.
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               )}
@@ -599,7 +731,7 @@ export default function SettingsModal({
                     <div style={{ padding: '1px 0', background: 'rgba(255,255,255,0.05)' }} />
 
                     <div style={{
-                      background: 'rgba(255,255,255,0.02)',
+                      background: '#1a1a1a',
                       padding: '16px',
                       borderRadius: 'var(--radius-lg)',
                       border: '1px solid rgba(255,255,255,0.05)'
@@ -621,15 +753,103 @@ export default function SettingsModal({
                             onChange={(e) => setBoardBackupIntervalMinutes(Math.max(1, parseInt(e.target.value) || 10))}
                             style={{
                               width: '50px',
-                              background: 'rgba(0,0,0,0.2)',
-                              border: '1px solid rgba(255,255,255,0.1)',
-                              color: 'var(--text-primary)',
-                              borderRadius: '4px',
+                              background: '#0a0a0a',
+                              border: '1px solid rgba(255,255,255,0.08)',
+                              borderRadius: '6px',
                               padding: '4px 8px',
-                              fontSize: '13px'
+                              color: 'var(--text-primary)',
+                              fontSize: '12px',
+                              outline: 'none'
                             }}
                           />
-                          <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>min</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>min</span>
+                        </div>
+                      </div>
+
+                      <div style={{ padding: '1px 0', background: 'rgba(255,255,255,0.05)', margin: '16px 0' }} />
+
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          cursor: 'pointer'
+                        }}
+                        onClick={() => setEnableBoardAutosave(!enableBoardAutosave)}
+                      >
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>
+                            Enable Board Auto-Save (Experimental)
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '11px',
+                              color: 'var(--text-secondary)',
+                              marginTop: '2px'
+                            }}
+                          >
+                            Periodically auto-save board changes to the main file.
+                          </div>
+                        </div>
+                        <button
+                          style={{
+                            width: '36px',
+                            height: '20px',
+                            borderRadius: '10px',
+                            background: enableBoardAutosave ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
+                            border: 'none',
+                            position: 'relative',
+                            transition: 'all 0.2s'
+                          }}
+                        >
+                          <motion.div
+                            animate={{ x: enableBoardAutosave ? 16 : 2 }}
+                            style={{
+                              width: '14px',
+                              height: '14px',
+                              background: '#fff',
+                              borderRadius: '50%',
+                              position: 'absolute',
+                              top: '3px'
+                            }}
+                          />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style={{
+                      background: '#1a1a1a',
+                      padding: '16px',
+                      borderRadius: 'var(--radius-lg)',
+                      border: '1px solid rgba(255,255,255,0.05)'
+                    }}>
+                      <h4 style={{ margin: '0 0 10px 0', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        Board Backups
+                      </h4>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>Board Auto-Backup Interval</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>Create backup snapshots of the active board at a fixed interval.</div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={boardBackupIntervalMinutes}
+                            onChange={(e) => setBoardBackupIntervalMinutes(Math.max(1, parseInt(e.target.value) || 10))}
+                            style={{
+                              width: '50px',
+                              background: '#0a0a0a',
+                              border: '1px solid rgba(255,255,255,0.08)',
+                              borderRadius: '6px',
+                              padding: '4px 8px',
+                              color: 'var(--text-primary)',
+                              fontSize: '12px',
+                              outline: 'none'
+                            }}
+                          />
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>min</span>
                         </div>
                       </div>
                     </div>
@@ -936,7 +1156,7 @@ export default function SettingsModal({
                           display: 'flex',
                           justifyContent: 'space-between',
                           padding: '10px 14px',
-                          background: 'rgba(255,255,255,0.02)',
+                          background: '#1a1a1a',
                           borderRadius: '10px',
                           border: '1px solid rgba(255,255,255,0.03)'
                         }}
@@ -981,7 +1201,7 @@ export default function SettingsModal({
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div style={{ 
-                      background: 'rgba(255,255,255,0.02)', 
+                      background: '#1a1a1a', 
                       padding: '16px', 
                       borderRadius: 'var(--radius-lg)',
                       border: '1px solid rgba(255,255,255,0.05)'
@@ -1044,7 +1264,7 @@ export default function SettingsModal({
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div style={{
-                      background: 'rgba(255,255,255,0.02)',
+                      background: '#1a1a1a',
                       padding: '16px',
                       borderRadius: 'var(--radius-lg)',
                       border: '1px solid rgba(255,255,255,0.05)'
@@ -1086,7 +1306,7 @@ export default function SettingsModal({
 
                     {/* Google Calendar Sync */}
                     <div style={{
-                      background: 'rgba(255,255,255,0.02)',
+                      background: '#1a1a1a',
                       padding: '16px',
                       borderRadius: 'var(--radius-lg)',
                       border: '1px solid rgba(255,255,255,0.05)'
@@ -1146,7 +1366,7 @@ export default function SettingsModal({
                   </p>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
                     <div style={{
-                      background: 'rgba(255,255,255,0.02)',
+                      background: '#1a1a1a',
                       padding: '16px',
                       borderRadius: 'var(--radius-lg)',
                       border: '1px solid rgba(255,255,255,0.05)'
@@ -1170,7 +1390,7 @@ export default function SettingsModal({
         <div
           style={{
             padding: '12px 20px',
-            background: 'rgba(0,0,0,0.2)',
+            background: '#0F0F0F',
             borderTop: '1px solid rgba(255,255,255,0.05)',
             display: 'flex',
             justifyContent: 'flex-end'

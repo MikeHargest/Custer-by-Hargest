@@ -77,6 +77,8 @@ const api = {
     ipcRenderer.invoke('notes:readBackup', backupFilePath),
   restoreNoteBackup: (targetDir: string, originalFileName: string, backupFilePath: string) =>
     ipcRenderer.invoke('notes:restoreBackup', targetDir, originalFileName, backupFilePath),
+  deleteNoteBackup: (backupFilePath: string) =>
+    ipcRenderer.invoke('notes:deleteBackup', backupFilePath),
 
   // Boards File System
   readBoard: (dirPath: string, fileName: string) =>
@@ -98,6 +100,14 @@ const api = {
     ipcRenderer.invoke('boards:add-asset', boardId, assetId, assetData),
   packBoard: (boardId: string, dirPath: string, fileName: string) =>
     ipcRenderer.invoke('boards:pack-board', boardId, dirPath, fileName),
+  listBoardVersions: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:list-versions', dirPath, fileName),
+  createBoardVersion: (dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:create-version', dirPath, fileName),
+  restoreBoardVersion: (dirPath: string, fileName: string, versionPath: string) =>
+    ipcRenderer.invoke('boards:restore-version', dirPath, fileName, versionPath),
+  deleteBoardVersion: (versionPath: string) =>
+    ipcRenderer.invoke('boards:delete-version', versionPath),
   closeBoard: (boardId: string) =>
     ipcRenderer.invoke('boards:close-board', boardId),
 

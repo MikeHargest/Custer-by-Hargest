@@ -959,6 +959,19 @@ export default function ProjectOverview({
                           >
                             {stage.name}
                           </span>
+                          {stage.items && stage.items.length > 0 && (
+                            <span
+                              style={{
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                color: 'var(--text-secondary)',
+                                opacity: 0.6,
+                                paddingRight: '4px'
+                              }}
+                            >
+                              {stage.items.length}
+                            </span>
+                          )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation()

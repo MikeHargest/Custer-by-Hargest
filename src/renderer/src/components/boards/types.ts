@@ -15,9 +15,13 @@ export interface BoardElement {
   points?: { x: number; y: number; width?: number }[]
   size?: number
   color?: string
+  opacity?: number
+  fillColor?: string
+  fillOpacity?: number
   // For 'rect'
   strokeColor?: string
   strokeWidth?: number
+  strokeOpacity?: number
   groupId?: string
   baseWidth?: number
   baseHeight?: number

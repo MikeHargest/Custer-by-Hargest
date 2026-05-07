@@ -19,6 +19,7 @@ import {
   Heading3,
   Italic,
   Link2,
+  ExternalLink,
   List,
   Palette,
   Save,
@@ -50,21 +51,85 @@ export default function OverviewEditor({
   const [selectionMenuPos, setSelectionMenuPos] = useState<{ left: number; top: number } | null>(null)
   const [showSelectionMenu, setShowSelectionMenu] = useState(false)
   const [textColorPickerRect, setTextColorPickerRect] = useState<DOMRect | null>(null)
-  const [showLinkPopover, setShowLinkPopover] = useState(false)
-  const [linkValue, setLinkValue] = useState('')
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; initialUrl: string } | null>(null)
+  const [linkDialogUrl, setLinkDialogUrl] = useState('')
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const selectionMenuRef = useRef<HTMLDivElement>(null)
-  const linkInputRef = useRef<HTMLInputElement>(null)
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
   const projectIdRef = useRef(projectId)
   const projectPathRef = useRef(projectPath)
+  const editorContainerRef = useRef<HTMLDivElement>(null)
 
+  const NonInclusiveLink = Link.extend({
+    inclusive: false
+  })
+
+  // Stable ref for openLink so editorProps.handleClick never has a stale closure
+  const openLinkRef = useRef((href: string) => {
+    if (!href) return
+    const trimmed = href.trim()
+    if (/^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed)) {
+      ;(window as any).api.openExternal(trimmed)
+    } else {
+      let pathToOpen = trimmed
+      if (pathToOpen.startsWith('file:///')) {
+        pathToOpen = decodeURI(pathToOpen.replace('file:///', ''))
+      } else if (pathToOpen.startsWith('local-file:///')) {
+        pathToOpen = decodeURI(pathToOpen.replace('local-file:///', ''))
+      } else if (pathToOpen.startsWith('file://')) {
+        pathToOpen = decodeURI(pathToOpen.replace('file://', ''))
+      }
+      // On Windows, markdown might have saved it as /C:/..., strip the leading slash
+      if (/^\/[a-zA-Z]:[\\/]/.test(pathToOpen)) {
+        pathToOpen = pathToOpen.substring(1)
+      }
+      ;(window as any).api.openPath(decodeURIComponent(pathToOpen))
+    }
+  })
+
+  // Migrate legacy local-file:// and bare /C:/... paths to canonical file:/// format.
+  const migrateLocalFilePaths = useCallback((markdown: string): string => {
+    let result = markdown.replace(/local-file:\/\/\//g, 'file:///')
+    result = result.replace(/file:\/\/\/([A-Za-z])%3A\//g, 'file:///$1:/')
+    result = result.replace(/(\])\(\/(([a-zA-Z]):[\\/][^)]*)\)/g, (_match, bracket, rest) => {
+      const normalized = rest.replace(/\\/g, '/')
+      return `${bracket}(file:///${normalized})`
+    })
+    result = result.replace(/!\\\[([^\]]*)\\\]\(([^)]+)\)/g, '![$1]($2)')
+    result = result.replace(/\\\[([^\]]*)\\\]\(([^)]+)\)/g, '[$1]($2)')
+    return result
+  }, [])
+
+  // Ctrl key detection for links
+  useEffect(() => {
+    const container = editorContainerRef.current
+    if (!container) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        container.classList.add('ctrl-held')
+      }
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.key === 'Meta') {
+        container.classList.remove('ctrl-held')
+      }
+    }
+    const onBlur = () => container.classList.remove('ctrl-held')
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      container.classList.remove('ctrl-held')
+    }
+  }, [])
 
   useEffect(() => {
     projectIdRef.current = projectId
     projectPathRef.current = projectPath
   }, [projectId, projectPath])
-
 
   const saveContent = useCallback(async (content: string) => {
     if (!projectPathRef.current) return
@@ -74,7 +139,6 @@ export default function OverviewEditor({
       console.error('[OverviewEditor] save failed:', e)
     }
   }, [])
-
 
   const editor = useEditor({
     extensions: [
@@ -88,23 +152,48 @@ export default function OverviewEditor({
       Color,
       Highlight.configure({ multicolor: true }),
       Placeholder.configure({ placeholder: 'Add a description for this project...' }),
-      Link.configure({
-        openOnClick: false,
+      Markdown.configure({
+        html: true,
+        transformPastedText: true,
+        transformCopiedText: true
+      }),
+      NonInclusiveLink.configure({
+        openOnClick: false, // We handle clicks manually
         autolink: true,
         linkOnPaste: true,
-        protocols: ['http', 'https', 'mailto', 'ftp', 'file'],
+        protocols: ['http', 'https', 'mailto', 'ftp', 'file', 'local-file'],
         HTMLAttributes: {
           class: 'overview-link',
-          rel: 'noopener noreferrer',
-          target: '_blank'
+          rel: 'noopener noreferrer'
         }
-      }),
-      Markdown
+      })
     ],
     content: '',
     editable: false,
     editorProps: {
-      attributes: { class: 'overview-tiptap' }
+      attributes: { class: 'overview-tiptap' },
+      handleClick: (_view, _pos, event) => {
+        const target = event.target as Node
+        const el = target.nodeType === 3 ? target.parentElement : (target as HTMLElement)
+        const linkEl = el?.closest('a')
+        if (linkEl && (event.ctrlKey || event.metaKey)) {
+          const href = linkEl.getAttribute('href')
+          if (href) {
+            event.preventDefault()
+            openLinkRef.current(href)
+            return true
+          }
+        }
+        return false
+      },
+      handleKeyDown: (_view, event) => {
+        if ((event.ctrlKey || event.metaKey) && event.key === 'k') {
+          event.preventDefault()
+          openLinkDialog()
+          return true
+        }
+        return false
+      }
     },
     onUpdate: ({ editor: e }) => {
       const text = e.getText()
@@ -119,6 +208,18 @@ export default function OverviewEditor({
     }
   })
 
+  // Патч markdown-it validateLink напрямую через storage редактора.
+  useEffect(() => {
+    if (!editor) return
+    const md = (editor.storage as any)?.markdown?.parser?.md
+    if (!md) return
+    const originalValidate = md.validateLink?.bind(md)
+    md.validateLink = (url: string) => {
+      if (url.startsWith('file://') || url.startsWith('local-file://')) return true
+      return originalValidate ? originalValidate(url) : true
+    }
+  }, [editor])
+
   const hideSelectionMenu = useCallback(() => {
     if (selectionTimerRef.current) {
       clearTimeout(selectionTimerRef.current)
@@ -126,7 +227,6 @@ export default function OverviewEditor({
     }
     setShowSelectionMenu(false)
     setSelectionMenuPos(null)
-    setShowLinkPopover(false)
   }, [])
 
   const getSelectionRect = useCallback((): DOMRect | null => {
@@ -206,83 +306,57 @@ export default function OverviewEditor({
     [editor, isEditing, scheduleSelectionMenu]
   )
 
-  const normalizeLink = useCallback((raw: string): string => {
-    const trimmed = raw.trim()
-    if (!trimmed) return ''
-    if (/^[a-zA-Z][a-zA-Z\d+\-.]*:/.test(trimmed)) return trimmed
-    if (/^[a-zA-Z]:[\\/]/.test(trimmed)) {
-      const normalized = trimmed.replace(/\\/g, '/')
-      return `file:///${encodeURI(normalized)}`
+  const openLinkDialog = useCallback(() => {
+    if (!editor || !isEditing) return
+    const { from, to } = editor.state.selection
+    savedSelectionRef.current = { from, to }
+    const existingHref = editor.getAttributes('link').href || ''
+    setLinkDialogUrl(existingHref)
+    setLinkDialog({ open: true, initialUrl: existingHref })
+  }, [editor, isEditing])
+
+  const handleApplyLink = useCallback((url: string) => {
+    if (!editor) return
+    setLinkDialog(null)
+
+    const sel = savedSelectionRef.current
+    savedSelectionRef.current = null
+
+    const chain = editor.chain().focus()
+
+    if (sel && sel.from !== sel.to) {
+      chain.setTextSelection({ from: sel.from, to: sel.to })
     }
-    if (/^\/[a-zA-Z]:[\\/]/.test(trimmed)) {
-      const normalized = trimmed.replace(/\\/g, '/')
-      return `file://${encodeURI(normalized)}`
+
+    let finalUrl = url.trim()
+    if (!finalUrl) {
+      chain.extendMarkRange('link').unsetLink().run()
+      return
     }
-    return `https://${trimmed}`
-  }, [])
 
-  const applyLinkToSelection = useCallback(
-    (rawUrl?: string): void => {
-      if (!editor || !isEditing) return
-      const normalized = normalizeLink(rawUrl ?? linkValue)
-      const savedSel = savedSelectionRef.current
-      const activeSel = editor.state.selection
-      const finalSel =
-        savedSel && savedSel.from !== savedSel.to
-          ? savedSel
-          : activeSel.from !== activeSel.to
-            ? { from: activeSel.from, to: activeSel.to }
-            : null
+    if (/^[a-zA-Z]:[\\/]/.test(finalUrl)) {
+      const normalized = finalUrl.replace(/\\/g, '/')
+      finalUrl = `file:///${encodeURI(normalized)}`
+    } else if (/^\/[a-zA-Z]:[\/]/.test(finalUrl)) {
+      finalUrl = `file://${encodeURI(finalUrl)}`
+    }
 
-      if (!finalSel) return
-
-      const chain = editor
-        .chain()
-        .focus()
-        .setTextSelection({ from: finalSel.from, to: finalSel.to })
-
-      if (!normalized) {
-        chain.unsetMark('link').run()
-      } else {
-        chain.setMark('link', { href: normalized }).run()
-      }
-      savedSelectionRef.current = null
-      setShowLinkPopover(false)
-      scheduleSelectionMenu()
-    },
-    [editor, isEditing, linkValue, normalizeLink, scheduleSelectionMenu]
-  )
+    chain.extendMarkRange('link').setLink({ href: finalUrl }).run()
+  }, [editor])
 
   const handleBrowseLinkFile = useCallback(async () => {
     const filePath: string | null = await (window as any).api.selectFile()
     if (filePath) {
-      setLinkValue(filePath)
-      applyLinkToSelection(filePath)
+      setLinkDialogUrl(filePath)
     }
-  }, [applyLinkToSelection])
+  }, [])
 
   const handleBrowseLinkFolder = useCallback(async () => {
     const folderPath: string | null = await (window as any).api.selectFolder()
     if (folderPath) {
-      setLinkValue(folderPath)
-      applyLinkToSelection(folderPath)
+      setLinkDialogUrl(folderPath)
     }
-  }, [applyLinkToSelection])
-
-  const openLinkPopover = useCallback(() => {
-    if (!editor || !isEditing) return
-    const { from, to } = editor.state.selection
-    if (from === to) return
-    savedSelectionRef.current = { from, to }
-    const existingHref = editor.getAttributes('link').href || ''
-    setLinkValue(existingHref)
-    setShowLinkPopover(true)
-    setTimeout(() => linkInputRef.current?.focus(), 10)
-  }, [editor, isEditing])
-
-  const applyLink = useCallback(() => {
-    applyLinkToSelection()
-  }, [applyLinkToSelection])
+  }, [])
 
   const removeLink = useCallback(() => {
     if (!editor || !isEditing) return
@@ -306,7 +380,7 @@ export default function OverviewEditor({
       editor.chain().focus().extendMarkRange('link').unsetMark('link').run()
     }
     savedSelectionRef.current = null
-    setShowLinkPopover(false)
+    setLinkDialog(null)
     scheduleSelectionMenu()
   }, [editor, isEditing, scheduleSelectionMenu])
 
@@ -320,7 +394,8 @@ export default function OverviewEditor({
       try {
         const content = await (window as any).api.readOverviewDescription(projectPath)
         if (projectIdRef.current === projectId) {
-          editor.commands.setContent(content || '', { emitUpdate: false })
+          const migratedContent = migrateLocalFilePaths(content || '')
+          editor.commands.setContent(migratedContent, { emitUpdate: false })
           editor.setEditable(false)
           const text = editor.getText()
           setCharCount(Math.min(text.length, MAX_CHARS))
@@ -339,6 +414,7 @@ export default function OverviewEditor({
   useEffect(() => {
     if (!editor || !isEditing) {
       hideSelectionMenu()
+      setLinkDialog(null)
       return
     }
 
@@ -371,13 +447,19 @@ export default function OverviewEditor({
     const handleOutsideClick = (e: MouseEvent): void => {
       const target = e.target as Node
       if (selectionMenuRef.current?.contains(target)) return
+      if ((target as HTMLElement).closest('.link-dialog-box')) return
       hideSelectionMenu()
     }
-    if (showSelectionMenu || showLinkPopover) {
+    if (showSelectionMenu || linkDialog?.open) {
       document.addEventListener('mousedown', handleOutsideClick)
     }
     return () => document.removeEventListener('mousedown', handleOutsideClick)
-  }, [hideSelectionMenu, showLinkPopover, showSelectionMenu])
+  }, [hideSelectionMenu, linkDialog?.open, showSelectionMenu])
+
+  const hideAllMenus = useCallback(() => {
+    hideSelectionMenu()
+    setLinkDialog(null)
+  }, [hideSelectionMenu])
 
   useEffect(() => {
     return () => {
@@ -401,8 +483,8 @@ export default function OverviewEditor({
     editor.setEditable(false)
     setIsEditing(false)
     hideSelectionMenu()
+    setLinkDialog(null)
     setTextColorPickerRect(null)
-    setShowLinkPopover(false)
   }, [editor, hideSelectionMenu, saveContent])
 
 
@@ -456,6 +538,7 @@ export default function OverviewEditor({
 
   return (
     <div
+      ref={editorContainerRef}
       style={{
         display: 'flex',
         flexDirection: 'column',
@@ -464,6 +547,33 @@ export default function OverviewEditor({
         transition: 'opacity 0.2s ease'
       }}
     >
+      <style>
+        {`
+        .overview-tiptap a {
+          color: #8e8e8e;
+          text-decoration: underline;
+          text-decoration-color: color-mix(in srgb, #8e8e8e 60%, transparent);
+          text-underline-offset: 3px;
+          cursor: text;
+          pointer-events: none;
+          transition: color 0.15s, text-decoration-color 0.15s, opacity 0.15s;
+          border-radius: 2px;
+        }
+
+        .ctrl-held .overview-tiptap a {
+          cursor: pointer !important;
+          pointer-events: auto !important;
+          text-decoration-color: #8e8e8e !important;
+          opacity: 0.85;
+        }
+
+        .ctrl-held .overview-tiptap a:hover {
+          opacity: 1;
+          background: rgba(255, 255, 255, 0.05);
+        }
+      `}
+      </style>
+
       {/* Header with label + button */}
       <div
         style={{
@@ -653,7 +763,7 @@ export default function OverviewEditor({
           <button
             title="Insert Link"
             onMouseDown={keepEditorSelectionOnMenuMouseDown}
-            onClick={openLinkPopover}
+            onClick={openLinkDialog}
             style={formatButtonStyle(!!editor?.isActive('link'))}
           >
             <Link2 size={14} />
@@ -666,121 +776,6 @@ export default function OverviewEditor({
           >
             <Unlink size={14} />
           </button>
-
-          {showLinkPopover && (
-            <div
-              style={{
-                position: 'absolute',
-                left: '50%',
-                top: 'calc(100% + 8px)',
-                transform: 'translateX(-50%)',
-                background: 'rgba(18,18,18,0.97)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '10px',
-                padding: '8px',
-                minWidth: '280px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <input
-                ref={linkInputRef}
-                type="text"
-                value={linkValue}
-                onChange={(e) => setLinkValue(e.target.value)}
-                placeholder="https://example.com"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') applyLink()
-                  if (e.key === 'Escape') setShowLinkPopover(false)
-                }}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  borderRadius: '8px',
-                  color: 'var(--text-primary)',
-                  fontSize: '12px',
-                  padding: '8px 10px',
-                  outline: 'none'
-                }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '6px' }}>
-                <button
-                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
-                  onClick={handleBrowseLinkFile}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '7px',
-                    color: 'var(--text-secondary)',
-                    fontSize: '12px',
-                    padding: '6px 10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <FolderOpen size={12} />
-                  File
-                </button>
-                <button
-                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
-                  onClick={handleBrowseLinkFolder}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '7px',
-                    color: 'var(--text-secondary)',
-                    fontSize: '12px',
-                    padding: '6px 10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Folder size={12} />
-                  Folder
-                </button>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
-                <button
-                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
-                  onClick={() => setShowLinkPopover(false)}
-                  style={{
-                    background: 'transparent',
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '7px',
-                    color: 'var(--text-secondary)',
-                    fontSize: '12px',
-                    padding: '6px 10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
-                  onClick={applyLink}
-                  style={{
-                    background: accent,
-                    border: '1px solid transparent',
-                    borderRadius: '7px',
-                    color: '#fff',
-                    fontSize: '12px',
-                    padding: '6px 10px',
-                    cursor: 'pointer'
-                  }}
-                >
-                  Apply
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -793,8 +788,203 @@ export default function OverviewEditor({
         />
       )}
 
+      {/* Link Insert Dialog */}
+      {linkDialog?.open && (
+        <div
+          className="link-dialog-overlay"
+          onClick={(e) => { if (e.target === e.currentTarget) setLinkDialog(null) }}
+        >
+          <div className="link-dialog-box">
+            <div className="link-dialog-title">
+              <Link2 size="16" style={{ opacity: 0.8 }} />
+              Insert Link
+            </div>
+
+            <div>
+              <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px', fontWeight: 500 }}>
+                URL or File Path
+              </div>
+              <div className="link-dialog-input-row">
+                <input
+                  autoFocus
+                  className="link-dialog-input"
+                  type="text"
+                  placeholder="https://example.com  or  C:\Users\...\file.pdf"
+                  value={linkDialogUrl}
+                  onChange={(e) => setLinkDialogUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleApplyLink(linkDialogUrl)
+                    if (e.key === 'Escape') setLinkDialog(null)
+                  }}
+                />
+                <button 
+                  className="link-btn-browse" 
+                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
+                  onClick={handleBrowseLinkFile}
+                >
+                  <FolderOpen size={13} />
+                  File
+                </button>
+                <button 
+                  className="link-btn-browse" 
+                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
+                  onClick={handleBrowseLinkFolder}
+                >
+                  <Folder size={13} />
+                  Folder
+                </button>
+              </div>
+            </div>
+
+            <div className="link-dialog-hint">
+              <ExternalLink size={11} style={{ display: 'inline', marginRight: 4, verticalAlign: 'middle' }} />
+              Web links (https://...) open in the browser. Local file paths open with the default app.
+            </div>
+
+            <div className="link-dialog-actions">
+              {linkDialog.initialUrl && (
+                <button
+                  className="link-btn-secondary"
+                  style={{ marginRight: 'auto', color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                  onMouseDown={keepEditorSelectionOnMenuMouseDown}
+                  onClick={() => handleApplyLink('')}
+                >
+                  Remove Link
+                </button>
+              )}
+              <button 
+                className="link-btn-secondary" 
+                onMouseDown={keepEditorSelectionOnMenuMouseDown}
+                onClick={() => setLinkDialog(null)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="link-btn-primary" 
+                onMouseDown={keepEditorSelectionOnMenuMouseDown}
+                onClick={() => handleApplyLink(linkDialogUrl)}
+              >
+                Insert
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Tiptap editor styles scoped to overview */}
       <style>{`
+        /* Link dialog overlay */
+        .link-dialog-overlay {
+          position: fixed;
+          inset: 0;
+          background: rgba(0,0,0,0.55);
+          backdrop-filter: blur(4px);
+          z-index: 10000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .link-dialog-box {
+          background: var(--card-bg, #1e1e2e);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 12px;
+          padding: 24px;
+          width: 480px;
+          max-width: 90vw;
+          box-shadow: 0 24px 64px rgba(0,0,0,0.7);
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+        .link-dialog-title {
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--text-primary);
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .link-dialog-input-row {
+          display: flex;
+          gap: 8px;
+          align-items: center;
+        }
+        .link-dialog-input {
+          flex: 1;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.12);
+          border-radius: 8px;
+          color: var(--text-primary);
+          font-size: 13px;
+          padding: 10px 14px;
+          outline: none;
+          transition: border-color 0.2s;
+          font-family: inherit;
+        }
+        .link-dialog-input:focus {
+          border-color: var(--accent-primary, #7c8bdc);
+          background: rgba(255,255,255,0.07);
+        }
+        .link-dialog-hint {
+          font-size: 11px;
+          color: var(--text-secondary);
+          opacity: 0.7;
+          line-height: 1.5;
+        }
+        .link-dialog-actions {
+          display: flex;
+          gap: 8px;
+          justify-content: flex-end;
+        }
+        .link-btn-secondary {
+          padding: 8px 16px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.12);
+          background: transparent;
+          color: var(--text-primary);
+          font-size: 13px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: inherit;
+        }
+        .link-btn-secondary:hover {
+          background: rgba(255,255,255,0.06);
+        }
+        .link-btn-primary {
+          padding: 8px 20px;
+          border-radius: 8px;
+          border: none;
+          background: var(--accent-primary, #7c8bdc);
+          color: white;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-family: inherit;
+        }
+        .link-btn-primary:hover {
+          opacity: 0.85;
+        }
+        .link-btn-browse {
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid rgba(255,255,255,0.1);
+          background: rgba(255,255,255,0.04);
+          color: var(--text-secondary);
+          font-size: 12px;
+          cursor: pointer;
+          white-space: nowrap;
+          transition: all 0.2s;
+          font-family: inherit;
+          display: flex;
+          align-items: center;
+          gap: 5px;
+        }
+        .link-btn-browse:hover {
+          background: rgba(255,255,255,0.08);
+          color: var(--text-primary);
+        }
+
         @keyframes overview-float-in {
           from {
             opacity: 0;

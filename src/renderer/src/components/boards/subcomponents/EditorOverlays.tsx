@@ -133,18 +133,25 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
             }}
             value={el.text || ''}
             onChange={(e) => {
+              const val = e.target.value
               setElements((prev) =>
-                prev.map((p) => (p.id === el.id ? { ...p, text: e.target.value } : p))
+                prev.map((p) => (p.id === el.id ? { ...p, text: val } : p))
               )
             }}
-            onBlur={() => {
+            onBlur={(e) => {
+              const finalVal = e.target.value
+              // Sync immediately without setTimeout to ensure handleManualSave captures it
+              setElements((prev) =>
+                prev.map((p) => {
+                  if (p.id === el.id) {
+                    return { ...p, text: finalVal.trim() || 'text' }
+                  }
+                  return p
+                })
+              )
+              // Only delay closing the editor to prevent race conditions with UI clicks
               setTimeout(() => {
                 setEditingTextId(null)
-                if (!el.text?.trim()) {
-                  setElements((prev) =>
-                    prev.map((p) => (p.id === el.id ? { ...p, text: 'text' } : p))
-                  )
-                }
               }, 100)
             }}
             onKeyDown={(e) => {
@@ -273,7 +280,7 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
                       setPenSize(val)
                     }
                   }}
-                  style={{ flex: 1, cursor: 'pointer', accentColor: 'var(--accent)' }}
+                  style={{ flex: 1, cursor: 'pointer', accentColor: '#d1d1d1' }}
                 />
                 <div
                   style={{
@@ -390,7 +397,7 @@ const EditorOverlays: React.FC<EditorOverlaysProps> = ({
                 max="100"
                 value={eraserSize}
                 onChange={(e): void => setEraserSize(parseInt(e.target.value))}
-                style={{ flex: 1, cursor: 'pointer', accentColor: 'var(--accent)' }}
+                style={{ flex: 1, cursor: 'pointer', accentColor: '#d1d1d1' }}
               />
               <div
                 style={{

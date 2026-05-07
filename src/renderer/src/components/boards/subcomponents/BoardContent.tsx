@@ -10,7 +10,11 @@ interface BoardContentProps {
   activePath: { x: number; y: number; width?: number }[] | null
   activeRect: { x: number; y: number; w: number; h: number } | null
   penColor: string
+  fillColor: string
   penSize: number
+  rectStrokeWidth: number
+  strokeOpacity: number
+  fillOpacity: number
   viewport: Viewport
   selectedIds: string[]
   onSelect: (ids: string[]) => void
@@ -118,6 +122,7 @@ const Graphics = (props: any) => {
   )
 }
 const Container = 'pixiContainer' as any
+const Text = 'pixiText' as any
 
 const BoardContent = React.memo(
   ({
@@ -125,7 +130,11 @@ const BoardContent = React.memo(
     activePath,
     activeRect,
     penColor,
+    fillColor,
     penSize,
+    rectStrokeWidth,
+    strokeOpacity,
+    fillOpacity,
     viewport,
     selectedIds,
     onSelect,
@@ -444,29 +453,39 @@ const BoardContent = React.memo(
 
               const colorHex = parseColor(penColor)
               const strokeWidth = penSize
+              const fillHex = fillColor && fillColor !== 'transparent' ? parseColor(fillColor) : null
 
-              if (pts.length === 1) {
-                g.circle(pts[0].x, pts[0].y, strokeWidth / 2)
-                g.fill({ color: colorHex })
-              } else {
-                g.moveTo(pts[0].x, pts[0].y)
-                if (pts.length > 2) {
-                  let i
-                  for (i = 1; i < pts.length - 2; i++) {
-                    const xc = (pts[i].x + pts[i + 1].x) / 2
-                    const yc = (pts[i].y + pts[i + 1].y) / 2
-                    g.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc)
-                  }
-                  g.quadraticCurveTo(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y)
+              const render = () => {
+                if (pts.length === 1) {
+                  g.circle(pts[0].x, pts[0].y, Math.max(strokeWidth, 2) / 2)
                 } else {
-                  g.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y)
+                  g.moveTo(pts[0].x, pts[0].y)
+                  if (pts.length > 2) {
+                    let i
+                    for (i = 1; i < pts.length - 2; i++) {
+                      const xc = (pts[i].x + pts[i + 1].x) / 2
+                      const yc = (pts[i].y + pts[i + 1].y) / 2
+                      g.quadraticCurveTo(pts[i].x, pts[i].y, xc, yc)
+                    }
+                    g.quadraticCurveTo(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y)
+                  } else {
+                    g.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y)
+                  }
                 }
+              }
 
+              if (fillHex !== null) {
+                render()
+                g.fill({ color: fillHex, alpha: fillOpacity })
+              }
+
+              if (strokeWidth > 0) {
+                render()
                 // @ts-ignore - PIXI v8 stroke API
                 g.stroke({
-                  width: strokeWidth,
+                  width: Math.max(strokeWidth * viewport.scale, 1.5) / viewport.scale,
                   color: colorHex,
-                  alpha: 1,
+                  alpha: strokeOpacity,
                   join: 'round',
                   cap: 'round'
                 })
@@ -494,15 +513,20 @@ const BoardContent = React.memo(
               }
 
               g.rect(x, y, w, h)
-              g.fill({ color: 0, alpha: 0 })
-              // @ts-ignore - PIXI v8 stroke API
-              g.stroke({
-                width: penSize,
-                color: parseColor(penColor),
-                alpha: 1,
-                join: 'round',
-                cap: 'round'
+              g.fill({ 
+                color: fillColor === 'transparent' ? 0 : parseColor(fillColor), 
+                alpha: fillColor === 'transparent' ? 0 : fillOpacity 
               })
+              if (rectStrokeWidth > 0) {
+                // @ts-ignore - PIXI v8 stroke API
+                g.stroke({
+                  width: Math.max(rectStrokeWidth * viewport.scale, 1.5) / viewport.scale,
+                  color: parseColor(penColor),
+                  alpha: strokeOpacity,
+                  join: 'round',
+                  cap: 'round'
+                })
+              }
             }}
           />
         )}
@@ -864,6 +888,19 @@ const BoardContent = React.memo(
                       />
                     )
                   })}
+
+                  <Text
+                    text={`${Math.round(w)} × ${Math.round(h)}`}
+                    anchor={{ x: 0.5, y: 0 }}
+                    x={cx}
+                    y={maxY + 12 / viewport.scale}
+                    style={new PIXI.TextStyle({
+                      fill: accentColor,
+                      fontSize: 12 / viewport.scale,
+                      fontWeight: '600',
+                      fontFamily: 'Inter, sans-serif'
+                    })}
+                  />
                 </Container>
               )
             })()}

@@ -83,10 +83,23 @@ interface ToolbarProps {
   isSettingsPinned?: boolean
   penSize?: number
   setPenSize?: (s: number) => void
+  rectStrokeWidth?: number
+  setRectStrokeWidth?: (s: number) => void
   eraserSize?: number
   setEraserSize?: (s: number) => void
   textSize?: number
   setTextSize?: (s: number) => void
+  selectionSize?: number
+  setSelectionSize?: (s: number) => void
+  isSizeDisabled?: boolean
+  isStrokeDisabled?: boolean
+  isFillDisabled?: boolean
+  strokeColor?: string
+  fillColor?: string
+  onStrokeColorClick?: (rect: DOMRect) => void
+  onFillColorClick?: (rect: DOMRect) => void
+  onBgColorClick?: (rect: DOMRect) => void
+  activePicker?: 'stroke' | 'fill' | 'bg' | null
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -112,10 +125,23 @@ const Toolbar: React.FC<ToolbarProps> = ({
   isSettingsPinned,
   penSize,
   setPenSize,
+  rectStrokeWidth,
+  setRectStrokeWidth,
   eraserSize,
   setEraserSize,
   textSize,
-  setTextSize
+  setTextSize,
+  selectionSize,
+  setSelectionSize,
+  isSizeDisabled,
+  isStrokeDisabled,
+  isFillDisabled,
+  strokeColor,
+  fillColor,
+  onStrokeColorClick,
+  onFillColorClick,
+  onBgColorClick,
+  activePicker
 }) => {
   const containerRef = useRef<HTMLDivElement>(null)
 
@@ -127,21 +153,34 @@ const Toolbar: React.FC<ToolbarProps> = ({
     return () => el.removeEventListener('wheel', handleWheel)
   }, [])
   
-  let currentSize = penSize || 4
-  let min = 1
-  let max = 80
-  let setSizeFn: ((s: number) => void) | undefined = setPenSize
+  let currentSize = selectionSize ?? 0
+  let min = 0
+  let max = 300
+  let setSizeFn = setSelectionSize
+  let sizeDisabled = isSizeDisabled
 
-  if (mode === 'eraser') {
+  if (mode === 'pen') {
+    currentSize = penSize ?? 4
+    setSizeFn = setPenSize
+    sizeDisabled = false
+  } else if (mode === 'rect') {
+    currentSize = rectStrokeWidth ?? 2
+    setSizeFn = setRectStrokeWidth
+    sizeDisabled = false
+  } else if (mode === 'eraser') {
     currentSize = eraserSize || 24
     min = 4
-    max = 200
     setSizeFn = setEraserSize
+    sizeDisabled = false
   } else if (mode === 'text') {
     currentSize = textSize || 32
     min = 8
-    max = 200
     setSizeFn = setTextSize
+    sizeDisabled = false
+  }
+
+  if (sizeDisabled) {
+    currentSize = 0
   }
 
   return (
@@ -167,16 +206,33 @@ const Toolbar: React.FC<ToolbarProps> = ({
       onMouseDown={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.stopPropagation()}
     >
-      {setSizeFn && (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '4px', padding: '4px 0' }}>
+      <div 
+        style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center', 
+          marginBottom: '4px', 
+          padding: '4px 0',
+        }}
+      >
+        {/* Size Slider Block */}
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          alignItems: 'center',
+          opacity: sizeDisabled ? 0.3 : 1,
+          pointerEvents: sizeDisabled ? 'none' : 'auto',
+          transition: 'opacity 0.2s ease'
+        }}>
           <div style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)', marginBottom: '8px', fontWeight: 'bold' }}>
-             {currentSize}
+             {Math.round(currentSize)}
           </div>
           <input 
             type="range"
             min={min}
             max={max}
-            value={currentSize}
+            value={sizeDisabled ? 0 : currentSize}
+            disabled={sizeDisabled}
             onChange={(e) => setSizeFn && setSizeFn(Number(e.target.value))}
             style={{
               appearance: 'auto',
@@ -184,13 +240,75 @@ const Toolbar: React.FC<ToolbarProps> = ({
               WebkitAppearance: 'slider-vertical',
               height: '80px',
               width: '8px',
-              cursor: 'ns-resize',
+              cursor: sizeDisabled ? 'default' : 'ns-resize',
               margin: '0',
+              accentColor: sizeDisabled ? 'transparent' : '#d1d1d1'
             }}
           />
-          <div style={{ height: '1px', width: '20px', background: 'rgba(255,255,255,0.15)', marginTop: '12px' }} />
         </div>
-      )}
+
+        <div style={{ height: '1px', width: '20px', background: 'rgba(255,255,255,0.15)', marginTop: '12px', marginBottom: '12px' }} />
+        
+        {/* Color Indicators */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'center' }}>
+          <button
+            onClick={(e) => onStrokeColorClick?.(e.currentTarget.getBoundingClientRect())}
+            title="Stroke Color"
+            disabled={isStrokeDisabled}
+            style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '4px',
+              background: 'transparent',
+              border: `3px solid ${strokeColor || '#ffffff'}`,
+              cursor: isStrokeDisabled ? 'default' : 'pointer',
+              padding: 0,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              transition: 'all 0.1s',
+              boxSizing: 'border-box',
+              opacity: isStrokeDisabled ? 0.3 : 1,
+              pointerEvents: isStrokeDisabled ? 'none' : 'auto'
+            }}
+            onMouseDown={(e) => !isStrokeDisabled && (e.currentTarget.style.transform = 'scale(0.9)')}
+            onMouseUp={(e) => !isStrokeDisabled && (e.currentTarget.style.transform = 'scale(1)')}
+          />
+          <button
+            onClick={(e) => onFillColorClick?.(e.currentTarget.getBoundingClientRect())}
+            title="Fill Color"
+            disabled={isFillDisabled}
+            style={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '4px',
+              background: fillColor === 'transparent' ? 'none' : fillColor,
+              border: '2px solid rgba(255,255,255,0.2)',
+              cursor: isFillDisabled ? 'default' : 'pointer',
+              padding: 0,
+              boxShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              transition: 'all 0.1s',
+              position: 'relative',
+              overflow: 'hidden',
+              opacity: isFillDisabled ? 0.3 : 1,
+              pointerEvents: isFillDisabled ? 'none' : 'auto'
+            }}
+            onMouseDown={(e) => !isFillDisabled && (e.currentTarget.style.transform = 'scale(0.9)')}
+            onMouseUp={(e) => !isFillDisabled && (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            {fillColor === 'transparent' && (
+              <div style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                background: 'linear-gradient(45deg, transparent 45%, #ff4d4f 45%, #ff4d4f 55%, transparent 55%)'
+              }} />
+            )}
+          </button>
+        </div>
+
+        <div style={{ height: '1px', width: '20px', background: 'rgba(255,255,255,0.15)', marginTop: '12px' }} />
+      </div>
 
       <ToolButton
         active={mode === 'hand'}
@@ -380,7 +498,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <ToolButton
         active={false}
-        onClick={onSave}
+        onClick={(e) => {
+          // Blur any active element to ensure final data is captured
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur()
+          }
+          // Small delay to let blur/state settle
+          setTimeout(() => onSave(), 10)
+        }}
         icon={
           <div
             style={{
@@ -422,22 +547,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <div style={{ height: '1px', background: 'rgba(255,255,255,0.15)', margin: '0 6px' }} />
 
       <ToolButton
-        active={showColorPicker}
+        active={activePicker === 'bg'}
         onClick={(e) => {
           const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-          setShowColorPicker(!showColorPicker)
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setPickerAnchor(rect)
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
-          setShowColorPicker(true)
-          setShowPenSettings(false)
-          setShowEraserSettings(false)
-          setPickerAnchor(rect)
+          onBgColorClick?.(rect)
         }}
         icon={<Palette size={18} />}
         title="Background Color"

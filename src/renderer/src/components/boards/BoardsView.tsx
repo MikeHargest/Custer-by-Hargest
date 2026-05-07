@@ -143,6 +143,8 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null)
   const [isSavedFlash, setIsSavedFlash] = useState(false)
 
+  const [activePicker, setActivePicker] = useState<'stroke' | 'fill' | 'bg' | null>(null)
+
   const adjustAnchor = useCallback((rect: DOMRect | null) => {
     if (!rect || !containerRef.current) return null
     const board = containerRef.current.getBoundingClientRect()
@@ -159,7 +161,14 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     } as DOMRect
   }, [])
 
-  const handleSetPickerAnchor = useCallback((r: DOMRect | null) => setPickerAnchor(adjustAnchor(r)), [adjustAnchor])
+  const handleSetPickerAnchor = useCallback((r: DOMRect | null) => {
+    if (!r) {
+      setPickerAnchor(null)
+      setActivePicker(null)
+      return
+    }
+    setPickerAnchor(adjustAnchor(r))
+  }, [adjustAnchor])
   const handleSetPenSettingsAnchor = useCallback((r: DOMRect | null) => setPenSettingsAnchor(adjustAnchor(r)), [adjustAnchor])
   const handleSetEraserSettingsAnchor = useCallback((r: DOMRect | null) => setEraserSettingsAnchor(adjustAnchor(r)), [adjustAnchor])
 
@@ -182,28 +191,235 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   const lastPushedDataRef = useRef<string | null>(null)
   const isDirtyRef = useRef(false)
 
+
+  // --- Refs to avoid dependency churn on callbacks ---
+  // These stabilize handleManualSave and the autosave effect
+  // so they don't re-create on every viewport/elements change.
+  const elementsRef = useRef(elements)
+  useEffect(() => {
+    elementsRef.current = elements
+  }, [elements])
+  const selectedIdsRef = useRef(selectedIds)
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds
+  }, [selectedIds])
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    onChangeRef.current = onChange
+  }, [onChange])
+
+  // --- Hooks ---
+  const { undo, redo, pushToHistory, canUndo, canRedo } = useBoardHistory(elements, setElements)
+
+  const {
+    viewport,
+    setViewport,
+    isGrabbing,
+    onPointerDown: onNavPointerDown,
+    isNavigatingRef
+  } = useBoardNavigation(containerRef, mode, isSpaceDown)
+
+  // Keep a viewport ref for stable callbacks
+  const viewportRef = useRef(viewport)
+  useEffect(() => {
+    viewportRef.current = viewport
+  }, [viewport])
+
   // Settings
   const [penColor, setPenColor] = useState('#ffffff')
+  const [fillColor, setFillColor] = useState('transparent')
   const [penSize, setPenSizeState] = useState(4)
+  const [rectStrokeWidth, setRectStrokeWidthState] = useState(2)
   const [textSize, setTextSizeState] = useState(32)
   const [eraserSize, setEraserSizeState] = useState(24)
+
+  const [strokeOpacityState, setStrokeOpacityState] = useState(1)
+  const [fillOpacityState, setFillOpacityState] = useState(1)
+
+  const isSizeDisabled = useMemo(() => {
+    if (selectedIds.length === 0) return false
+    // Slider is disabled if NO selectable stroke elements (path/rect) are in selection
+    return !elements.some(el => selectedIds.includes(el.id) && (el.type === 'path' || el.type === 'rect'))
+  }, [elements, selectedIds])
+
+  const isStrokeDisabled = useMemo(() => {
+    if (selectedIds.length === 0) return false
+    return !elements.some(el => selectedIds.includes(el.id) && (el.type === 'path' || el.type === 'rect'))
+  }, [elements, selectedIds])
+
+  const isFillDisabled = useMemo(() => {
+    if (selectedIds.length === 0) return false
+    return !elements.some(el => selectedIds.includes(el.id) && (el.type === 'rect' || el.type === 'text' || el.type === 'path'))
+  }, [elements, selectedIds])
+
+  const selectionSize = useMemo(() => {
+    if (isSizeDisabled) return 0
+    if (selectedIds.length === 0) {
+      if (mode === 'pen') return penSize
+      if (mode === 'rect') return rectStrokeWidth
+      return penSize
+    }
+    // If multiple, show size of the first one that is a path or rect
+    const targetEl = elements.find((e) => selectedIds.includes(e.id) && (e.type === 'path' || e.type === 'rect'))
+    if (!targetEl) return penSize
+    if (targetEl.type === 'path') return targetEl.size || 0
+    if (targetEl.type === 'rect') return targetEl.strokeWidth || 0
+    return penSize
+  }, [elements, selectedIds, penSize, rectStrokeWidth, isSizeDisabled, mode])
+
+  const strokeColor = useMemo(() => {
+    if (selectedIds.length === 0) return penColor
+    const el = elements.find(e => selectedIds.includes(e.id) && (e.type === 'path' || e.type === 'rect'))
+    if (!el) return penColor
+    if (el.type === 'path') return el.color || '#ffffff'
+    if (el.type === 'rect') return el.strokeColor || '#ffffff'
+    return penColor
+  }, [elements, selectedIds, penColor])
+
+  const currentFillColor = useMemo(() => {
+    if (selectedIds.length === 0) return fillColor
+    const el = elements.find(e => selectedIds.includes(e.id) && (e.type === 'rect' || e.type === 'text' || e.type === 'path'))
+    if (!el) return fillColor
+    if (el.type === 'rect') return el.color || 'transparent'
+    if (el.type === 'text') return el.color || '#ffffff'
+    if (el.type === 'path') return el.fillColor || 'transparent'
+    return fillColor
+  }, [elements, selectedIds, fillColor])
+
+  const strokeOpacity = useMemo(() => {
+    if (selectedIds.length === 0) return strokeOpacityState
+    const el = elements.find(e => selectedIds.includes(e.id) && (e.type === 'path' || e.type === 'rect'))
+    if (!el) return strokeOpacityState
+    if (el.type === 'path') return el.opacity ?? 1
+    if (el.type === 'rect') return el.strokeOpacity ?? 1
+    return strokeOpacityState
+  }, [elements, selectedIds, strokeOpacityState])
+
+  const fillOpacity = useMemo(() => {
+    if (selectedIds.length === 0) return fillOpacityState
+    const el = elements.find(e => selectedIds.includes(e.id) && (e.type === 'rect' || e.type === 'text' || e.type === 'path'))
+    if (!el) return fillOpacityState
+    if (el.type === 'path') return el.fillOpacity ?? 1
+    return el.opacity ?? 1
+  }, [elements, selectedIds, fillOpacityState])
+
+  const setSelectionSize = useCallback(
+    (val: number) => {
+      if (selectedIds.length === 0) {
+        if (mode === 'pen') setPenSizeState(val)
+        else if (mode === 'rect') setRectStrokeWidthState(val)
+        return
+      }
+
+      // If we have selection, we update based on what's selected
+      const hasPath = elements.some(el => selectedIds.includes(el.id) && el.type === 'path')
+      const hasRect = elements.some(el => selectedIds.includes(el.id) && el.type === 'rect')
+
+      if (!hasPath && !hasRect) return
+
+      pushToHistory()
+      setElements((prev) =>
+        prev.map((el) => {
+          if (!selectedIds.includes(el.id)) return el
+          if (el.type === 'path') return { ...el, size: val }
+          if (el.type === 'rect') return { ...el, strokeWidth: val }
+          return el
+        })
+      )
+      
+      // Also update global state for future objects if the specific type was in selection
+      if (hasPath) setPenSizeState(val)
+      if (hasRect) setRectStrokeWidthState(val)
+    },
+    [selectedIds, elements, setElements, pushToHistory, mode]
+  )
+
+  const handleStrokeOpacityChange = useCallback((opacity: number) => {
+    setStrokeOpacityState(opacity)
+    if (selectedIds.length > 0) {
+      setElements(prev => prev.map(el => {
+        if (!selectedIds.includes(el.id)) return el
+        if (el.type === 'path') return { ...el, opacity }
+        if (el.type === 'rect') return { ...el, strokeOpacity: opacity }
+        return el
+      }))
+    }
+  }, [selectedIds, setElements])
+
+  const handleFillOpacityChange = useCallback((opacity: number) => {
+    setFillOpacityState(opacity)
+    if (selectedIds.length > 0) {
+      setElements(prev => prev.map(el => {
+        if (!selectedIds.includes(el.id)) return el
+        if (el.type === 'rect') return { ...el, opacity }
+        if (el.type === 'text') return { ...el, opacity }
+        if (el.type === 'path') return { ...el, fillOpacity: opacity }
+        return el
+      }))
+    }
+  }, [selectedIds, setElements])
+
+  const handleStrokeColorChange = useCallback((color: string) => {
+    setPenColor(color)
+    if (selectedIds.length > 0) {
+      setElements(prev => prev.map(el => {
+        if (!selectedIds.includes(el.id)) return el
+        if (el.type === 'path') return { ...el, color }
+        if (el.type === 'rect') return { ...el, strokeColor: color }
+        return el
+      }))
+    }
+  }, [selectedIds, setElements])
+
+  const handleFillColorChange = useCallback((color: string) => {
+    setFillColor(color)
+    if (selectedIds.length > 0) {
+      setElements(prev => prev.map(el => {
+        if (!selectedIds.includes(el.id)) return el
+        if (el.type === 'rect') return { ...el, color }
+        if (el.type === 'text') return { ...el, color }
+        if (el.type === 'path') return { ...el, fillColor: color }
+        return el
+      }))
+    }
+  }, [selectedIds, setElements])
 
   const setPenSize = useCallback(
     (val: number) => {
       setPenSizeState(val)
-      if (selectedIds.length > 0) {
+      const hasPaths = elements.some(el => selectedIds.includes(el.id) && el.type === 'path')
+      if (selectedIds.length > 0 && hasPaths) {
+        pushToHistory()
         setElements((prev) =>
           prev.map((el) => {
-            if (selectedIds.includes(el.id)) {
-              if (el.type === 'path') return { ...el, size: val }
-              if (el.type === 'rect') return { ...el, strokeWidth: val }
+            if (selectedIds.includes(el.id) && el.type === 'path') {
+              return { ...el, size: val }
             }
             return el
           })
         )
       }
     },
-    [selectedIds, setElements]
+    [selectedIds, elements, setElements, pushToHistory]
+  )
+
+  const setRectStrokeWidth = useCallback(
+    (val: number) => {
+      setRectStrokeWidthState(val)
+      const hasRects = elements.some(el => selectedIds.includes(el.id) && el.type === 'rect')
+      if (selectedIds.length > 0 && hasRects) {
+        pushToHistory()
+        setElements((prev) =>
+          prev.map((el) => {
+            if (selectedIds.includes(el.id) && el.type === 'rect') {
+              return { ...el, strokeWidth: val }
+            }
+            return el
+          })
+        )
+      }
+    },
+    [selectedIds, elements, setElements, pushToHistory]
   )
 
   const setTextSize = useCallback(
@@ -240,39 +456,6 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   const processingCount = useMemo(() => elements.filter((el) => el.isProcessing).length, [elements])
   const isSyncing = processingCount > 0
 
-  // --- Refs to avoid dependency churn on callbacks ---
-  // These stabilize handleManualSave and the autosave effect
-  // so they don't re-create on every viewport/elements change.
-  const elementsRef = useRef(elements)
-  useEffect(() => {
-    elementsRef.current = elements
-  }, [elements])
-  const selectedIdsRef = useRef(selectedIds)
-  useEffect(() => {
-    selectedIdsRef.current = selectedIds
-  }, [selectedIds])
-  const onChangeRef = useRef(onChange)
-  useEffect(() => {
-    onChangeRef.current = onChange
-  }, [onChange])
-
-  // --- Hooks ---
-  const { undo, redo, pushToHistory, canUndo, canRedo } = useBoardHistory(elements, setElements)
-
-  const {
-    viewport,
-    setViewport,
-    isGrabbing,
-    onPointerDown: onNavPointerDown,
-    isNavigatingRef
-  } = useBoardNavigation(containerRef, mode, isSpaceDown)
-
-  // Keep a viewport ref for stable callbacks
-  const viewportRef = useRef(viewport)
-  useEffect(() => {
-    viewportRef.current = viewport
-  }, [viewport])
-
   const { handleDrop } = useBoardAssets({
     boardId,
     boardDir,
@@ -287,13 +470,18 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     activePath,
     activeRect,
     onPointerDown: onToolPointerDown,
-    handleTextCreation
+    handleTextCreation,
+    lastPathPoint
   } = useBoardTools({
     mode,
     setMode,
     viewport,
     penColor,
+    fillColor,
     penSize,
+    rectStrokeWidth,
+    strokeOpacity,
+    fillOpacity,
     eraserSize,
     textSize,
     setElements,
@@ -472,13 +660,52 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   // Mark dirty on any change
   useEffect(() => {
     isDirtyRef.current = true
-  }, [elements.length, viewport])
+    
+    // Decrease debounce to 50ms for snappier response, 
+    // but also handle immediate sync on elements/viewport changes that are final
+    const timer = setTimeout(() => {
+      const els = elements.map((el) => {
+        const { 
+          id, type, x, y, width, height, rotation, url, title, 
+          points, size, color, opacity, strokeColor, strokeWidth, strokeOpacity, groupId,
+          baseWidth, baseHeight, text, fontSize, fontWeight, textAlign
+        } = el
+        
+        return {
+          id, type, x, y, width, height, rotation, url, title,
+          points, size, color, opacity, strokeColor, strokeWidth, strokeOpacity, groupId,
+          baseWidth, baseHeight, text, fontSize, fontWeight, textAlign
+        }
+      })
+      
+      const dataStr = JSON.stringify({ elements: els, viewport: viewport })
+      if (dataStr !== lastPushedDataRef.current) {
+        lastPushedDataRef.current = dataStr
+        onChange(dataStr)
+      }
+    }, 50) 
+    
+    return () => clearTimeout(timer)
+  }, [elements, viewport, onChange])
 
   // Autosave (uses refs → stable, never re-creates the interval)
   useEffect(() => {
     const interval = setInterval(() => {
       if (!isDirtyRef.current) return
-      const els = elementsRef.current.map(({ isProcessing: _ip, ...rest }) => rest)
+      // We already sync in the elements/viewport effect, 
+      // but keeping this as a safety fallback.
+      const els = elementsRef.current.map((el) => {
+        const { 
+          id, type, x, y, width, height, rotation, url, title, 
+          points, size, color, strokeColor, strokeWidth, groupId,
+          baseWidth, baseHeight, text, fontSize, fontWeight, textAlign
+        } = el
+        return {
+          id, type, x, y, width, height, rotation, url, title,
+          points, size, color, strokeColor, strokeWidth, groupId,
+          baseWidth, baseHeight, text, fontSize, fontWeight, textAlign
+        }
+      })
       const dataStr = JSON.stringify({ elements: els, viewport: viewportRef.current })
       if (dataStr !== lastPushedDataRef.current) {
         lastPushedDataRef.current = dataStr
@@ -488,13 +715,6 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     }, 10000)
     return () => {
       clearInterval(interval)
-      // CRITICAL: Save viewport + elements on unmount (note switch, etc)
-      const els = elementsRef.current.map(({ isProcessing: _ip, ...rest }) => rest)
-      const dataStr = JSON.stringify({ elements: els, viewport: viewportRef.current })
-      if (dataStr !== lastPushedDataRef.current) {
-        lastPushedDataRef.current = dataStr
-        onChangeRef.current(dataStr)
-      }
     }
   }, [])
 
@@ -617,6 +837,32 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     fitToContent
   ])
 
+  useEffect(() => {
+    if (!pickerAnchor) return
+    const handleGlobalClick = (e: MouseEvent) => {
+      // If we clicked on the toolbar buttons themselves, let their own onClick handle it
+      // This prevents immediate closing when trying to open
+      if (activePicker) {
+        const target = e.target as HTMLElement
+        if (target.closest('.tool-btn') || target.closest('button')) {
+           // If it's the color buttons, they are handled by their own onClick
+           return
+        }
+      }
+      setShowColorPicker(false)
+      setActivePicker(null)
+      setPickerAnchor(null)
+    }
+    // Small timeout to avoid catching the current click that opens the picker
+    const timer = setTimeout(() => {
+      window.addEventListener('mousedown', handleGlobalClick)
+    }, 10)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('mousedown', handleGlobalClick)
+    }
+  }, [pickerAnchor, activePicker])
+
   // --- Event Handlers ---
   const handleMouseDown = useCallback((e: React.MouseEvent): void => {
     isBoardActiveRef.current = true
@@ -714,10 +960,40 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         isSettingsPinned={isSettingsPinned}
         penSize={penSize}
         setPenSize={setPenSize}
+        rectStrokeWidth={rectStrokeWidth}
+        setRectStrokeWidth={setRectStrokeWidth}
         eraserSize={eraserSize}
         setEraserSize={setEraserSize}
         textSize={textSize}
         setTextSize={setTextSize}
+        selectionSize={selectionSize}
+        setSelectionSize={setSelectionSize}
+        isSizeDisabled={isSizeDisabled}
+        isStrokeDisabled={isStrokeDisabled}
+        isFillDisabled={isFillDisabled}
+        strokeColor={strokeColor}
+        fillColor={currentFillColor}
+        onStrokeColorClick={(r) => {
+          pushToHistory()
+          setActivePicker('stroke')
+          handleSetPickerAnchor(r)
+          setShowPenSettings(false)
+          setShowEraserSettings(false)
+        }}
+        onFillColorClick={(r) => {
+          pushToHistory()
+          setActivePicker('fill')
+          handleSetPickerAnchor(r)
+          setShowPenSettings(false)
+          setShowEraserSettings(false)
+        }}
+        onBgColorClick={(r) => {
+          setActivePicker('bg')
+          handleSetPickerAnchor(r)
+          setShowPenSettings(false)
+          setShowEraserSettings(false)
+        }}
+        activePicker={activePicker}
       />
 
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
@@ -743,7 +1019,11 @@ const BoardsView: React.FC<BoardsViewProps> = ({
               activePath={activePath}
               activeRect={activeRect}
               penColor={penColor}
+              fillColor={fillColor}
               penSize={penSize}
+              rectStrokeWidth={rectStrokeWidth}
+              strokeOpacity={strokeOpacity}
+              fillOpacity={fillOpacity}
               viewport={viewport}
               selectedIds={selectedIds}
               onSelect={setSelectedIds}
@@ -852,16 +1132,17 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         />
       )}
 
-      {showColorPicker && pickerAnchor && (
+      {pickerAnchor && (
         <div
+          onMouseDown={(e) => e.stopPropagation()}
           style={{
             position: 'absolute',
             zIndex: 10000,
-            top: pickerAnchor.bottom + 10,
-            left: pickerAnchor.left,
+            top: `${pickerAnchor.top}px`,
+            left: `${pickerAnchor.right + 10}px`,
             background: 'var(--card-bg)',
             borderRadius: '10px',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             padding: '12px',
             boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
             width: '260px',
@@ -869,10 +1150,34 @@ const BoardsView: React.FC<BoardsViewProps> = ({
           }}
         >
           <ColorPicker
-            color={theme?.boardBg || '#1b1b1b'}
-            onChange={(c) => setTheme && setTheme({ ...theme!, boardBg: c })}
-            onClose={() => setShowColorPicker(false)}
+            color={
+              activePicker === 'stroke' ? strokeColor :
+              activePicker === 'fill' ? currentFillColor :
+              theme?.boardBg || '#1b1b1b'
+            }
+            onChange={(c) => {
+              if (activePicker === 'stroke') handleStrokeColorChange(c)
+              else if (activePicker === 'fill') handleFillColorChange(c)
+              else if (activePicker === 'bg') setTheme && setTheme({ ...theme!, boardBg: c })
+            }}
+            onClose={() => {
+              setShowColorPicker(false)
+              setActivePicker(null)
+              setPickerAnchor(null)
+            }}
             inline={true}
+            opacity={
+              activePicker === 'stroke' ? strokeOpacity :
+              activePicker === 'fill' ? fillOpacity :
+              1
+            }
+            onOpacityChange={(a) => {
+              if (activePicker === 'stroke') {
+                handleStrokeOpacityChange(a)
+              } else if (activePicker === 'fill') {
+                handleFillOpacityChange(a)
+              }
+            }}
           />
         </div>
       )}

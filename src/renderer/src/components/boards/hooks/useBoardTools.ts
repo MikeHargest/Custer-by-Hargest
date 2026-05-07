@@ -8,7 +8,11 @@ interface UseBoardToolsProps {
   setMode: (mode: any) => void
   viewport: Viewport
   penColor: string
+  fillColor: string
   penSize: number
+  rectStrokeWidth: number
+  strokeOpacity: number
+  fillOpacity: number
   eraserSize: number
   textSize: number
   setElements: React.Dispatch<React.SetStateAction<BoardElement[]>>
@@ -23,7 +27,11 @@ export const useBoardTools = ({
   setMode,
   viewport,
   penColor,
+  fillColor,
   penSize,
+  rectStrokeWidth,
+  strokeOpacity,
+  fillOpacity,
   eraserSize,
   textSize,
   setElements,
@@ -215,7 +223,10 @@ export const useBoardTools = ({
           // @ts-ignore
           baseWidth: w, baseHeight: h,
           points: simplified.map(pt => ({ x: pt.x - cx, y: pt.y - cy, width: pt.width })),
-          color: penColor, size: penSize, url: ''
+          color: penColor, size: penSize, url: '',
+          opacity: strokeOpacity,
+          fillColor: fillColor,
+          fillOpacity: fillOpacity
         }])
         lastPathPoint.current = { x: currentPath[currentPath.length - 1].x, y: currentPath[currentPath.length - 1].y }
       }
@@ -233,7 +244,8 @@ export const useBoardTools = ({
       pushToHistory()
       setElements(prev => [...prev, {
         id: nanoid(), type: 'rect', x: fX + w/2, y: fY + h/2, width: w, height: h,
-        url: '', color: 'transparent', strokeColor: penColor, strokeWidth: penSize
+        url: '', color: fillColor, strokeColor: penColor, strokeWidth: rectStrokeWidth,
+        opacity: fillOpacity, strokeOpacity: strokeOpacity
       }])
     }
     setActiveRect(null)
@@ -245,7 +257,9 @@ export const useBoardTools = ({
     const newTextEl: BoardElement = {
       id: nanoid(), type: 'text', x, y,
       width: Math.max(200, textSize * 5), height: Math.max(40, textSize * 1.5),
-      url: '', text: '', fontSize: textSize, fontWeight: 400, textAlign: 'left', color: penColor
+      url: '', text: '', fontSize: textSize, fontWeight: 400, textAlign: 'left', 
+      color: fillColor === 'transparent' ? '#ffffff' : fillColor,
+      opacity: fillOpacity
     }
     pushToHistory()
     setElements(prev => [...prev.map(el => (el.type === 'text' && !el.text?.trim() ? { ...el, text: 'text' } : el)), newTextEl])
