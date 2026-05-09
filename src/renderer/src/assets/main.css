@@ -104,18 +104,19 @@ body {
 .app-body {
   display: flex;
   flex: 1;
-  gap: 0;
+  gap: 2px;
+  padding: 2px 0 0 0;
   overflow: hidden;
 }
 
 .main-content {
   flex: 1;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 40px 2px 1fr;
+  gap: 0;
   overflow: hidden;
   position: relative;
-  background-color: transparent;
-  gap: 0;
 }
 
 .header {
@@ -337,17 +338,6 @@ body {
   align-items: center;
 }
 
-.views-wrapper {
-  background-color: var(--card-bg);
-  border-radius: 0;
-  border: none;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  padding: 0;
-}
-
 .pin-btn {
   display: flex;
   align-items: center;
@@ -470,23 +460,30 @@ body {
 }
 
 /* --- CONTENT TOOLBAR --- */
-.content-toolbar {
+.content-toolbar-left {
+  grid-area: 1 / 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  height: 38px;
-  min-height: 38px;
-  padding: 0 10px;
+  gap: 4px;
   background: var(--card-bg);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  flex-shrink: 0;
-  gap: 8px;
+  border-radius: var(--radius-md);
+  padding: 0 8px;
+  height: 40px;
+  margin-right: 2px;
+  position: relative;
 }
 
-.content-toolbar-left {
+.content-toolbar-right {
+  grid-area: 1 / 2 / 3 / 3;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 12px;
+  padding: 0 12px;
+  height: 42px;
+  background: var(--card-bg);
+  border-top-right-radius: 0;
+  border-top-left-radius: var(--radius-lg);
+  flex-shrink: 0;
 }
 
 .content-toolbar-separator {
@@ -497,18 +494,25 @@ body {
   flex-shrink: 0;
 }
 
-.content-toolbar-right {
+.views-wrapper {
+  grid-area: 3 / 1 / 4 / 3;
+  flex: 1;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  background: var(--card-bg);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  border-top-left-radius: var(--radius-lg);
 }
 
 .view-icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 28px;
+  width: 34px;
+  height: 30px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -986,8 +990,11 @@ body {
 /* Sidebar Styles */
 .task-sidebar {
   height: 100%;
-  background-color: transparent;
-  border-right: none;
+  background-color: var(--card-bg);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  border-top-right-radius: var(--radius-lg);
+  border-bottom-right-radius: 0;
   transition:
     width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);

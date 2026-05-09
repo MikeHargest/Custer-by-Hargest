@@ -7,11 +7,13 @@ import {
   MoreVertical,
   RefreshCw,
   Square,
-  Check,
+  Check,story
+  
   Calendar,
   Layout,
   Info,
-  PanelRight
+  PanelRight,
+  ArrowLeft
 } from 'lucide-react'
 import { Project, PipelineStage, PipelineItem, PipelineData } from '../types'
 import ColorPicker from './ColorPicker'
@@ -75,35 +77,84 @@ const TinyButton = ({
 // --- Main PipelineView ---
 interface PipelineViewProps {
   project: Project
+  allProjects: Project[] // Add allProjects to find subprojects
   onUpdate: (id: string, updates: Partial<Project>) => void
+  onSelectProject?: (id: string) => void
   isVisible?: boolean
 }
 
 export default function PipelineView({
   project,
+  allProjects,
   onUpdate,
+  onSelectProject,
   isVisible
 }: PipelineViewProps): React.ReactElement {
+  // Find subprojects of the current project recursively
+  const subProjects = useMemo(() => {
+    const subs: Project[] = []
+    const traverse = (p: Project) => {
+      if (p.subprojects && p.subprojects.length > 0) {
+        p.subprojects.forEach(sp => {
+          subs.push(sp)
+          traverse(sp)
+        })
+      }
+    }
+    traverse(project)
+    return subs
+  }, [project])
+
+  // Track which project's pipeline we are viewing (default to current)
+  const [activeProjectId, setActiveProjectId] = useState(project.id)
+
+  // Reset activeProjectId when the main project changes
+  useEffect(() => {
+    setActiveProjectId(project.id)
+  }, [project.id])
+
+  // Get the project currently being viewed in the pipeline
+  const currentViewingProject = useMemo(() => {
+    if (activeProjectId === project.id) return project
+    // Try to find in subProjects first (which are already traversed)
+    const foundInSubs = subProjects.find(p => p.id === activeProjectId)
+    if (foundInSubs) return foundInSubs
+    // Fallback to allProjects if not found in immediate sub-tree
+    return allProjects.find(p => p.id === activeProjectId) || project
+  }, [activeProjectId, project, subProjects, allProjects])
+
   // --- Migration and Initialization ---
   useEffect(() => {
-    if (project.pipeline && (!project.pipelines || project.pipelines.length === 0)) {
+    if (currentViewingProject.pipeline && (!currentViewingProject.pipelines || currentViewingProject.pipelines.length === 0)) {
       const defaultPipeline: PipelineData = {
         id: 'default',
         name: 'Default Pipeline',
-        stages: project.pipeline
+        stages: currentViewingProject.pipeline
       }
-      onUpdate(project.id, {
+      onUpdate(currentViewingProject.id, {
         pipelines: [defaultPipeline],
         activePipelineId: 'default',
         pipeline: undefined
       })
-    } else if (project.pipelines && project.pipelines.length > 0 && !project.activePipelineId) {
-      onUpdate(project.id, { activePipelineId: project.pipelines[0].id })
+    } else if (currentViewingProject.pipelines && currentViewingProject.pipelines.length > 0 && !currentViewingProject.activePipelineId) {
+      onUpdate(currentViewingProject.id, { activePipelineId: currentViewingProject.pipelines[0].id })
+    } else if (!currentViewingProject.pipelines || currentViewingProject.pipelines.length === 0) {
+      // Auto-create first pipeline if none exists
+      const defaultPipeline: PipelineData = {
+        id: 'default',
+        name: 'Default Pipeline',
+        stages: []
+      }
+      onUpdate(currentViewingProject.id, {
+        pipelines: [defaultPipeline],
+        activePipelineId: 'default'
+      })
     }
-  }, [project.id, project.pipeline, project.pipelines, project.activePipelineId, onUpdate])
+  }, [currentViewingProject.id, currentViewingProject.pipeline, currentViewingProject.pipelines, currentViewingProject.activePipelineId, onUpdate])
 
-  const pipelines = useMemo(() => project.pipelines || [], [project.pipelines])
-  const activePipelineId = project.activePipelineId || (pipelines.length > 0 ? pipelines[0].id : '')
+  const pipelines = useMemo(() => currentViewingProject.pipelines || [], [currentViewingProject.pipelines])
+
+  const activePipelineId = currentViewingProject.activePipelineId || (pipelines.length > 0 ? pipelines[0].id : '')
   const activePipeline = useMemo(
     () => pipelines.find((p) => p.id === activePipelineId) || pipelines[0],
     [pipelines, activePipelineId]
@@ -118,11 +169,11 @@ export default function PipelineView({
     stageId: string
     rect: DOMRect
   } | null>(null)
-  const [selectedStageId, setSelectedStageId] = useState<string | null>(project.activePipelineStageId || null)
+  const [selectedStageId, setSelectedStageId] = useState<string | null>(currentViewingProject.activePipelineStageId || null)
 
   useEffect(() => {
-    setSelectedStageId(project.activePipelineStageId || null)
-  }, [project.activePipelineStageId])
+    setSelectedStageId(currentViewingProject.activePipelineStageId || null)
+  }, [currentViewingProject.activePipelineStageId])
 
 
   // --- AUTO-RESIZE TEXTAREAS ON MOUNT/CHANGE ---
@@ -190,7 +241,7 @@ export default function PipelineView({
       name: `Page ${pipelines.length + 1}`,
       stages: []
     }
-    onUpdate(project.id, {
+    onUpdate(currentViewingProject.id, {
       pipelines: [...pipelines, newPipeline],
       activePipelineId: newPipeline.id
     })
@@ -205,7 +256,7 @@ export default function PipelineView({
           ? newPipelines[0].id
           : ''
         : activePipelineId
-    onUpdate(project.id, { pipelines: newPipelines, activePipelineId: newActiveId })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines, activePipelineId: newActiveId })
   }
 
   const startEditingPipeline = (e: React.MouseEvent, p: PipelineData): void => {
@@ -219,12 +270,11 @@ export default function PipelineView({
     const newPipelines = pipelines.map((p) =>
       p.id === editingPipelineId ? { ...p, name: pipelineNameValue || 'Untitled' } : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
     setEditingPipelineId(null)
   }
 
-  // --- STAGE CRUD ---
-  const handleAddStage = (): void => {
+  const handleAddStage = useCallback((): void => {
     if (!activePipeline) return
     const newStage: PipelineStage = {
       id: Math.random().toString(36).substr(2, 9),
@@ -234,8 +284,19 @@ export default function PipelineView({
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId ? { ...p, stages: [...p.stages, newStage] } : p
     )
-    onUpdate(project.id, { pipelines: newPipelines, activePipelineStageId: newStage.id })
-  }
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines, activePipelineStageId: newStage.id })
+  }, [activePipeline, activePipelineId, pipelines, onUpdate, currentViewingProject.id])
+
+  useEffect(() => {
+    const handleAddStageEvent = () => handleAddStage()
+    const handleToggleSidebarEvent = () => setShowSidebar(prev => !prev)
+    window.addEventListener('pipeline-add-stage', handleAddStageEvent)
+    window.addEventListener('pipeline-toggle-sidebar', handleToggleSidebarEvent)
+    return () => {
+      window.removeEventListener('pipeline-add-stage', handleAddStageEvent)
+      window.removeEventListener('pipeline-toggle-sidebar', handleToggleSidebarEvent)
+    }
+  }, [handleAddStage])
 
   const handleUpdateStage = (stageId: string, name: string): void => {
     if (!activePipeline) return
@@ -244,7 +305,7 @@ export default function PipelineView({
         ? { ...p, stages: p.stages.map((s) => (s.id === stageId ? { ...s, name } : s)) }
         : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
   }
 
   const handleDeleteStage = (stageId: string): void => {
@@ -252,7 +313,7 @@ export default function PipelineView({
     const newPipelines = pipelines.map((p) =>
       p.id === activePipelineId ? { ...p, stages: p.stages.filter((s) => s.id !== stageId) } : p
     )
-    onUpdate(project.id, {
+    onUpdate(currentViewingProject.id, {
       pipelines: newPipelines,
       ...(stageId === selectedStageId ? { activePipelineStageId: undefined } : {})
     })
@@ -276,7 +337,7 @@ export default function PipelineView({
         }
         : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
   }
 
   const handleUpdateItem = (
@@ -297,7 +358,7 @@ export default function PipelineView({
         }
         : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
   }
 
   const handleDeleteItem = (stageId: string, itemId: string): void => {
@@ -312,7 +373,7 @@ export default function PipelineView({
         }
         : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
   }
 
   // --- DRAG AND DROP ---
@@ -492,6 +553,11 @@ export default function PipelineView({
     [activePipeline, selectedStageId]
   )
 
+  const parentProject = useMemo(() => {
+    if (!project.parentId) return null
+    return allProjects.find(p => p.id === project.parentId)
+  }, [project.parentId, allProjects])
+
   const handleUpdateStageDetails = (stageId: string, updates: Partial<PipelineStage>) => {
     if (!activePipeline) return
     const newPipelines = pipelines.map(p =>
@@ -499,7 +565,7 @@ export default function PipelineView({
         ? { ...p, stages: p.stages.map(s => s.id === stageId ? { ...s, ...updates } : s) }
         : p
     )
-    onUpdate(project.id, { pipelines: newPipelines })
+    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
   }
 
 
@@ -609,188 +675,6 @@ export default function PipelineView({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-          {/* Header bar */}
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: '16px',
-              padding: '0 10px',
-              height: '45px',
-              boxSizing: 'border-box',
-              flexShrink: 0
-            }}
-          >
-            {/* Pipeline tabs */}
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                overflowX: 'auto',
-                scrollbarWidth: 'none'
-              }}
-              onWheel={(e) => {
-                if (e.deltaY !== 0) {
-                  e.currentTarget.scrollLeft += e.deltaY
-                }
-              }}
-            >
-              {pipelines.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => onUpdate(project.id, { activePipelineId: p.id })}
-                  onMouseEnter={() => setHoveredPipelineId(p.id)}
-                  onMouseLeave={() => setHoveredPipelineId(null)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    whiteSpace: 'nowrap',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    background: p.id === activePipelineId ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    border: `1px solid ${p.id === activePipelineId ? 'rgba(255,255,255,0.1)' : 'transparent'}`,
-                    color:
-                      p.id === activePipelineId ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                  }}
-                >
-                  {editingPipelineId === p.id ? (
-                    <input
-                      autoFocus
-                      value={pipelineNameValue}
-                      onChange={(e) => setPipelineNameValue(e.target.value)}
-                      onBlur={savePipelineName}
-                      onKeyDown={(e) => e.key === 'Enter' && savePipelineName()}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'inherit',
-                        fontSize: 'inherit',
-                        fontWeight: 'inherit',
-                        padding: 0,
-                        width: '100px',
-                        outline: 'none'
-                      }}
-                    />
-                  ) : (
-                    <>
-                      <span onDoubleClick={(e) => startEditingPipeline(e, p)}>{p.name}</span>
-                      <div
-                        style={{
-                          display: 'flex',
-                          gap: '4px',
-                          opacity: (p.id === activePipelineId && hoveredPipelineId === p.id) ? 1 : 0,
-                          pointerEvents: (p.id === activePipelineId && hoveredPipelineId === p.id) ? 'auto' : 'none',
-                          transition: 'opacity 0.2s'
-                        }}
-                      >
-                        <button
-                          onClick={(e) => handleDeletePipeline(e, p.id)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            padding: 0,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'var(--text-secondary)'
-                          }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.color = 'var(--danger)')
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.color = 'var(--text-secondary)')
-                          }
-                          title="Delete"
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-              <button
-                onClick={handleAddPipeline}
-                style={{ ...editBtnStyle, padding: '4px 6px' }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                  e.currentTarget.style.color = 'var(--text-primary)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = 'var(--text-secondary)'
-                }}
-                title="Add Page"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-
-            {/* Add stage button */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
-              <button
-                onClick={handleAddStage}
-                disabled={!activePipeline}
-                style={{
-                  ...editBtnStyle,
-                  padding: '4px 10px',
-                  opacity: !activePipeline ? 0.3 : 1,
-                  pointerEvents: !activePipeline ? 'none' : 'auto'
-                }}
-                onMouseEnter={(e) => {
-                  if (!activePipeline) return
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
-                  e.currentTarget.style.color = 'var(--text-primary)'
-                }}
-                onMouseLeave={(e) => {
-                  if (!activePipeline) return
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = 'var(--text-secondary)'
-                }}
-              >
-                <PlusCircle size={14} style={{ marginRight: '4px' }} /> Add Stage
-              </button>
-              <button
-                onClick={() => setShowSidebar(!showSidebar)}
-                title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-                style={{
-                  ...editBtnStyle,
-                  padding: '4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: showSidebar ? 0.6 : 0.3,
-                  flexShrink: 0,
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-secondary)',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  marginLeft: '4px'
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.opacity = '1'
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.3'
-                  e.currentTarget.style.background = 'transparent'
-                }}
-              >
-                <PanelRight size={18} />
-              </button>
-            </div>
-          </div>
-
           {/* Stages area */}
           <div
             className="pipeline-stages custom-scrollbar"
@@ -817,14 +701,92 @@ export default function PipelineView({
                   alignItems: 'center',
                   justifyContent: 'center',
                   padding: '40px',
-                  color: 'rgba(255, 255, 255, 0.25)'
+                  color: 'rgba(255, 255, 255, 0.25)',
+                  gap: '24px'
                 }}
               >
-                <p style={{ margin: 0, fontSize: '13px' }}>
-                  {!activePipeline
-                    ? 'Create a pipeline to get started.'
-                    : 'No stages in this pipeline. Click "Add Stage" above.'}
-                </p>
+                <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+                  {parentProject && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        if (onSelectProject) onSelectProject(parentProject.id)
+                      }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '8px 16px',
+                        background: 'rgba(255,255,255,0.03)',
+                        border: '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: '8px',
+                        color: 'var(--text-secondary)',
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                        e.currentTarget.style.color = 'var(--text-primary)'
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+                        e.currentTarget.style.color = 'var(--text-secondary)'
+                      }}
+                    >
+                      <ArrowLeft size={14} />
+                      Back to {parentProject.name}
+                    </button>
+                  )}
+                  <p style={{ margin: 0, fontSize: '13px' }}>
+                    {!activePipeline
+                      ? 'Create a pipeline to get started.'
+                      : 'No stages in this pipeline. Click "Add Stage" above.'}
+                  </p>
+                </div>
+
+                {subProjects.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', alignItems: 'center', width: '100%', maxWidth: '600px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '10px', width: '100%' }}>
+                      {subProjects.map((sp) => (
+                        <div
+                          key={sp.id}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (onSelectProject) {
+                              onSelectProject(sp.id)
+                            } else {
+                              setActiveProjectId(sp.id)
+                            }
+                          }}
+                          style={{
+                            padding: '12px',
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.05)',
+                            borderRadius: '10px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '4px'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.06)'
+                            e.currentTarget.style.borderColor = sp.color || 'var(--accent)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.03)'
+                            e.currentTarget.style.borderColor = 'rgba(255,255,255,0.05)'
+                          }}
+                        >
+                          <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {sp.name}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               activePipeline.stages.map((stage) => (
