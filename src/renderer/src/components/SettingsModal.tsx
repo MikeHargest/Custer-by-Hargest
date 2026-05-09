@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import { X, RotateCcw, Save, Settings, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus, ImagePlus, Trash2, Check } from 'lucide-react'
+import { RotateCcw, Save, Compass, Hand, Layout, Timer, FileText, CalendarDays, Palette, Info, User, HardDrive, LayoutGrid, FolderOpen, FolderPlus, ImagePlus, Trash2 } from 'lucide-react'
 import { UITheme, DEFAULT_THEME, ThemePreset } from '../types'
 import { v4 as uuidv4 } from 'uuid'
 import { motion, AnimatePresence } from 'framer-motion'

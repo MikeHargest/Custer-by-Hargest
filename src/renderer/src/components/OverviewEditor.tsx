@@ -456,10 +456,6 @@ export default function OverviewEditor({
     return () => document.removeEventListener('mousedown', handleOutsideClick)
   }, [hideSelectionMenu, linkDialog?.open, showSelectionMenu])
 
-  const hideAllMenus = useCallback(() => {
-    hideSelectionMenu()
-    setLinkDialog(null)
-  }, [hideSelectionMenu])
 
   useEffect(() => {
     return () => {

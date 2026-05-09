@@ -69,9 +69,7 @@ interface ToolbarProps {
   onRedo: () => void
   onSave: () => void
   isSavedFlash: boolean
-  showColorPicker: boolean
   setShowColorPicker: (show: boolean) => void
-  setPickerAnchor: (rect: DOMRect | null) => void
   setShowPenSettings: (show: boolean) => void
   setShowEraserSettings: (show: boolean) => void
   setPenSettingsAnchor: (rect: DOMRect | null) => void
@@ -111,9 +109,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onRedo,
   onSave,
   isSavedFlash,
-  showColorPicker,
   setShowColorPicker,
-  setPickerAnchor,
   setShowPenSettings,
   setShowEraserSettings,
   setPenSettingsAnchor,
@@ -498,7 +494,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <ToolButton
         active={false}
-        onClick={(e) => {
+        onClick={() => {
           // Blur any active element to ensure final data is captured
           if (document.activeElement instanceof HTMLElement) {
             document.activeElement.blur()

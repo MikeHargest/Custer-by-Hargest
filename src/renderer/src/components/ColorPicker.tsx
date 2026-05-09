@@ -149,7 +149,6 @@ export default function ColorPicker({
   useEffect(() => {
     // Only update if it's actually different from our current internal state
     const [curR, curG, curB] = hsbToRgb(hue, sat, bright)
-    const currentHexStr = rgbToHex(curR, curG, curB)
     
     const targetHex = color.startsWith('#') ? color : '#' + color
     

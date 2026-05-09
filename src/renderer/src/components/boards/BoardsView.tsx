@@ -133,7 +133,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
   const prevDimsRef = useRef({ width: 0, height: 0 })
 
   // Floating UI States
-  const [showColorPicker, setShowColorPicker] = useState(false)
+  const [, setShowColorPicker] = useState(false)
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
   const [showPenSettings, setShowPenSettings] = useState(false)
   const [penSettingsAnchor, setPenSettingsAnchor] = useState<DOMRect | null>(null)
@@ -470,8 +470,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
     activePath,
     activeRect,
     onPointerDown: onToolPointerDown,
-    handleTextCreation,
-    lastPathPoint
+    handleTextCreation
   } = useBoardTools({
     mode,
     setMode,
@@ -946,9 +945,7 @@ const BoardsView: React.FC<BoardsViewProps> = ({
         onRedo={redo}
         onSave={handleManualSave}
         isSavedFlash={isSavedFlash}
-        showColorPicker={showColorPicker}
         setShowColorPicker={setShowColorPicker}
-        setPickerAnchor={handleSetPickerAnchor}
         setShowPenSettings={setShowPenSettings}
         setShowEraserSettings={setShowEraserSettings}
         setPenSettingsAnchor={handleSetPenSettingsAnchor}
