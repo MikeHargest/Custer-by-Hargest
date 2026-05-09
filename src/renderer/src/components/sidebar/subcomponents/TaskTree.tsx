@@ -46,7 +46,7 @@ const TaskTree: React.FC<TaskTreeProps> = memo(function TaskTree({
 }) {
   const projectTasks = isArchiveView ? (project.archivedTasks || []) : (project.tasks || [])
   return (
-    <div key={project.id}>
+    <div key={project.id} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
       {!isRoot && projectTasks.length > 0 && (
         <div
           style={{

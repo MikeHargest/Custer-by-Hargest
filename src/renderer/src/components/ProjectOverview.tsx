@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ChevronUp,
   Trash2,
-  PanelLeft,
   Settings,
   Move,
   Check,
@@ -17,16 +16,6 @@ import { Project, TaskItem, AppNote } from '../types'
 import OverviewEditor from './OverviewEditor'
 
 // --- STYLES ---
-const topMenuStyle: React.CSSProperties = {
-  height: '45px',
-  display: 'flex',
-  alignItems: 'center',
-  padding: '0 10px',
-  borderBottom: '1px solid rgba(255,255,255,0.05)',
-  flexShrink: 0,
-  gap: '12px',
-  background: 'transparent'
-}
 const containerStyle: React.CSSProperties = {
   flex: 1,
   padding: '0',
@@ -109,22 +98,6 @@ const iconBoxStyle: React.CSSProperties = {
   position: 'relative',
   border: '1px solid transparent',
   transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-}
-
-const bannerActionBtnStyle: React.CSSProperties = {
-  width: '30px',
-  height: '30px',
-  background: 'transparent',
-  border: 'none',
-  borderRadius: '6px',
-  color: 'var(--text-secondary)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  opacity: 0.6,
-  transition: 'all 0.2s',
-  padding: 0
 }
 
 const subprojectsGridStyle: React.CSSProperties = {
@@ -335,9 +308,9 @@ interface ProjectOverviewProps {
   notes: AppNote[]
   onNoteClick?: (noteId: string) => void
   onProjectClick?: (projectId: string) => void
-  isSidebarOpen: boolean
-  onToggleSidebar: () => void
   onNavigateToPipeline?: () => void
+  isRepositioning?: boolean
+  setIsRepositioning?: (val: boolean) => void
 }
 
 const MONOCHROME_ICONS = [
@@ -435,17 +408,14 @@ export default function ProjectOverview({
   notes,
   onNoteClick,
   onProjectClick,
-  isSidebarOpen,
-  onToggleSidebar,
-  onNavigateToPipeline
+  onNavigateToPipeline,
+  isRepositioning = false,
+  setIsRepositioning = () => {}
 }: ProjectOverviewProps): React.ReactElement | null {
   const [isEditingName, setIsEditingName] = useState(false)
   const [nameValue, setNameValue] = useState(project.name || '')
   const [showIconPicker, setShowIconPicker] = useState(false)
-  const [showBannerMenu, setShowBannerMenu] = useState(false)
-  const bannerMenuRef = useRef<HTMLDivElement>(null)
 
-  const [isRepositioning, setIsRepositioning] = useState(false)
   const [tempPosition, setTempPosition] = useState(project.bannerPosition ?? 50)
   const [isDragging, setIsDragging] = useState(false)
   const [startY, setStartY] = useState(0)
@@ -458,20 +428,6 @@ export default function ProjectOverview({
   useEffect(() => {
     setTempPosition(project.bannerPosition ?? 50)
   }, [project.bannerPosition, project.id])
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (bannerMenuRef.current && !bannerMenuRef.current.contains(event.target as Node)) {
-        setShowBannerMenu(false)
-      }
-    }
-    if (showBannerMenu) {
-      document.addEventListener('mousedown', handleClickOutside)
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showBannerMenu])
 
   const stats = useMemo(() => {
     let total = 0
@@ -530,22 +486,6 @@ export default function ProjectOverview({
 
   const displayProgress = pipelineProgress !== null ? pipelineProgress : progressPercent
 
-  const handleBannerChange = async (): Promise<void> => {
-    // @ts-ignore - Electron API
-    const path = await window.api.selectImageFile()
-    if (path) {
-      const normalizedPath = path.replace(/\\/g, '/')
-      const fileUrl = `file://${normalizedPath.startsWith('/') ? '' : '/'}${encodeURI(normalizedPath)}`
-      onUpdate(project.id, { banner: fileUrl })
-    }
-  }
-
-  const handleStartReposition = () => {
-    setIsRepositioning(true)
-    setShowBannerMenu(false)
-    setTempPosition(project.bannerPosition ?? 50)
-  }
-
   const handleBannerMouseDown = (e: React.MouseEvent) => {
     if (!isRepositioning) return
     setIsDragging(true)
@@ -600,146 +540,6 @@ export default function ProjectOverview({
   return (
     <div className="project-overview-container" style={containerStyle}>
       <div className="project-card" style={cardStyle}>
-
-        {/* --- TOP MENU --- */}
-        <div className="project-top-menu" style={topMenuStyle}>
-          <button
-            onClick={onToggleSidebar}
-            title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: isSidebarOpen ? 0.6 : 0.4,
-              transition: 'opacity 0.2s',
-              width: '30px',
-              height: '30px',
-              marginRight: '8px'
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')}
-          >
-            <PanelLeft size={18} />
-          </button>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }} />
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', position: 'relative' }}>
-            <div ref={bannerMenuRef} style={{ position: 'relative', display: 'flex' }}>
-              <button
-                onClick={() => setShowBannerMenu(!showBannerMenu)}
-                style={{
-                  ...bannerActionBtnStyle,
-                  background: showBannerMenu ? 'rgba(255,255,255,0.08)' : 'transparent',
-                  opacity: showBannerMenu ? 1 : 0.6
-                }}
-                title="Banner Settings"
-                onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                onMouseLeave={(e) => { if (!showBannerMenu) e.currentTarget.style.opacity = '0.6' }}
-              >
-                <Settings size={18} />
-              </button>
-
-              {showBannerMenu && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '8px',
-                    background: '#1a1a1a',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: '10px',
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                    padding: '6px',
-                    minWidth: '180px',
-                    zIndex: 1000,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px'
-                  }}
-                >
-                  <button
-                    onClick={() => { handleBannerChange(); setShowBannerMenu(false) }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 12px', background: 'transparent', border: 'none',
-                      borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px',
-                      fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <ImageIcon size={14} style={{ opacity: 0.7 }} />
-                    Select Banner Image
-                  </button>
-
-                  <button
-                    disabled={!project.banner}
-                    onClick={handleStartReposition}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 12px', background: 'transparent', border: 'none',
-                      borderRadius: '6px',
-                      color: project.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontSize: '13px', fontWeight: 500,
-                      cursor: project.banner ? 'pointer' : 'not-allowed',
-                      opacity: project.banner ? 1 : 0.4,
-                      width: '100%', textAlign: 'left', transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => { if (project.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <Move size={14} style={{ opacity: 0.7 }} />
-                    Reposition Banner
-                  </button>
-
-                  <button
-                    disabled={!project.banner}
-                    onClick={() => { onUpdate(project.id, { banner: undefined }); setShowBannerMenu(false) }}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: '10px',
-                      padding: '8px 12px', background: 'transparent', border: 'none',
-                      borderRadius: '6px',
-                      color: project.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      fontSize: '13px', fontWeight: 500,
-                      cursor: project.banner ? 'pointer' : 'not-allowed',
-                      opacity: project.banner ? 1 : 0.4,
-                      width: '100%', textAlign: 'left', transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => { if (project.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                  >
-                    <Trash2 size={14} style={{ opacity: 0.7 }} />
-                    Remove Banner
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <button
-              disabled={!project.banner}
-              onClick={() => onUpdate(project.id, { bannerCollapsed: !project.bannerCollapsed })}
-              style={{
-                ...bannerActionBtnStyle,
-                opacity: project.banner ? 0.6 : 0.2,
-                cursor: project.banner ? 'pointer' : 'not-allowed',
-                marginLeft: '4px'
-              }}
-              title={project.bannerCollapsed ? 'Expand Banner' : 'Collapse Banner'}
-              onMouseEnter={(e) => { if (project.banner) e.currentTarget.style.opacity = '1' }}
-              onMouseLeave={(e) => { if (project.banner) e.currentTarget.style.opacity = '0.6' }}
-            >
-              {project.bannerCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-            </button>
-          </div>
-        </div>
 
         <div
           style={{

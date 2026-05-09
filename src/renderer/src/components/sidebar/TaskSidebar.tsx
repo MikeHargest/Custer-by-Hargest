@@ -143,13 +143,13 @@ export default memo(function TaskSidebar({
 
     const handleMouseMove = (e: MouseEvent): void => {
       const deltaY = e.clientY - resizeStartY
-      const newHeight = resizeStartHeight + deltaY
+      // Invert delta because dragging UP should increase bottom block height
+      const newHeight = resizeStartHeight - deltaY
 
-      // Snapping to collapsed header (50px)
-      if (newHeight < 60) {
-        setProjectsHeight(50)
-      } else if (newHeight > window.innerHeight - 200) {
-        setProjectsHeight(window.innerHeight - 200)
+      if (newHeight < 100) {
+        setProjectsHeight(100)
+      } else if (newHeight > window.innerHeight * 0.7) {
+        setProjectsHeight(window.innerHeight * 0.7)
       } else {
         setProjectsHeight(newHeight)
       }
@@ -1468,11 +1468,12 @@ export default memo(function TaskSidebar({
           <div
             className="sidebar-block has-resizer-after"
             style={{
-              flex: (!isTasksExpanded && !isEventsExpanded) ? '1 1 0px' : `0 0 ${projectsHeight}px`,
+              flex: '1 1 0%',
               display: 'flex',
               flexDirection: 'column',
-              minHeight: 0,
-              transition: (isResizingSidebar || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              minHeight: '100px',
+              transition: (isResizingSidebar || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              overflow: 'hidden'
             }}
           >
             <div
@@ -1492,28 +1493,18 @@ export default memo(function TaskSidebar({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
+                    justifyContent: 'space-between',
                     marginBottom: '0',
-                    padding: isOpen ? '12px 20px' : '12px 0'
+                    padding: isOpen ? '16px' : '12px 0',
+                    flexShrink: 0
                   }}
                 >
-                  {isOpen ? (
-                    <h3
-                      style={{
-                        fontSize: '13px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        color: 'var(--text-secondary)',
-                        opacity: 0.8,
-                        margin: 0,
-                        fontWeight: 600,
-                        paddingLeft: 0,
-                        flex: 1
-                      }}
-                    >
-                      Projects
-                    </h3>
-                  ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isOpen ? 1 : 'none', justifyContent: isOpen ? 'flex-start' : 'center', width: isOpen ? 'auto' : '100%' }}>
+                    {isOpen ? (
+                      <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', opacity: 0.5, margin: 0, fontWeight: 700, paddingLeft: '4px' }}>
+                        Projects
+                      </h3>
+                    ) : (
                     <div
                       className="sidebar-header-icon"
                       title="Projects"
@@ -1528,9 +1519,10 @@ export default memo(function TaskSidebar({
                       }}
                     >
                       <Folder size={18} />
-                    </div>
-                  )}
-                  {isOpen && (
+                  </div>
+                )}
+              </div>
+              {isOpen && (
                     <button
                       onClick={async () => {
                         const result = await handleAddProject('New Project')
@@ -1568,7 +1560,7 @@ export default memo(function TaskSidebar({
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   scrollbarGutter: 'stable',
-                  padding: isOpen ? '0 0 0 18px' : '0',
+                  padding: isOpen ? '0 12px' : '0',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: isOpen ? 'stretch' : 'center',
@@ -1578,15 +1570,15 @@ export default memo(function TaskSidebar({
                 {projects.length === 0 ? (
                  <div
                    style={{
-                     flex: 1,
                      display: 'flex',
                      alignItems: 'center',
                      justifyContent: 'center',
                      textAlign: 'center',
-                     padding: '20px',
+                     padding: '24px 20px',
                      color: 'var(--text-secondary)',
-                     opacity: 0.4,
-                     fontSize: '12px'
+                     opacity: 0.3,
+                     fontSize: '11px',
+                     fontStyle: 'italic'
                    }}
                  >
                    No projects planned
@@ -1630,10 +1622,13 @@ export default memo(function TaskSidebar({
           <div
             className={`sidebar-resizer projects-resizer is-resizable ${isResizingSidebar ? 'is-resizing' : ''}`}
             style={{
-              opacity: isOpen ? 1 : 0,
-              pointerEvents: isOpen ? 'auto' : 'none',
-              height: '1px',
-              transition: isResizingSidebar ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              height: '12px',
+              marginTop: '-6px',
+              marginBottom: '-6px',
+              cursor: 'row-resize',
+              zIndex: 10,
+              position: 'relative',
+              background: 'transparent'
             }}
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1646,42 +1641,22 @@ export default memo(function TaskSidebar({
               ref={detailBlockRef}
               className="sidebar-block detail-block"
               style={{
-                flex: (isTasksExpanded || isEventsExpanded) ? '1 1 0px' : (isOpen ? '0 0 100px' : '0 0 130px'),
-                minHeight: isOpen ? '100px' : '130px',
+                height: `${projectsHeight}px`,
                 display: 'flex',
                 flexDirection: 'column',
-                marginTop: '0px',
                 transition: (isResizingSidebar || isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                paddingBottom: '0px',
+                flexShrink: 0
               }}
             >
             {selectedProject ? (
               <>
                 {/* --- TASKS SECTION --- */}
-                <div
-                  className="sidebar-section-header"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: isOpen ? '12px 20px 12px 20px' : '12px 0',
-                    cursor: 'default',
-                    width: '100%'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: isOpen ? 'flex-start' : 'center' }}>
+                <div className="sidebar-section-header">
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: isOpen ? 'auto' : '100%', justifyContent: isOpen ? 'flex-start' : 'center' }}>
                     {isOpen ? (
-                      <h3
-                        style={{
-                          fontSize: '13px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.08em',
-                          color: 'var(--text-secondary)',
-                          opacity: 0.8,
-                          margin: 0,
-                          fontWeight: 600
-                        }}
-                      >
+                      <h3>
                         {isArchiveView ? 'Archive' : 'Temp Tasks'}
                       </h3>
                     ) : (
@@ -1825,15 +1800,9 @@ export default memo(function TaskSidebar({
                   <div
                     className="tasks-list custom-scrollbar"
                     style={{
-                      flex: isEventsExpanded ? `0 2 ${tasksHeight}px` : '1 1 0px',
-                      height: '100%',
-                      minHeight: 0,
-                      overflowY: 'auto',
-                      scrollbarGutter: 'stable',
-                      padding: '0 12px 30px 20px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '4px',
+                      flex: isEventsExpanded ? `0 1 ${tasksHeight}px` : '1 1 0px',
+                      padding: '0 12px 20px 12px',
+                      gap: '8px',
                       transition: (isResizingTasks || isInitialLoading)
                         ? 'none'
                         : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -1864,15 +1833,15 @@ export default memo(function TaskSidebar({
                     {(!selectedProject.tasks || selectedProject.tasks.length === 0) && (
                       <div
                         style={{
-                          flex: 1,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           textAlign: 'center',
-                          padding: '20px',
+                          padding: '12px 20px',
                           color: 'var(--text-secondary)',
-                          opacity: 0.4,
-                          fontSize: '12px'
+                          opacity: 0.3,
+                          fontSize: '11px',
+                          fontStyle: 'italic'
                         }}
                       >
                         No tasks planned
@@ -1885,57 +1854,39 @@ export default memo(function TaskSidebar({
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    minHeight: isEventsExpanded ? '100px' : (isOpen ? '50px' : '65px'),
-                    flex: isEventsExpanded ? (isTasksExpanded ? '1 0 0%' : '1') : (isOpen ? '0 0 50px' : '0 0 65px'),
-                    transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                    minHeight: isEventsExpanded ? '80px' : (isOpen ? '40px' : '65px'),
+                    flex: isEventsExpanded ? '1 1 auto' : '0 0 auto',
+                    transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                    overflow: 'visible'
                   }}
                 >
                   {/* --- TASKS RESIZER --- */}
-                  <div
-                    className={`sidebar-resizer section-divider ${isTasksExpanded && isEventsExpanded ? 'is-resizable' : ''}`}
-                    style={{
-                      cursor: isTasksExpanded && isEventsExpanded ? 'row-resize' : 'default',
-                      height: (isTasksExpanded && isEventsExpanded) ? '4px' : '1px',
-                      opacity: 1,
-                      pointerEvents: (isTasksExpanded && isEventsExpanded) ? 'auto' : 'none',
-                      margin: isOpen ? '8px 0' : '16px 0',
-                      background: 'rgba(255,255,255,0.25)',
-                      transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                    }}
-                    onMouseDown={(e) => {
-                      if (!isTasksExpanded || !isEventsExpanded) return
-                      e.preventDefault()
-                      setResizeTasksStartY(e.clientY)
-                      setResizeTasksStartHeight(tasksHeight)
-                      setIsResizingTasks(true)
-                    }}
-                  />
+                  {isTasksExpanded && isEventsExpanded && (
+                    <div
+                      className="sidebar-resizer"
+                      style={{
+                        height: '12px',
+                        marginTop: '-6px',
+                        marginBottom: '-6px',
+                        cursor: 'row-resize',
+                        zIndex: 10,
+                        position: 'relative',
+                        background: 'transparent'
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                        setResizeTasksStartY(e.clientY)
+                        setResizeTasksStartHeight(tasksHeight)
+                        setIsResizingTasks(true)
+                      }}
+                    />
+                  )}
 
                   {/* --- EVENTS SECTION --- */}
-                  <div
-                    className="sidebar-section-header"
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      padding: isOpen ? '12px 20px 12px 20px' : '12px 0',
-                      cursor: 'default',
-                      width: '100%'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: isOpen ? 'flex-start' : 'center' }}>
+                  <div className="sidebar-section-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: isOpen ? 'auto' : '100%', justifyContent: isOpen ? 'flex-start' : 'center' }}>
                       {isOpen ? (
-                        <h3
-                          style={{
-                            fontSize: '13px',
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.08em',
-                            color: 'var(--text-secondary)',
-                            opacity: 0.8,
-                            margin: 0,
-                            fontWeight: 600
-                          }}
-                        >
+                        <h3>
                           Events
                         </h3>
                       ) : (
@@ -2035,14 +1986,8 @@ export default memo(function TaskSidebar({
                       className="events-list custom-scrollbar"
                       style={{
                         flex: '1 1 0px',
-                        height: '100%',
-                        minHeight: 0,
-                        overflowY: 'auto',
-                        scrollbarGutter: 'stable',
-                        padding: '0 12px 30px 20px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
+                        padding: '0 12px 24px 12px',
+                        gap: '10px',
                         transition: (isResizingTasks || isInitialLoading)
                           ? 'none'
                           : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -2050,7 +1995,7 @@ export default memo(function TaskSidebar({
                         pointerEvents: 'all'
                       }}
                     >
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flexShrink: 0 }}>
                         {selectedProject.events?.map((event) => (
                           <EventItem
                             key={event.id}
@@ -2071,15 +2016,15 @@ export default memo(function TaskSidebar({
                         {(!selectedProject.events || selectedProject.events.length === 0) && (
                           <div
                             style={{
-                              flex: 1,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               textAlign: 'center',
-                              padding: '20px',
+                              padding: '12px 20px',
                               color: 'var(--text-secondary)',
-                              opacity: 0.4,
-                              fontSize: '12px'
+                              opacity: 0.3,
+                              fontSize: '11px',
+                              fontStyle: 'italic'
                             }}
                           >
                             No events planned

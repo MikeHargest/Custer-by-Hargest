@@ -29,7 +29,6 @@ import {
   Check,
   FolderOpen,
   Folder,
-  PanelLeft,
   Link2,
   Unlink,
   Image as ImageIcon,
@@ -72,8 +71,6 @@ interface NotesViewProps {
   boardBackupIntervalMinutes?: number
   disableBoardBackups?: boolean
   enableBoardAutosave?: boolean
-  isSidebarOpen: boolean
-  onToggleSidebar: () => void
 }
 
 const findProjectRecursive = (projs: Project[], id: string | null): Project | undefined => {
@@ -119,9 +116,7 @@ export default function NotesView({
   backupIntervalMinutes = 10,
   boardBackupIntervalMinutes = 10,
   disableBoardBackups = false,
-  enableBoardAutosave = false,
-  isSidebarOpen,
-  onToggleSidebar
+  enableBoardAutosave = false
 }: NotesViewProps): React.ReactElement {
   const floatingBtnStyle = (active = false): React.CSSProperties => ({
     width: '28px',
@@ -2670,31 +2665,6 @@ export default function NotesView({
                       }}
                     >
                       <button
-                        onClick={onToggleSidebar}
-                        title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: isSidebarOpen ? 0.6 : 0.4,
-                          transition: 'opacity 0.2s',
-                          width: '30px',
-                          height: '30px',
-                          marginRight: '8px'
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-                        }
-                      >
-                        <PanelLeft size={18} />
-                      </button>
-                      <button
                         onClick={() => setCurrentView('overview')}
                         title="Back to Project"
                         style={{
@@ -3025,31 +2995,6 @@ export default function NotesView({
                         gap: '12px'
                       }}
                     >
-                      <button
-                        onClick={onToggleSidebar}
-                        title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: isSidebarOpen ? 0.6 : 0.4,
-                          transition: 'opacity 0.2s',
-                          width: '30px',
-                          height: '30px',
-                          marginRight: '8px'
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-                        }
-                      >
-                        <PanelLeft size={18} />
-                      </button>
                       <button
                         onClick={() => setCurrentView('overview')}
                         title="Back to Project"
@@ -3656,7 +3601,7 @@ export default function NotesView({
                 <div
                   style={{
                     display: 'flex',
-                    justifyContent: 'space-between',
+                    justifyContent: 'flex-end',
                     padding: '0 10px',
                     alignItems: 'center',
                     height: '45px',
@@ -3664,31 +3609,6 @@ export default function NotesView({
                     boxSizing: 'border-box'
                   }}
                 >
-                  <button
-                    onClick={onToggleSidebar}
-                    title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: isSidebarOpen ? 0.6 : 0.4,
-                      transition: 'opacity 0.2s',
-                      width: '30px',
-                      height: '30px',
-                      marginRight: '8px'
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-                    }
-                  >
-                    <PanelLeft size={18} />
-                  </button>
                   <button
                     onClick={() => setShowSidebar(!showSidebar)}
                     title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}

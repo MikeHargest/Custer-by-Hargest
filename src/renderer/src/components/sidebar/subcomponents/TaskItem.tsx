@@ -112,7 +112,7 @@ const TaskItemRenderer: React.FC<TaskItemProps> = memo(function TaskItemRenderer
       >
         <div
           className="task-row"
-          style={{ padding: '8px 8px 8px 10px', display: 'flex', alignItems: 'flex-start' }}
+          style={{ padding: '8px 8px 8px 8px', display: 'flex', alignItems: 'flex-start' }}
           onContextMenu={(e) => {
             e.preventDefault()
             e.stopPropagation()
@@ -122,15 +122,15 @@ const TaskItemRenderer: React.FC<TaskItemProps> = memo(function TaskItemRenderer
           <button
             className="task-checkbox"
             style={{
-              marginLeft: '-5px',
-              marginRight: '0px',
-              marginTop: '-2px',
+              marginLeft: '-4px',
+              marginRight: '4px',
+              marginTop: '0px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               color: task.completed ? 'var(--success)' : 'var(--text-secondary)',
               flexShrink: 0,
-              padding: '5px',
+              padding: '4px',
               background: 'none',
               border: 'none',
               cursor: 'pointer'

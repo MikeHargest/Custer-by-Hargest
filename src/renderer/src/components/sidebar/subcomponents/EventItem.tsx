@@ -157,15 +157,15 @@ const EventItem = memo(function EventItem({
       ref={containerRef}
       style={{
         position: 'relative',
-        background: 'rgba(255,255,255,0.03)',
-        borderRadius: '10px',
-        border: '1px solid rgba(255,255,255,0.05)',
+        background: 'rgba(255,255,255,0.02)',
+        borderRadius: '8px',
+        border: '1px solid rgba(255,255,255,0.04)',
         transition: 'all 0.2s',
         overflow: 'visible'
       }}
     >
       {/* Clipped background/strip container */}
-      <div style={{ position: 'absolute', inset: 0, borderRadius: '10px', overflow: 'hidden', pointerEvents: 'none' }}>
+      <div style={{ position: 'absolute', inset: 0, borderRadius: '8px', overflow: 'hidden', pointerEvents: 'none' }}>
         <div
           style={{
             position: 'absolute',
@@ -190,7 +190,7 @@ const EventItem = memo(function EventItem({
           )
         }}
         style={{
-          padding: '8px 10px 8px 16px',
+          padding: '10px 10px 10px 12px',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
@@ -315,7 +315,7 @@ const EventItem = memo(function EventItem({
             }
           }}
           style={{
-            padding: '0 8px 12px 16px',
+            padding: '0 8px 12px 12px',
             display: 'flex',
             flexDirection: 'column',
             gap: '8px',

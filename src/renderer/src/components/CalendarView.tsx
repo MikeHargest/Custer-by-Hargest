@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react'
+import React, { useMemo, useState, useRef, forwardRef, useImperativeHandle } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import MonthGrid from './calendar/MonthGrid'
 import WeekGrid from './calendar/WeekGrid'
@@ -17,8 +17,7 @@ import {
   AlignLeft,
   RotateCcw,
   RefreshCcw,
-  SlidersHorizontal,
-  PanelLeft
+  SlidersHorizontal
 } from 'lucide-react'
 import CalendarQuickAdd from './calendar/CalendarQuickAdd'
 import CalendarContextMenu from './calendar/CalendarContextMenu'
@@ -38,35 +37,48 @@ interface TimelineViewProps {
   onAddAlarm: (date: string, time: string, title: string) => void
   hiddenProjectIds: string[]
   setHiddenProjectIds: (ids: string[]) => void
-  isSidebarOpen: boolean
-  onToggleSidebar: () => void
   onSyncWorkspaceEvents?: () => void
   isSyncing?: boolean
   selectedProjectId?: string | null
   setProjects: React.Dispatch<React.SetStateAction<Project[]>>
+  viewMode: 'timeline' | 'month' | 'week' | 'day'
+  setViewMode: (mode: 'timeline' | 'month' | 'week' | 'day') => void
+  showFilterMenu: boolean
+  setShowFilterMenu: (show: boolean) => void
+  viewDate: Date
+  setViewDate: React.Dispatch<React.SetStateAction<Date>>
+  scrollToToday: () => void
 }
 
-export default function CalendarView({
-  projects,
-  timelineTasks,
-  setTimelineTasks,
-  onAddProjectItem,
-  onAddEvent,
-  onAddAlarm,
-  hiddenProjectIds,
-  setHiddenProjectIds,
-  isSidebarOpen,
-  onToggleSidebar,
-  onSyncWorkspaceEvents,
-  isSyncing,
-  setProjects
-}: TimelineViewProps): React.ReactElement {
+const CalendarView = forwardRef<
+  { scrollToToday: () => void },
+  TimelineViewProps
+>(function CalendarView(
+  {
+    projects,
+    timelineTasks,
+    setTimelineTasks,
+    onAddProjectItem,
+    onAddEvent,
+    onAddAlarm,
+    hiddenProjectIds,
+    setHiddenProjectIds,
+    onSyncWorkspaceEvents,
+    isSyncing,
+    setProjects,
+    viewMode,
+    setViewMode,
+    showFilterMenu,
+    setShowFilterMenu,
+    viewDate,
+    setViewDate
+  },
+  ref
+): React.ReactElement {
   const PAST_DAYS = 14
   const minCellWidth = 150
 
   // 1. State and Refs first
-  const [viewMode, setViewMode] = useState<'timeline' | 'month' | 'week' | 'day'>('timeline')
-  const [viewDate, setViewDate] = useState(new Date())
   const [addingToCell, setAddingToCell] = useState<{
     projectId: string
     date: string
@@ -85,7 +97,6 @@ export default function CalendarView({
   // const [newItemName, setNewItemName] = useState('')
   // const [selectedTaskId, setSelectedTaskId] = useState<string>('')
   const [isDraggingResize, setIsDraggingResize] = useState(false)
-  const [showFilterMenu, setShowFilterMenu] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [startX, setStartX] = useState(0)
   const [startY, setStartY] = useState(0)
@@ -93,8 +104,24 @@ export default function CalendarView({
   const [scrollTop, setScrollTop] = useState(0)
 
   const scrollRef = useRef<HTMLDivElement>(null)
-  const filterMenuRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
+
+  useImperativeHandle(ref, () => ({
+    scrollToToday: () => {
+      if (!scrollRef.current) return
+
+      if (viewMode === 'timeline') {
+        const todayIndex = days.findIndex((d) => d.isToday)
+        if (todayIndex !== -1) {
+          const targetLeft = todayIndex * minCellWidth
+          scrollRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' })
+        }
+      } else {
+        setViewDate(new Date())
+        window.dispatchEvent(new CustomEvent('scroll-to-today'))
+      }
+    }
+  }))
 
   /*
   const adjustMonth = (offset: number): void => {
@@ -412,21 +439,6 @@ export default function CalendarView({
     setViewDate(new Date(dateStr + 'T00:00:00'))
   }
 
-  const scrollToToday = (): void => {
-    if (!scrollRef.current) return
-
-    if (viewMode === 'timeline') {
-      const todayIndex = days.findIndex((d) => d.isToday)
-      if (todayIndex !== -1) {
-        const targetLeft = todayIndex * minCellWidth
-        scrollRef.current.scrollTo({ left: targetLeft, behavior: 'smooth' })
-      }
-    } else {
-      setViewDate(new Date())
-      window.dispatchEvent(new CustomEvent('scroll-to-today'))
-    }
-  }
-
   React.useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
       if (
@@ -436,17 +448,10 @@ export default function CalendarView({
       ) {
         setAddingToCell(null)
       }
-      if (
-        showFilterMenu &&
-        filterMenuRef.current &&
-        !filterMenuRef.current.contains(event.target as Node)
-      ) {
-        setShowFilterMenu(false)
-      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [addingToCell, showFilterMenu])
+  }, [addingToCell])
 
   React.useEffect(() => {
     if (viewMode === 'timeline' && scrollRef.current && mondayOffsetIndex > 0) {
@@ -783,324 +788,6 @@ export default function CalendarView({
             background: 'var(--card-bg)'
           }}
         >
-          {/* Shared Top Bar Controls */}
-          <div
-            style={{
-              position: 'sticky',
-              top: 0,
-              left: 0,
-              right: 0,
-              zIndex: 45,
-              background: 'var(--card-bg)',
-              height: '45px',
-              padding: '0 10px',
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
-              display: 'flex',
-              alignItems: 'center',
-              width: 'max-content',
-              minWidth: '100%',
-              boxSizing: 'border-box',
-              gap: '6px'
-            }}
-          >
-            <button
-              onClick={onToggleSidebar}
-              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: isSidebarOpen ? 0.6 : 0.4,
-                transition: 'opacity 0.2s',
-                width: '30px',
-                height: '30px',
-                marginRight: '8px'
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-              }
-            >
-              <PanelLeft size={18} />
-            </button>
-            <div
-              style={{
-                width: '200px',
-                minWidth: '200px',
-                height: '100%',
-                padding: '0 12px 0 24px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                position: 'sticky',
-                left: 0,
-                background: 'var(--card-bg)',
-                zIndex: 46,
-                boxSizing: 'border-box'
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  background: 'rgba(0,0,0,0.2)',
-                  padding: '2px',
-                  borderRadius: 'var(--radius-md)',
-                  border: '1px solid rgba(255,255,255,0.05)'
-                }}
-              >
-                <button
-                  onClick={() => setViewMode('timeline')}
-                  style={{
-                    background: viewMode === 'timeline' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    color: viewMode === 'timeline' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: 'none',
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Timeline View"
-                >
-                  <AlignLeft size={14} />
-                </button>
-                <button
-                  onClick={() => setViewMode('month')}
-                  style={{
-                    background: viewMode === 'month' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    color: viewMode === 'month' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: 'none',
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Month Grid View"
-                >
-                  <CalendarDays size={14} />
-                </button>
-                <button
-                  onClick={() => setViewMode('week')}
-                  style={{
-                    background: viewMode === 'week' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    color: viewMode === 'week' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: 'none',
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Week View"
-                >
-                  <CalendarRange size={14} />
-                </button>
-                <button
-                  onClick={() => setViewMode('day')}
-                  style={{
-                    background: viewMode === 'day' ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    color: viewMode === 'day' ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    border: 'none',
-                    padding: '5px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    transition: 'all 0.2s'
-                  }}
-                  title="Day View"
-                >
-                  <CalendarIcon size={14} />
-                </button>
-              </div>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowFilterMenu(!showFilterMenu)
-                }}
-                style={{
-                  background: showFilterMenu ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'var(--text-primary)',
-                  padding: '0px 7px',
-                  height: '26px',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  transition: 'all 0.2s',
-                  position: 'relative'
-                }}
-                title="Filter projects"
-              >
-                <SlidersHorizontal size={14} />
-                {showFilterMenu && (
-                  <div
-                    ref={filterMenuRef}
-                    style={{
-                      position: 'absolute',
-                      top: 'calc(100% + 8px)',
-                      left: 0,
-                      background: 'var(--card-bg)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '6px 0',
-                      minWidth: '180px',
-                      zIndex: 100,
-                      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                      maxHeight: '400px',
-                      overflowY: 'auto'
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em' }}>
-                      Visibility
-                    </div>
-                    {flattenedProjects.map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          toggleProjectVisibility(p.id)
-                        }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '10px',
-                          width: '100%',
-                          padding: '8px 12px',
-                          paddingLeft: '12px',
-                          background: 'transparent',
-                          border: 'none',
-                          color: hiddenProjects.has(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
-                          cursor: 'pointer',
-                          fontSize: '13px',
-                          textAlign: 'left',
-                          transition: 'background 0.2s',
-                          opacity: hiddenProjects.has(p.id) ? 0.6 : 1,
-                          position: 'relative'
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        {/* Recursive hierarchy lines */}
-                        {Array.from({ length: p.depth || 0 }).map((_, idx) => (
-                          <div
-                            key={idx}
-                            style={{
-                              position: 'absolute',
-                              left: `${12 + idx * 16 + 6}px`, // 12px padding + 16px per depth + 6px (half of 12px icon)
-                              top: 0,
-                              bottom: 0,
-                              width: '1px',
-                              background: 'rgba(255,255,255,0.08)',
-                              zIndex: 1
-                            }}
-                          />
-                        ))}
-
-                        <div
-                          style={{
-                            width: '12px',
-                            height: '12px',
-                            borderRadius: '3px',
-                            border: `2px solid ${p.color || 'var(--accent)'}`,
-                            background: hiddenProjects.has(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
-                            flexShrink: 0,
-                            marginLeft: `${(p.depth || 0) * 16}px`,
-                            zIndex: 2
-                          }}
-                        />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 2 }}>{p.name}</span>
-                      </button>
-                    ))}
-                    {hiddenProjects.size > 0 && (
-                      <>
-                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setHiddenProjectIds([])
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            width: '100%',
-                            padding: '8px 12px',
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-primary)',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            textAlign: 'left',
-                            fontWeight: 500
-                          }}
-                        >
-                          <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
-                          <span>Show all projects</span>
-                        </button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </button>
-              <button
-                onClick={scrollToToday}
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: 'var(--text-primary)',
-                  padding: '0px 10px',
-                  height: '26px',
-                  borderRadius: 'var(--radius-md)',
-                  cursor: 'pointer',
-                  fontSize: '12px',
-                  fontWeight: 500,
-                  transition: 'all 0.2s'
-                }}
-                title="Scroll to Today"
-              >
-                Today
-              </button>
-              {onSyncWorkspaceEvents && (
-                <button
-                  onClick={onSyncWorkspaceEvents}
-                  disabled={isSyncing}
-                  title="Sync Events with Google Calendar"
-                  style={{
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: isSyncing ? 'var(--accent)' : 'var(--text-secondary)',
-                    padding: '0px 10px',
-                    height: '26px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: isSyncing ? 'default' : 'pointer',
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    transition: 'all 0.2s',
-                    whiteSpace: 'nowrap'
-                  }}
-                >
-                  <RefreshCcw size={12} className={isSyncing ? 'spin-anim' : ''} />
-                  {isSyncing ? 'Syncing...' : 'GCal Sync'}
-                </button>
-              )}
-            </div>
-          </div>
-
           {viewMode === 'timeline' ? (
             <table
               className="timeline-container"
@@ -1123,7 +810,7 @@ export default function CalendarView({
                       color: 'var(--text-secondary)',
                       fontWeight: 600,
                       position: 'sticky',
-                      top: '45px',
+                      top: '0px',
                       left: 0,
                       background: 'var(--card-bg)',
                       zIndex: 35,
@@ -1146,7 +833,7 @@ export default function CalendarView({
                         textAlign: 'left',
                         background: 'var(--card-bg)',
                         position: 'sticky',
-                        top: '45px',
+                        top: '0px',
                         zIndex: 10,
                         boxSizing: 'border-box',
                         overflow: 'visible'
@@ -1201,7 +888,7 @@ export default function CalendarView({
                                 ? 'rgba(0,0,0,0.08)'
                                 : 'var(--card-bg)',
                         position: 'sticky',
-                        top: '90px',
+                        top: '45px',
                         zIndex: 10,
                         fontSize: '12px'
                       }}
@@ -1933,4 +1620,6 @@ export default function CalendarView({
       </div>
     </div>
   )
-}
+})
+
+export default CalendarView

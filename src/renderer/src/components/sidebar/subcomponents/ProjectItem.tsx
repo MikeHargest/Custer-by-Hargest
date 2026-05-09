@@ -99,13 +99,13 @@ const ProjectItem = memo(({
               dropIndicator.type === 'project'
               ? '2px solid var(--accent)'
               : undefined,
-            marginRight: isOpen ? '6px' : '0px',
+            marginRight: isOpen ? '4px' : '0px',
             marginLeft: (isOpen && level !== 0) ? '4px' : '0px',
             position: 'relative',
             display: 'flex',
             justifyContent: 'center',
             width: isOpen ? 'auto' : '100%',
-            paddingLeft: isOpen ? '10px' : '0px'
+            paddingLeft: isOpen ? '8px' : '0px'
           }}
         onClick={() => {
           if (editingId === project.id) return

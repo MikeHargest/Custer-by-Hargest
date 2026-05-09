@@ -11,8 +11,7 @@ import {
   Calendar,
   Layout,
   Info,
-  PanelRight,
-  PanelLeft
+  PanelRight
 } from 'lucide-react'
 import { Project, PipelineStage, PipelineItem, PipelineData } from '../types'
 import ColorPicker from './ColorPicker'
@@ -77,16 +76,12 @@ const TinyButton = ({
 interface PipelineViewProps {
   project: Project
   onUpdate: (id: string, updates: Partial<Project>) => void
-  isSidebarOpen: boolean
-  onToggleSidebar: () => void
   isVisible?: boolean
 }
 
 export default function PipelineView({
   project,
   onUpdate,
-  isSidebarOpen,
-  onToggleSidebar,
   isVisible
 }: PipelineViewProps): React.ReactElement {
   // --- Migration and Initialization ---
@@ -624,35 +619,9 @@ export default function PipelineView({
               padding: '0 10px',
               height: '45px',
               boxSizing: 'border-box',
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
               flexShrink: 0
             }}
           >
-            <button
-              onClick={onToggleSidebar}
-              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                cursor: 'pointer',
-                padding: '4px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                opacity: isSidebarOpen ? 0.6 : 0.4,
-                transition: 'opacity 0.2s',
-                width: '30px',
-                height: '30px',
-                marginRight: '8px'
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-              }
-            >
-              <PanelLeft size={18} />
-            </button>
             {/* Pipeline tabs */}
             <div
               style={{

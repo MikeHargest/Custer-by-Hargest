@@ -8,7 +8,27 @@ import {
   X as CloseIcon,
   Minus as MinimizeIcon,
   Maximize2 as MaximizeIcon,
-  Search
+  Search,
+  LayoutDashboard,
+  GitBranch,
+  FileText as FileTextIcon,
+  Calendar as CalendarIcon,
+  Clock,
+  Plus,
+  Pencil,
+  Settings,
+  Image as ImageIcon,
+  Move,
+  ChevronDown,
+  ChevronUp,
+  Trash2,
+  CalendarDays,
+  CalendarRange,
+  CalendarClock,
+  AlignLeft,
+  RotateCcw,
+  RefreshCcw,
+  SlidersHorizontal
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import TimerCard from './components/TimerCard'
@@ -174,6 +194,23 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
 
+  // Banner settings states
+  const [showBannerMenu, setShowBannerMenu] = useState(false)
+  const [isRepositioning, setIsRepositioning] = useState(false)
+  const bannerMenuRef = useRef<HTMLDivElement>(null)
+
+  // Calendar states
+  const [calendarViewMode, setCalendarViewMode] = useState<'timeline' | 'month' | 'week' | 'day'>('timeline')
+  const [calendarViewDate, setCalendarViewDate] = useState(new Date())
+  const [showCalendarFilter, setShowCalendarFilter] = useState(false)
+  const calendarRef = useRef<{ scrollToToday: () => void } | null>(null)
+
+  // Tab system
+  const [tabs, setTabs] = useState<{id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, label: string}[]>([
+    { id: 'initial-tab', view: 'overview', selectedProjectId: null, label: 'Overview' }
+  ])
+  const [activeTabId, setActiveTabId] = useState('initial-tab')
+
   // Undo implementation
   const [, setHistory] = useState<{ projects: Project[]; timelineTasks: TimelineTask[] }[]>([])
 
@@ -278,6 +315,20 @@ function App() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showNotifications])
+
+  // Click outside banner menu to close
+  useEffect(() => {
+    if (!showBannerMenu) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (bannerMenuRef.current && !bannerMenuRef.current.contains(event.target as Node)) {
+        setShowBannerMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showBannerMenu])
 
   useEffect(() => {
     localStorage.setItem('cluster-ui-disable-board-backups', JSON.stringify(disableBoardBackups))
@@ -1195,6 +1246,69 @@ function App() {
     setTheme(action)
   }, [])
 
+  // --- Tab management ---
+  const VIEW_LABELS: Record<string, string> = { overview: 'Overview', pipeline: 'Pipeline', notes: 'Notes', timeline: 'Calendar', clock: 'Clock' }
+  const VIEW_ICONS: Record<string, any> = {
+    overview: LayoutDashboard,
+    pipeline: GitBranch,
+    notes: FileTextIcon,
+    timeline: CalendarIcon,
+    clock: Clock
+  }
+
+  // Sync active tab when view/project changes
+  useEffect(() => {
+    setTabs(prev => prev.map(t =>
+      t.id === activeTabId
+        ? { ...t, view: currentView, selectedProjectId, label: selectedProject?.name || VIEW_LABELS[currentView] || 'Tab' }
+        : t
+    ))
+  }, [currentView, selectedProjectId, activeTabId, selectedProject?.name])
+
+  const addTab = useCallback(() => {
+    const newId = uuidv4()
+    setTabs(prev => [...prev, { id: newId, view: 'overview' as const, selectedProjectId: selectedProjectId, label: 'Overview' }])
+    setActiveTabId(newId)
+    setCurrentView('overview')
+    // Keep the current selected project instead of resetting to null
+    setSelectedProjectId(selectedProjectId)
+  }, [selectedProjectId])
+
+  const closeTab = useCallback((tabId: string) => {
+    setTabs(prev => {
+      if (prev.length <= 1) return prev
+      const newTabs = prev.filter(t => t.id !== tabId)
+      if (tabId === activeTabId) {
+        const idx = prev.findIndex(t => t.id === tabId)
+        const newActive = newTabs[Math.min(idx, newTabs.length - 1)]
+        setActiveTabId(newActive.id)
+        setCurrentView(newActive.view)
+        setSelectedProjectId(newActive.selectedProjectId)
+      }
+      return newTabs
+    })
+  }, [activeTabId])
+
+  const switchTab = useCallback((tabId: string) => {
+    if (tabId === activeTabId) return
+    // Save current state to current tab
+    setTabs(prev => prev.map(t =>
+      t.id === activeTabId
+        ? { ...t, view: currentView, selectedProjectId }
+        : t
+    ))
+    // Load new tab state
+    setTabs(prev => {
+      const tab = prev.find(t => t.id === tabId)
+      if (tab) {
+        setActiveTabId(tabId)
+        setCurrentView(tab.view)
+        setSelectedProjectId(tab.selectedProjectId)
+      }
+      return prev
+    })
+  }, [activeTabId, currentView, selectedProjectId])
+
   if (miniTimerId) {
     return <MiniTimer timerId={miniTimerId} />
   }
@@ -1246,6 +1360,21 @@ function App() {
       ])
     }
 
+    const handleBannerChange = async (projectId: string): Promise<void> => {
+      // @ts-ignore - Electron API
+      const path = await window.api.selectImageFile()
+      if (path) {
+        const normalizedPath = path.replace(/\\/g, '/')
+        const fileUrl = `file://${normalizedPath.startsWith('/') ? '' : '/'}${encodeURI(normalizedPath)}`
+        updateProject(projectId, { banner: fileUrl })
+      }
+    }
+
+    const handleStartReposition = () => {
+      setIsRepositioning(true)
+      setShowBannerMenu(false)
+    }
+
   const profileDisplayName = workspacePath ? workspacePath.split(/[\\/]/).pop() || 'No Workspace' : 'No Workspace'
   const profileAvatarUrl = workspacePath ? workspaceAvatarMap[workspacePath] || null : null
 
@@ -1265,91 +1394,101 @@ function App() {
     <div className="app-container">
       <WindowResizeHandles />
       <header className="header">
-        {/* Profile trigger */}
-        <button
-          className="header-profile-trigger"
-          onClick={() => { setShowSettings(true); }}
-          title="Profile & Workspace"
-        >
-          <span className={`header-profile-avatar ${profileAvatarUrl ? 'has-avatar' : ''}`}>
-            {profileAvatarUrl ? (
-              <img className="header-profile-avatar-img" src={profileAvatarUrl} alt={profileDisplayName} />
-            ) : (
-              <User size={16} />
-            )}
-          </span>
-          <span className="header-profile-name">{profileDisplayName}</span>
-        </button>
-
-        <div className="header-divider" />
-
-        {/* Left actions: Bell + Search */}
-        <div ref={notificationRef} style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+        <div className="header-left-group">
+          {/* Left side: Profile & Workspace Name */}
           <button
-            className="pin-btn"
-            onClick={() => setShowNotifications(!showNotifications)}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: notifications.some((n) => !n.isRead) ? 'var(--accent)' : 'var(--text-secondary)',
-              position: 'relative'
-            }}
+            className="header-profile-trigger"
+            onClick={() => { setShowSettings(true); }}
+            title="Profile & Workspace"
           >
-            <Bell size={18} />
-            {notifications.some((n) => !n.isRead) && (
-              <span style={{ position: 'absolute', top: '6px', right: '6px', width: '6px', height: '6px', background: 'var(--accent)', borderRadius: '50%', border: '2px solid var(--bg-color)' }} />
-            )}
+            <span className={`header-profile-avatar ${profileAvatarUrl ? 'has-avatar' : ''}`}>
+              {profileAvatarUrl ? (
+                <img className="header-profile-avatar-img" src={profileAvatarUrl} alt={profileDisplayName} />
+              ) : (
+                <User size={14} />
+              )}
+            </span>
+            <span className="header-profile-name">
+              {profileDisplayName}
+            </span>
           </button>
-          {showNotifications && (
-            <NotificationCenter
-              notifications={notifications}
-              onMarkAsRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))}
-              onMarkAllAsRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))}
-              onClearAll={() => { setNotifications([]); setShowNotifications(false) }}
-              onClose={() => setShowNotifications(false)}
-            />
-          )}
-        </div>
 
-        <button
-          className="pin-btn"
-          onClick={() => setShowSearchModal(true)}
-          title="Global Search (Ctrl+K)"
-          style={{ background: 'transparent', border: 'none' }}
-        >
-          <Search size={18} />
-        </button>
-
-        <div className="header-divider" />
-
-        {/* View Toggle */}
-        <div className="view-toggle">
-          {selectedProject && (
-            <div
-              className="view-toggle-indicator"
-              style={{
-                backgroundColor: selectedProject.color || 'var(--accent)'
-              }}
-            />
-          )}
-          {[
-            { id: 'overview', label: 'Overview' },
-            { id: 'pipeline', label: 'Pipeline' },
-            { id: 'notes', label: 'Notes' },
-            { id: 'timeline', label: 'Calendar' },
-            { id: 'clock', label: 'Clock' }
-          ].map((view) => (
+          {/* Bell (Notifications) */}
+          <div ref={notificationRef} style={{ position: 'relative', display: 'flex', alignItems: 'center', marginLeft: '4px' }}>
             <button
-              key={view.id}
-              className={`view-tab ${currentView === view.id ? 'active' : ''}`}
-              onClick={() => setCurrentView(view.id as any)}
+              className="header-icon-btn"
+              onClick={() => setShowNotifications(!showNotifications)}
+              style={{
+                color: notifications.some((n) => !n.isRead) ? 'var(--accent)' : 'var(--text-secondary)',
+                position: 'relative'
+              }}
             >
-              <span className="view-tab-label">{view.label}</span>
+              <Bell size={16} />
+              {notifications.some((n) => !n.isRead) && (
+                <span style={{ position: 'absolute', top: '6px', right: '6px', width: '6px', height: '6px', background: 'var(--accent)', borderRadius: '50%', border: '2px solid var(--bg-color)' }} />
+              )}
             </button>
-          ))}
+            {showNotifications && (
+              <NotificationCenter
+                notifications={notifications}
+                onMarkAsRead={(id) => setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)))}
+                onMarkAllAsRead={() => setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })))}
+                onClearAll={() => { setNotifications([]); setShowNotifications(false) }}
+                onClose={() => setShowNotifications(false)}
+              />
+            )}
+          </div>
+
+          {/* Search */}
+          <button
+            className="header-icon-btn"
+            onClick={() => setShowSearchModal(true)}
+            title="Global Search (Ctrl+K)"
+            style={{ marginLeft: '2px' }}
+          >
+            <Search size={16} />
+          </button>
         </div>
 
-        {/* Right side */}
+        <div className="header-tabs-group">
+          {/* Tabs */}
+          <div className="tab-bar-tabs">
+            {tabs.map((tab) => {
+              const Icon = VIEW_ICONS[tab.view] || Pencil
+              const tabProject = tab.selectedProjectId ? allProjects.find(p => p.id === tab.selectedProjectId) : null
+              const iconColor = tabProject?.color || '#FACC15'
+              
+              return (
+                <button
+                  key={tab.id}
+                  className={`app-tab ${activeTabId === tab.id ? 'active' : ''}`}
+                  onClick={() => switchTab(tab.id)}
+                >
+                  <Icon size={12} style={{ marginRight: '6px', opacity: 0.8, color: iconColor }} />
+                  <span className="app-tab-label">{tab.label}</span>
+                  {tabs.length > 1 && (
+                    <span
+                      className="app-tab-close"
+                      onClick={(e) => { e.stopPropagation(); closeTab(tab.id) }}
+                    >
+                      <CloseIcon size={10} />
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Tab add button */}
+          <button className="tab-add-btn" onClick={addTab} title="New Tab" style={{ margin: '0 8px 0 0' }}>
+            <Plus size={14} />
+          </button>
+        </div>
+
+        {/* Draggable spacer */}
+        <div className="header-drag-spacer" />
+
+        {/* Right side: Timer, Pin, Window controls */}
         <div className="header-right">
           <HeaderTimer currentView={currentView} />
 
@@ -1363,7 +1502,7 @@ function App() {
               color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)'
             }}
           >
-            <Pin size={18} />
+            <Pin size={16} />
           </button>
 
           <div className="window-controls-group">
@@ -1403,6 +1542,335 @@ function App() {
         />
         <div className="main-content">
 
+          {/* Content Toolbar: view icons left, context actions right */}
+          <div className="content-toolbar">
+            <div className="content-toolbar-left">
+              <button
+                className="view-icon-btn"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
+                style={{ opacity: isSidebarOpen ? 0.8 : 0.5 }}
+              >
+                <PanelLeft size={18} />
+              </button>
+              <div className="content-toolbar-separator" />
+              {([
+                { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
+                { id: 'pipeline', icon: GitBranch, label: 'Pipeline' },
+                { id: 'notes', icon: FileTextIcon, label: 'Notes' },
+                { id: 'timeline', icon: CalendarIcon, label: 'Calendar' },
+                { id: 'clock', icon: Clock, label: 'Clock' }
+              ] as const).map((v) => (
+                <button
+                  key={v.id}
+                  className={`view-icon-btn ${currentView === v.id ? 'active' : ''}`}
+                  onClick={() => setCurrentView(v.id as any)}
+                  title={v.label}
+                >
+                  <v.icon size={18} />
+                </button>
+              ))}
+            </div>
+            <div className="content-toolbar-right">
+              {currentView === 'clock' && (
+                <>
+                  <button className="toolbar-action-btn" onClick={addTimer}>
+                    <PlusCircle size={14} /> Timer
+                  </button>
+                  <button className="toolbar-action-btn" onClick={addStopwatch}>
+                    <TimerIcon size={14} /> Stopwatch
+                  </button>
+                  <button className="toolbar-action-btn" onClick={addAlarm}>
+                    <Bell size={14} /> Alarm
+                  </button>
+                </>
+              )}
+              {currentView === 'overview' && selectedProject && (
+                <>
+                  <div ref={bannerMenuRef} style={{ position: 'relative', display: 'flex' }}>
+                    <button
+                      className="view-icon-btn"
+                      onClick={() => setShowBannerMenu(!showBannerMenu)}
+                      title="Banner Settings"
+                      style={{
+                        opacity: showBannerMenu ? 1 : 0.6,
+                        background: showBannerMenu ? 'rgba(255,255,255,0.08)' : 'transparent'
+                      }}
+                    >
+                      <Settings size={18} />
+                    </button>
+
+                    {showBannerMenu && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: '8px',
+                          background: '#1a1a1a',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '10px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          padding: '6px',
+                          minWidth: '180px',
+                          zIndex: 1000,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px'
+                        }}
+                      >
+                        <button
+                          onClick={() => { handleBannerChange(selectedProject.id); setShowBannerMenu(false) }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '8px 12px', background: 'transparent', border: 'none',
+                            borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px',
+                            fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                            transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <ImageIcon size={14} style={{ opacity: 0.7 }} />
+                          Select Banner Image
+                        </button>
+
+                        <button
+                          disabled={!selectedProject.banner}
+                          onClick={handleStartReposition}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '8px 12px', background: 'transparent', border: 'none',
+                            borderRadius: '6px',
+                            color: selectedProject.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            fontSize: '13px', fontWeight: 500,
+                            cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
+                            opacity: selectedProject.banner ? 1 : 0.4,
+                            width: '100%', textAlign: 'left', transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Move size={14} style={{ opacity: 0.7 }} />
+                          Reposition Banner
+                        </button>
+
+                        <button
+                          disabled={!selectedProject.banner}
+                          onClick={() => { updateProject(selectedProject.id, { banner: undefined }); setShowBannerMenu(false) }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '8px 12px', background: 'transparent', border: 'none',
+                            borderRadius: '6px',
+                            color: selectedProject.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            fontSize: '13px', fontWeight: 500,
+                            cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
+                            opacity: selectedProject.banner ? 1 : 0.4,
+                            width: '100%', textAlign: 'left', transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Trash2 size={14} style={{ opacity: 0.7 }} />
+                          Remove Banner
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    className="view-icon-btn"
+                    disabled={!selectedProject.banner}
+                    onClick={() => updateProject(selectedProject.id, { bannerCollapsed: !selectedProject.bannerCollapsed })}
+                    style={{
+                      opacity: selectedProject.banner ? 0.6 : 0.2,
+                      cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
+                      marginLeft: '4px'
+                    }}
+                    title={selectedProject.bannerCollapsed ? 'Expand Banner' : 'Collapse Banner'}
+                    onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.opacity = '1' }}
+                    onMouseLeave={(e) => { if (selectedProject.banner) e.currentTarget.style.opacity = '0.6' }}
+                  >
+                    {selectedProject.bannerCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                  </button>
+                </>
+              )}
+              {currentView === 'timeline' && (
+                <>
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => setCalendarViewMode('timeline')}
+                    title="Timeline View"
+                    style={{ background: calendarViewMode === 'timeline' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+                  >
+                    <AlignLeft size={18} />
+                  </button>
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => setCalendarViewMode('month')}
+                    title="Month View"
+                    style={{ background: calendarViewMode === 'month' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+                  >
+                    <CalendarDays size={18} />
+                  </button>
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => setCalendarViewMode('week')}
+                    title="Week View"
+                    style={{ background: calendarViewMode === 'week' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+                  >
+                    <CalendarRange size={18} />
+                  </button>
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => setCalendarViewMode('day')}
+                    title="Day View"
+                    style={{ background: calendarViewMode === 'day' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+                  >
+                    <CalendarIcon size={18} />
+                  </button>
+
+                  <div className="content-toolbar-separator" />
+
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => calendarRef.current?.scrollToToday()}
+                    title="Go to Today"
+                  >
+                    <RotateCcw size={18} />
+                  </button>
+                  <button
+                    className="view-icon-btn"
+                    onClick={handleSyncWorkspaceEvents}
+                    disabled={isSyncingCalendar}
+                    title="Sync Calendar"
+                  >
+                    <RefreshCcw size={18} className={isSyncingCalendar ? 'pulse' : ''} />
+                  </button>
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => setShowCalendarFilter(!showCalendarFilter)}
+                    title="Filter Projects"
+                    style={{ background: showCalendarFilter ? 'rgba(255,255,255,0.1)' : 'transparent', position: 'relative' }}
+                  >
+                    <SlidersHorizontal size={18} />
+                    {showCalendarFilter && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          right: 0,
+                          background: 'var(--card-bg)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '6px 0',
+                          minWidth: '200px',
+                          zIndex: 1000,
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                          maxHeight: '400px',
+                          overflowY: 'auto'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em', textAlign: 'left' }}>
+                          Visibility
+                        </div>
+                        {allProjects.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const newHidden = new Set(hiddenTimelineProjectIds)
+                              if (newHidden.has(p.id)) newHidden.delete(p.id)
+                              else newHidden.add(p.id)
+                              setHiddenTimelineProjectIds(Array.from(newHidden))
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              width: '100%',
+                              padding: '8px 12px',
+                              background: 'transparent',
+                              border: 'none',
+                              color: hiddenTimelineProjectIds.includes(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
+                              cursor: 'pointer',
+                              fontSize: '13px',
+                              textAlign: 'left',
+                              transition: 'background 0.2s',
+                              opacity: hiddenTimelineProjectIds.includes(p.id) ? 0.6 : 1,
+                              position: 'relative'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            {/* Recursive hierarchy lines */}
+                            {Array.from({ length: p.depth || 0 }).map((_, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${12 + idx * 16 + 6}px`,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: '1px',
+                                  background: 'rgba(255,255,255,0.08)',
+                                  zIndex: 1
+                                }}
+                              />
+                            ))}
+
+                            <div
+                              style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '3px',
+                                border: `2px solid ${p.color || 'var(--accent)'}`,
+                                background: hiddenTimelineProjectIds.includes(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
+                                flexShrink: 0,
+                                marginLeft: `${(p.depth || 0) * 16}px`,
+                                zIndex: 2
+                              }}
+                            />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 2 }}>{p.name}</span>
+                          </button>
+                        ))}
+                        {hiddenTimelineProjectIds.length > 0 && (
+                          <>
+                            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setHiddenTimelineProjectIds([])
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-primary)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                textAlign: 'left',
+                                fontWeight: 500
+                              }}
+                            >
+                              <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
+                              <span>Show all projects</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
           <div className="views-wrapper">
             {/* All views always rendered — hidden ones use display:none so timers keep running */}
             <div style={{ display: currentView === 'overview' ? 'contents' : 'none' }}>
@@ -1418,9 +1886,9 @@ function App() {
                     setActiveNoteId(noteId)
                   }}
                   onProjectClick={(projectId) => setSelectedProjectId(projectId)}
-                  isSidebarOpen={isSidebarOpen}
-                  onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                   onNavigateToPipeline={() => setCurrentView('pipeline')}
+                  isRepositioning={isRepositioning}
+                  setIsRepositioning={setIsRepositioning}
                 />
               ) : (
                 <div
@@ -1441,8 +1909,6 @@ function App() {
                 <PipelineView
                   project={selectedProject}
                   onUpdate={updateProject}
-                  isSidebarOpen={isSidebarOpen}
-                  onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                   isVisible={currentView === 'pipeline'}
                 />
               ) : (
@@ -1472,12 +1938,18 @@ function App() {
                 onAddAlarm={handleAddAlarm}
                 hiddenProjectIds={hiddenTimelineProjectIds}
                 setHiddenProjectIds={setHiddenTimelineProjectIds}
-                isSidebarOpen={isSidebarOpen}
-                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 onSyncWorkspaceEvents={handleSyncWorkspaceEvents}
                 isSyncing={isSyncingCalendar}
                 selectedProjectId={selectedProjectId}
                 setProjects={handleSetProjects}
+                viewMode={calendarViewMode}
+                setViewMode={setCalendarViewMode}
+                showFilterMenu={showCalendarFilter}
+                setShowFilterMenu={setShowCalendarFilter}
+                viewDate={calendarViewDate}
+                setViewDate={setCalendarViewDate}
+                scrollToToday={() => {}} // This will be handled by ref if needed, but we can pass it
+                ref={calendarRef}
               />
             </div>
             <div style={{ display: currentView === 'notes' ? 'contents' : 'none' }}>
@@ -1496,120 +1968,19 @@ function App() {
                 backupIntervalMinutes={backupIntervalMinutes}
                 boardBackupIntervalMinutes={boardBackupIntervalMinutes}
                 disableBoardBackups={disableBoardBackups}
-                isSidebarOpen={isSidebarOpen}
-                onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               />
             </div>
             <div
               className="clock-view-container"
               style={{
-                display: currentView === 'clock' ? 'grid' : 'none',
-                gridTemplateRows: 'auto 1fr',
+                display: currentView === 'clock' ? 'flex' : 'none',
+                flexDirection: 'column',
                 height: '100%',
                 maxHeight: '100%',
                 minHeight: 0,
                 overflow: 'hidden'
               }}
             >
-              <div
-                className="clock-actions"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  height: '45px',
-                  boxSizing: 'border-box',
-                  borderBottom: '1px solid rgba(255,255,255,0.05)',
-                  flexShrink: 0,
-                  padding: '0 10px',
-                  gap: '8px'
-                }}
-              >
-                <button
-                  onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                  title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: isSidebarOpen ? 'var(--text-primary)' : 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    padding: '4px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    opacity: isSidebarOpen ? 0.6 : 0.4,
-                    transition: 'opacity 0.2s',
-                    width: '30px',
-                    height: '30px',
-                    marginRight: '8px'
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.opacity = isSidebarOpen ? '0.6' : '0.4')
-                  }
-                >
-                  <PanelLeft size={18} />
-                </button>
-                <button
-                  onClick={addTimer}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'var(--text-primary)',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <PlusCircle size={14} />
-                  Timer
-                </button>
-                <button
-                  onClick={addStopwatch}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'var(--text-primary)',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <TimerIcon size={14} />
-                  Stopwatch
-                </button>
-                <button
-                  onClick={addAlarm}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    color: 'var(--text-primary)',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <Bell size={14} />
-                  Alarm
-                </button>
-              </div>
               <div
                 className="timers-list"
                 style={{
