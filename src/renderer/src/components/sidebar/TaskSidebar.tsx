@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { Plus, ChevronDown, ChevronRight, Archive, Trash2 } from 'lucide-react'
+import { Plus, ChevronDown, ChevronRight, Archive, Trash2, Folder, CheckSquare, Calendar as CalendarIcon } from 'lucide-react'
 import { Project, TaskItem, TimelineTask, AppEvent } from '../../types'
 import ColorPicker from '../ColorPicker'
 
@@ -253,6 +253,14 @@ export default memo(function TaskSidebar({
     window.addEventListener('resize', capHeights)
     return () => window.removeEventListener('resize', capHeights)
   }, [isEventsExpanded, isTasksExpanded, tasksHeight, isResizingTasks, isTransitioning])
+
+  // Auto-collapse sections when sidebar is closed
+  useEffect(() => {
+    if (!isOpen) {
+      setIsTasksExpanded(false)
+      setIsEventsExpanded(false)
+    }
+  }, [isOpen])
 
   const handleAddProject = useCallback(
     (name: string, parentId?: string) => {
@@ -1480,68 +1488,90 @@ export default memo(function TaskSidebar({
                 minHeight: 0
               }}
             >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: '0',
-                  padding: '12px 20px'
-                }}
-              >
-                <h3
+                <div
                   style={{
-                    fontSize: '13px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    color: 'var(--text-secondary)',
-                    opacity: 0.8,
-                    margin: 0,
-                    fontWeight: 600,
-                    paddingLeft: 0
-                  }}
-                >
-                  Projects
-                </h3>
-                <button
-                  onClick={async () => {
-                    const result = await handleAddProject('New Project')
-                    if (result) {
-                      startEditing(result.id, result.name)
-                    }
-                  }}
-                  className="task-add-btn premium-sidebar-btn"
-                  title="Add Project"
-                  style={{
-                    width: '26px',
-                    height: '26px',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    background: 'none',
-                    border: 'none',
-                    borderRadius: '6px',
-                    color: 'var(--text-secondary)',
-                    cursor: 'pointer',
-                    padding: 0
+                    marginBottom: '0',
+                    padding: isOpen ? '12px 20px' : '12px 0'
                   }}
                 >
-                  <Plus size={14} />
-                </button>
-              </div>
+                  {isOpen ? (
+                    <h3
+                      style={{
+                        fontSize: '13px',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.08em',
+                        color: 'var(--text-secondary)',
+                        opacity: 0.8,
+                        margin: 0,
+                        fontWeight: 600,
+                        paddingLeft: 0,
+                        flex: 1
+                      }}
+                    >
+                      Projects
+                    </h3>
+                  ) : (
+                    <div
+                      className="sidebar-header-icon"
+                      title="Projects"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        width: '100%',
+                        height: '26px',
+                        color: 'var(--text-secondary)',
+                        opacity: 0.8
+                      }}
+                    >
+                      <Folder size={18} />
+                    </div>
+                  )}
+                  {isOpen && (
+                    <button
+                      onClick={async () => {
+                        const result = await handleAddProject('New Project')
+                        if (result) {
+                          startEditing(result.id, result.name)
+                        }
+                      }}
+                      className="task-add-btn premium-sidebar-btn"
+                      title="Add Project"
+                      style={{
+                        width: '26px',
+                        height: '26px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'none',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                  )}
+                </div>
               <div
                 className="task-list custom-scrollbar"
                 style={{
-                  marginBottom: '8px',
+                  marginBottom: isOpen ? '8px' : '16px',
                   flex: 1,
                   minHeight: 0,
                   maxHeight: 'none',
                   overflowY: 'auto',
                   overflowX: 'hidden',
                   scrollbarGutter: 'stable',
-                  padding: '0 0 0 18px',
+                  padding: isOpen ? '0 0 0 18px' : '0',
                   display: 'flex',
                   flexDirection: 'column',
+                  alignItems: isOpen ? 'stretch' : 'center',
                   transition: (isResizingSidebar || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                 }}
               >
@@ -1589,6 +1619,7 @@ export default memo(function TaskSidebar({
                      openColorPickerFor={openColorPickerFor}
                      showTaskCounts={showTaskCounts}
                      showColoredDots={showColoredDots}
+                     isOpen={isOpen}
                    />
                  ))
                )}
@@ -1599,9 +1630,10 @@ export default memo(function TaskSidebar({
           <div
             className={`sidebar-resizer projects-resizer is-resizable ${isResizingSidebar ? 'is-resizing' : ''}`}
             style={{
-              opacity: 1,
-              pointerEvents: 'auto',
-              transition: isResizingSidebar ? 'none' : 'opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              opacity: isOpen ? 1 : 0,
+              pointerEvents: isOpen ? 'auto' : 'none',
+              height: '1px',
+              transition: isResizingSidebar ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
             onMouseDown={(e) => {
               e.preventDefault()
@@ -1611,18 +1643,18 @@ export default memo(function TaskSidebar({
             }}
           />
           <div
-            ref={detailBlockRef}
-            className="sidebar-block detail-block"
-            style={{
-              flex: (isTasksExpanded || isEventsExpanded) ? '1 1 0px' : '0 0 100px',
-              minHeight: '100px',
-              display: 'flex',
-              flexDirection: 'column',
-              marginTop: '0px',
-              transition: (isResizingSidebar || isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              overflow: 'hidden'
-            }}
-          >
+              ref={detailBlockRef}
+              className="sidebar-block detail-block"
+              style={{
+                flex: (isTasksExpanded || isEventsExpanded) ? '1 1 0px' : (isOpen ? '0 0 100px' : '0 0 130px'),
+                minHeight: isOpen ? '100px' : '130px',
+                display: 'flex',
+                flexDirection: 'column',
+                marginTop: '0px',
+                transition: (isResizingSidebar || isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                overflow: 'hidden'
+              }}
+            >
             {selectedProject ? (
               <>
                 {/* --- TASKS SECTION --- */}
@@ -1631,58 +1663,143 @@ export default memo(function TaskSidebar({
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '12px 20px 12px 20px',
-                    cursor: 'default'
+                    justifyContent: 'center',
+                    padding: isOpen ? '12px 20px 12px 20px' : '12px 0',
+                    cursor: 'default',
+                    width: '100%'
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <h3
-                      style={{
-                        fontSize: '13px',
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.08em',
-                        color: 'var(--text-secondary)',
-                        opacity: 0.8,
-                        margin: 0,
-                        fontWeight: 600
-                      }}
-                    >
-                      {isArchiveView ? 'Archive' : 'Temp Tasks'}
-                    </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: isOpen ? 'flex-start' : 'center' }}>
+                    {isOpen ? (
+                      <h3
+                        style={{
+                          fontSize: '13px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.08em',
+                          color: 'var(--text-secondary)',
+                          opacity: 0.8,
+                          margin: 0,
+                          fontWeight: 600
+                        }}
+                      >
+                        {isArchiveView ? 'Archive' : 'Temp Tasks'}
+                      </h3>
+                    ) : (
+                      <div
+                        className="sidebar-header-icon"
+                        title={isArchiveView ? 'Archive' : 'Tasks'}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: '100%',
+                          height: '26px',
+                          color: 'var(--text-secondary)',
+                          opacity: 0.8
+                        }}
+                      >
+                        {isArchiveView ? <Archive size={18} /> : <CheckSquare size={18} />}
+                      </div>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <button
-                      onClick={() => {
-                        setIsArchiveView(!isArchiveView)
-                      }}
-                      className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`}
-                      title={isArchiveView ? 'View Active Tasks' : 'View Archive'}
-                      style={{
-                        width: '26px',
-                        height: '26px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: isArchiveView ? 'rgba(255,255,255,0.1)' : 'none',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: isArchiveView ? 'var(--text-primary)' : 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        padding: 0
-                      }}
-                    >
-                      <Archive size={14} />
-                    </button>
-                    {isArchiveView ? (
+                  {isOpen && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button
+                        onClick={() => {
+                          setIsArchiveView(!isArchiveView)
+                        }}
+                        className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`}
+                        title={isArchiveView ? 'View Active Tasks' : 'View Archive'}
+                        style={{
+                          width: '26px',
+                          height: '26px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: isArchiveView ? 'rgba(255,255,255,0.1)' : 'none',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: isArchiveView ? 'var(--text-primary)' : 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          padding: 0
+                        }}
+                      >
+                        <Archive size={14} />
+                      </button>
+                      {isArchiveView ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            clearArchive(selectedProject.id)
+                          }}
+                          className="premium-sidebar-btn"
+                          title="Clear Archive"
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'none',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            padding: 0
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (isTasksExpanded) quickAddTask(selectedProject.id)
+                          }}
+                          className="task-add-btn premium-sidebar-btn"
+                          title="Add Task"
+                          disabled={!isTasksExpanded}
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'none',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: 'var(--text-secondary)',
+                            cursor: isTasksExpanded ? 'pointer' : 'default',
+                            transition: 'all 0.2s ease',
+                            padding: 0,
+                            opacity: isTasksExpanded ? 1 : 0.3,
+                            pointerEvents: isTasksExpanded ? 'auto' : 'none'
+                          }}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      )}
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
-                          clearArchive(selectedProject.id)
+                          setIsTransitioning(true)
+
+                          // If collapsing Tasks AND Events is already collapsed, Projects will expand
+                          if (isTasksExpanded && !isEventsExpanded && detailBlockRef.current) {
+                            // This is handled by projectsHeight transition if we set it
+                            setProjectsHeight(window.innerHeight - 150)
+                          } else if (!isTasksExpanded) {
+                            // If re-expanding tasks, set a reasonable project height first
+                            setProjectsHeight(Math.min(projectsHeight, 400))
+                          }
+
+                          setIsTasksExpanded(!isTasksExpanded)
+                          setTimeout(() => setIsTransitioning(false), 300)
                         }}
                         className="premium-sidebar-btn"
-                        title="Clear Archive"
+                        title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'}
                         style={{
                           width: '26px',
                           height: '26px',
@@ -1694,78 +1811,14 @@ export default memo(function TaskSidebar({
                           borderRadius: '6px',
                           color: 'var(--text-secondary)',
                           cursor: 'pointer',
-                          transition: 'all 0.2s ease',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                           padding: 0
                         }}
                       >
-                        <Trash2 size={14} />
+                        {isTasksExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                       </button>
-                    ) : (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isTasksExpanded) quickAddTask(selectedProject.id)
-                        }}
-                        className="task-add-btn premium-sidebar-btn"
-                        title="Add Task"
-                        disabled={!isTasksExpanded}
-                        style={{
-                          width: '26px',
-                          height: '26px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: isTasksExpanded ? 'pointer' : 'default',
-                          transition: 'all 0.2s ease',
-                          padding: 0,
-                          opacity: isTasksExpanded ? 1 : 0.3,
-                          pointerEvents: isTasksExpanded ? 'auto' : 'none'
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setIsTransitioning(true)
-
-                        // If collapsing Tasks AND Events is already collapsed, Projects will expand
-                        if (isTasksExpanded && !isEventsExpanded && detailBlockRef.current) {
-                          // This is handled by projectsHeight transition if we set it
-                          setProjectsHeight(window.innerHeight - 150)
-                        } else if (!isTasksExpanded) {
-                          // If re-expanding tasks, set a reasonable project height first
-                          setProjectsHeight(Math.min(projectsHeight, 400))
-                        }
-
-                        setIsTasksExpanded(!isTasksExpanded)
-                        setTimeout(() => setIsTransitioning(false), 300)
-                      }}
-                      className="premium-sidebar-btn"
-                      title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'}
-                      style={{
-                        width: '26px',
-                        height: '26px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'none',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        padding: 0
-                      }}
-                    >
-                      {isTasksExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
-                  </div>
+                    </div>
+                  )}
                 </div>
 
                 {isTasksExpanded && (
@@ -1832,8 +1885,8 @@ export default memo(function TaskSidebar({
                   style={{
                     display: 'flex',
                     flexDirection: 'column',
-                    minHeight: isEventsExpanded ? '100px' : '50px',
-                    flex: isEventsExpanded ? (isTasksExpanded ? '1 0 0%' : '1') : '0 0 50px',
+                    minHeight: isEventsExpanded ? '100px' : (isOpen ? '50px' : '65px'),
+                    flex: isEventsExpanded ? (isTasksExpanded ? '1 0 0%' : '1') : (isOpen ? '0 0 50px' : '0 0 65px'),
                     transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                   }}
                 >
@@ -1842,10 +1895,11 @@ export default memo(function TaskSidebar({
                     className={`sidebar-resizer section-divider ${isTasksExpanded && isEventsExpanded ? 'is-resizable' : ''}`}
                     style={{
                       cursor: isTasksExpanded && isEventsExpanded ? 'row-resize' : 'default',
-                      height: isTasksExpanded && isEventsExpanded ? '4px' : '1px',
+                      height: (isTasksExpanded && isEventsExpanded) ? '4px' : '1px',
                       opacity: 1,
-                      pointerEvents: isTasksExpanded && isEventsExpanded ? 'auto' : 'none',
-                      margin: 0,
+                      pointerEvents: (isTasksExpanded && isEventsExpanded) ? 'auto' : 'none',
+                      margin: isOpen ? '8px 0' : '16px 0',
+                      background: 'rgba(255,255,255,0.25)',
                       transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}
                     onMouseDown={(e) => {
@@ -1863,96 +1917,117 @@ export default memo(function TaskSidebar({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '12px 20px 12px 20px',
-                      cursor: 'default'
+                      justifyContent: 'center',
+                      padding: isOpen ? '12px 20px 12px 20px' : '12px 0',
+                      cursor: 'default',
+                      width: '100%'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <h3
-                        style={{
-                          fontSize: '13px',
-                          textTransform: 'uppercase',
-                          letterSpacing: '0.08em',
-                          color: 'var(--text-secondary)',
-                          opacity: 0.8,
-                          margin: 0,
-                          fontWeight: 600
-                        }}
-                      >
-                        Events
-                      </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', justifyContent: isOpen ? 'flex-start' : 'center' }}>
+                      {isOpen ? (
+                        <h3
+                          style={{
+                            fontSize: '13px',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.08em',
+                            color: 'var(--text-secondary)',
+                            opacity: 0.8,
+                            margin: 0,
+                            fontWeight: 600
+                          }}
+                        >
+                          Events
+                        </h3>
+                      ) : (
+                        <div
+                          className="sidebar-header-icon"
+                          title="Events"
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '100%',
+                            height: '26px',
+                            color: 'var(--text-secondary)',
+                            opacity: 0.8
+                          }}
+                        >
+                          <CalendarIcon size={18} />
+                        </div>
+                      )}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          if (isEventsExpanded) quickAddEvent(selectedProject.id)
-                        }}
-                        className="event-add-btn premium-sidebar-btn"
-                        title="Add Event"
-                        disabled={!isEventsExpanded}
-                        style={{
-                          width: '26px',
-                          height: '26px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: isEventsExpanded ? 'pointer' : 'default',
-                          transition: 'all 0.2s ease',
-                          padding: 0,
-                          opacity: isEventsExpanded ? 1 : 0.3,
-                          pointerEvents: isEventsExpanded ? 'auto' : 'none'
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setIsTransitioning(true)
+                    {isOpen && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (isEventsExpanded) quickAddEvent(selectedProject.id)
+                          }}
+                          className="event-add-btn premium-sidebar-btn"
+                          title="Add Event"
+                          disabled={!isEventsExpanded}
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'none',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: 'var(--text-secondary)',
+                            cursor: isEventsExpanded ? 'pointer' : 'default',
+                            transition: 'all 0.2s ease',
+                            padding: 0,
+                            opacity: isEventsExpanded ? 1 : 0.3,
+                            pointerEvents: isEventsExpanded ? 'auto' : 'none'
+                          }}
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setIsTransitioning(true)
 
-                          // If collapsing Events, Tasks should expand to the full height
-                          if (isEventsExpanded && detailBlockRef.current) {
-                            const containerHeight = detailBlockRef.current.getBoundingClientRect().height
-                            setTasksHeight(containerHeight - 50)
-                          } else if (!isEventsExpanded && detailBlockRef.current) {
-                            // If expanding Events, we need to ensure the starting height is correct
-                            // so it can animate back from "full" to its share
-                            const containerHeight = detailBlockRef.current.getBoundingClientRect().height
-                            setTasksHeight(containerHeight - 50)
-                            // We'll let the next frame or the natural flex-basis take over
-                            // Actually, let's just set it to a reasonable split like 50/50 for a moment
-                            setTimeout(() => setTasksHeight(Math.min(350, (containerHeight - 100))), 10);
-                          }
+                            // If collapsing Events, Tasks should expand to the full height
+                            if (isEventsExpanded && detailBlockRef.current) {
+                              const containerHeight = detailBlockRef.current.getBoundingClientRect().height
+                              setTasksHeight(containerHeight - 50)
+                            } else if (!isEventsExpanded && detailBlockRef.current) {
+                              // If expanding Events, we need to ensure the starting height is correct
+                              // so it can animate back from "full" to its share
+                              const containerHeight = detailBlockRef.current.getBoundingClientRect().height
+                              setTasksHeight(containerHeight - 50)
+                              // We'll let the next frame or the natural flex-basis take over
+                              // Actually, let's just set it to a reasonable split like 50/50 for a moment
+                              setTimeout(() => setTasksHeight(Math.min(350, (containerHeight - 100))), 10);
+                            }
 
-                          setIsEventsExpanded(!isEventsExpanded)
-                          setTimeout(() => setIsTransitioning(false), 300)
-                        }}
-                        className="premium-sidebar-btn"
-                        title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'}
-                        style={{
-                          width: '26px',
-                          height: '26px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          padding: 0
-                        }}
-                      >
-                        {isEventsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                      </button>
-                    </div>
+                            setIsEventsExpanded(!isEventsExpanded)
+                            setTimeout(() => setIsTransitioning(false), 300)
+                          }}
+                          className="premium-sidebar-btn"
+                          title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'}
+                          style={{
+                            width: '26px',
+                            height: '26px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            background: 'none',
+                            border: 'none',
+                            borderRadius: '6px',
+                            color: 'var(--text-secondary)',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            padding: 0
+                          }}
+                        >
+                          {isEventsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {isEventsExpanded && (

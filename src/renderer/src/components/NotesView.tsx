@@ -49,6 +49,7 @@ import { Markdown } from 'tiptap-markdown'
 import Link from '@tiptap/extension-link'
 import ImageExt from '@tiptap/extension-image'
 import { Virtuoso } from 'react-virtuoso'
+import { motion, AnimatePresence } from 'framer-motion'
 
 import { AppNote, Project } from '../types'
 import ColorPicker from './ColorPicker'
@@ -194,6 +195,47 @@ export default function NotesView({
   const lastBackedUpContentRef = useRef<Record<string, string>>({})
   const lastBoardBackupAtRef = useRef<Record<string, number>>({})
   const lastBoardBackupHashRef = useRef<Record<string, string>>({})
+
+  // Custom Confirmation Dialog State
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  })
+
+  const handleConfirm = useCallback(() => {
+    if (confirmDialog.isOpen) {
+      confirmDialog.onConfirm()
+      setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+    }
+  }, [confirmDialog])
+
+  const handleCancel = useCallback(() => {
+    setConfirmDialog((prev) => ({ ...prev, isOpen: false }))
+  }, [])
+
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if (!confirmDialog.isOpen) return
+
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        handleConfirm()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        handleCancel()
+      }
+    }
+
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [confirmDialog.isOpen, handleConfirm, handleCancel])
 
   useEffect(() => {
     notesRef.current = notes
@@ -576,19 +618,26 @@ export default function NotesView({
   }
 
   const handleDeleteBoardVersion = async (versionPath: string) => {
-    // @ts-ignore
-    const success = await window.api.deleteBoardVersion(versionPath)
-    if (success) {
-      const activeId = activeNoteIdRef.current
-      if (!activeId) return
-      const currentNote = notesRef.current.find((n) => n.id === activeId)
-      if (!currentNote) return
-      const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
-      const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
-      // @ts-ignore
-      const versions = await window.api.listBoardVersions(targetDir, fileName)
-      setBoardVersions(versions)
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Version',
+      message: 'Are you sure you want to delete this version?',
+      onConfirm: async () => {
+        // @ts-ignore
+        const success = await window.api.deleteBoardVersion(versionPath)
+        if (success) {
+          const activeId = activeNoteIdRef.current
+          if (!activeId) return
+          const currentNote = notesRef.current.find((n) => n.id === activeId)
+          if (!currentNote) return
+          const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+          const fileName = currentNote.fileName || getFileName(currentNote.title, currentNote.id, 'board')
+          // @ts-ignore
+          const versions = await window.api.listBoardVersions(targetDir, fileName)
+          setBoardVersions(versions)
+        }
+      }
+    })
   }
 
   // Ctrl+S listener
@@ -608,6 +657,33 @@ export default function NotesView({
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [handleManualSave])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+
+      // Проверка для меню бекапов/версий
+      const isMenuButton = target.closest('[data-history-menu-button="true"]') || 
+                         target.closest('[data-versions-menu-button="true"]') ||
+                         target.closest('[data-history-menu-button="true"]') ||
+                         target.closest('[ref="notesHistoryButtonRef"]') // notesHistoryButtonRef doesn't have data attr yet, will add
+
+      const isMenuRoot = target.closest('[data-history-menu-root="true"]') || 
+                       target.closest('[data-versions-menu-root="true"]')
+
+      if (!isMenuButton && !isMenuRoot) {
+        setShowHistoryDropdown(false)
+        setShowBoardVersionsDropdown(false)
+        setBoardHistoryMenuPos(null)
+        setBoardVersionsMenuPos(null)
+      }
+    }
+
+    if (showHistoryDropdown || showBoardVersionsDropdown) {
+      window.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => window.removeEventListener('mousedown', handleClickOutside)
+  }, [showHistoryDropdown, showBoardVersionsDropdown])
 
   const handleLoadHistory = async () => {
     if (!activeNoteId) return
@@ -693,11 +769,18 @@ export default function NotesView({
   }
 
   const handleDeleteBackup = async (backupItem: any) => {
-    // @ts-ignore
-    const ok = await window.api.deleteNoteBackup(backupItem.path)
-    if (ok) {
-      setHistoryList(prev => prev.filter(h => h.path !== backupItem.path))
-    }
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Backup',
+      message: 'Are you sure you want to permanently delete this backup?',
+      onConfirm: async () => {
+        // @ts-ignore
+        const ok = await window.api.deleteNoteBackup(backupItem.path)
+        if (ok) {
+          setHistoryList((prev) => prev.filter((h) => h.path !== backupItem.path))
+        }
+      }
+    })
   }
 
   const handleUpdateNote = useCallback(
@@ -2662,6 +2745,8 @@ export default function NotesView({
                       <div style={{ position: 'relative' }}>
                         <div data-history-menu-button="true" ref={boardHistoryButtonRef}>
                           <ToolbarButton onClick={() => {
+                            setShowBoardVersionsDropdown(false)
+                            setBoardVersionsMenuPos(null)
                             if (showHistoryDropdown) {
                               setShowHistoryDropdown(false)
                               setBoardHistoryMenuPos(null)
@@ -2698,13 +2783,37 @@ export default function NotesView({
                                   const dateStr = dt.toLocaleDateString()
                                   const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                   return (
-                                    <button key={i} onClick={() => handlePreviewHistory(h)} style={{
-                                      padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
-                                      background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
-                                    }} className="file-item-hover">
-                                      <RotateCcw size={12} color="var(--text-secondary)" />
-                                      <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
-                                    </button>
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '2px' }} className="file-item-hover">
+                                      <button onClick={() => handlePreviewHistory(h)} style={{
+                                        flex: 1, padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none'
+                                      }}>
+                                        <RotateCcw size={12} color="var(--text-secondary)" />
+                                        <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDeleteBackup(h)
+                                        }}
+                                        title="Delete backup"
+                                        style={{
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: 'rgba(255,255,255,0.2)',
+                                          padding: '6px',
+                                          cursor: 'pointer',
+                                          borderRadius: '4px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   )
                                 })}
                               </div>
@@ -2718,6 +2827,8 @@ export default function NotesView({
                         <div data-versions-menu-button="true" ref={boardVersionsButtonRef}>
                           <ToolbarButton
                             onClick={() => {
+                            setShowHistoryDropdown(false)
+                            setBoardHistoryMenuPos(null)
                             if (showBoardVersionsDropdown) {
                               setShowBoardVersionsDropdown(false)
                               setBoardVersionsMenuPos(null)
@@ -2976,30 +3087,34 @@ export default function NotesView({
                              justifyContent: 'flex-start'
                            }}
                          >
-                        <div style={{ position: 'relative' }} ref={notesHistoryButtonRef}>
-                          <ToolbarButton onClick={() => {
-                            if (showHistoryDropdown) {
-                              setShowHistoryDropdown(false)
-                              setBoardHistoryMenuPos(null)
-                              return
-                            }
-                            const rect = notesHistoryButtonRef.current?.getBoundingClientRect()
-                            if (!rect) return
-                            setBoardHistoryMenuPos({
-                               top: rect.bottom + 8,
-                               left: rect.left
-                             })
-                             handleLoadHistory()
-                           }} title="Version History">
-                             <History size={16} />
-                           </ToolbarButton>
+                        <div style={{ position: 'relative' }}>
+                          <div data-history-menu-button="true" ref={notesHistoryButtonRef}>
+                            <ToolbarButton onClick={() => {
+                              if (showHistoryDropdown) {
+                                setShowHistoryDropdown(false)
+                                setBoardHistoryMenuPos(null)
+                                return
+                              }
+                              const rect = notesHistoryButtonRef.current?.getBoundingClientRect()
+                              if (!rect) return
+                              setBoardHistoryMenuPos({
+                                 top: rect.bottom + 8,
+                                 left: rect.left
+                               })
+                               handleLoadHistory()
+                             }} title="Version History">
+                               <History size={16} />
+                             </ToolbarButton>
+                           </div>
                          </div>
                          {showHistoryDropdown && boardHistoryMenuPos && (
-                           <div style={{
+                           <div 
+                             data-history-menu-root="true"
+                             style={{
                              position: 'fixed',
                              top: `${boardHistoryMenuPos.top}px`,
                              left: `${boardHistoryMenuPos.left}px`,
-                             zIndex: 1000,
+                             zIndex: 2147483000,
                             background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
                             borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
                             boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
@@ -3014,13 +3129,37 @@ export default function NotesView({
                                   const dateStr = dt.toLocaleDateString()
                                   const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                                   return (
-                                    <button key={i} onClick={() => handlePreviewHistory(h)} style={{
-                                      padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
-                                      background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none', width: '100%'
-                                    }} className="file-item-hover">
-                                      <RotateCcw size={12} color="var(--text-secondary)" />
-                                      <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
-                                    </button>
+                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '2px' }} className="file-item-hover">
+                                      <button onClick={() => handlePreviewHistory(h)} style={{
+                                        flex: 1, padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
+                                        background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none'
+                                      }}>
+                                        <RotateCcw size={12} color="var(--text-secondary)" />
+                                        <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          handleDeleteBackup(h)
+                                        }}
+                                        title="Delete backup"
+                                        style={{
+                                          background: 'transparent',
+                                          border: 'none',
+                                          color: 'rgba(255,255,255,0.2)',
+                                          padding: '6px',
+                                          cursor: 'pointer',
+                                          borderRadius: '4px',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          justifyContent: 'center'
+                                        }}
+                                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
+                                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
                                   )
                                 })}
                               </div>
@@ -3733,6 +3872,121 @@ export default function NotesView({
           </div>
         </>
       )}
+
+      <AnimatePresence>
+        {confirmDialog.isOpen && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 2147483647,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '20px',
+              background: 'rgba(0, 0, 0, 0.4)',
+              backdropFilter: 'blur(4px)'
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              style={{
+                width: '100%',
+                maxWidth: '400px',
+                background: 'var(--card-bg, #1e1e1e)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '16px',
+                padding: '24px',
+                boxShadow: '0 20px 50px rgba(0, 0, 0, 0.5)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '2px',
+                  background: 'linear-gradient(90deg, transparent, var(--accent, #7c5cbf), transparent)'
+                }}
+              />
+
+              <h3
+                style={{
+                  margin: '0 0 12px 0',
+                  fontSize: '18px',
+                  fontWeight: 600,
+                  color: 'var(--text-primary, #fff)'
+                }}
+              >
+                {confirmDialog.title}
+              </h3>
+
+              <p
+                style={{
+                  margin: '0 0 24px 0',
+                  fontSize: '14px',
+                  lineHeight: '1.5',
+                  color: 'var(--text-secondary, #aaa)'
+                }}
+              >
+                {confirmDialog.message}
+              </p>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  justifyContent: 'flex-end'
+                }}
+              >
+                <button
+                  onClick={handleCancel}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: '8px',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    background: 'transparent',
+                    color: 'var(--text-primary, #fff)',
+                    fontSize: '14px',
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  style={{
+                    padding: '8px 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: 'var(--accent, #7c5cbf)',
+                    color: '#fff',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: '0 4px 12px rgba(124, 92, 191, 0.3)'
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.1)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
+                >
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   )
 }

@@ -36,9 +36,10 @@ interface ProjectItemProps {
   openColorPickerFor: (projectId: string, rect: DOMRect) => void
   showTaskCounts: boolean
   showColoredDots: boolean
+  isOpen: boolean
 }
 
-const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
+const ProjectItem = memo(({
   project,
   level,
   selectedProjectId,
@@ -63,8 +64,9 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
   parentColor,
   openColorPickerFor,
   showTaskCounts,
-  showColoredDots
-}) {
+  showColoredDots,
+  isOpen
+}: ProjectItemProps) => {
   const isSelected = selectedProjectId === project.id
   const displayColor = project.color || parentColor || 'var(--accent)'
 
@@ -76,6 +78,7 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
             ? 'drag-over-nest'
             : ''
           }`}
+        title={project.name}
         data-project-id={project.id}
         data-level={level}
         style={{
@@ -96,10 +99,14 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
               dropIndicator.type === 'project'
               ? '2px solid var(--accent)'
               : undefined,
-          marginRight: '8px',
-          marginLeft: level === 0 ? '0px' : '4px', // The rest is inherited from parent's div
-          position: 'relative'
-        }}
+            marginRight: isOpen ? '6px' : '0px',
+            marginLeft: (isOpen && level !== 0) ? '4px' : '0px',
+            position: 'relative',
+            display: 'flex',
+            justifyContent: 'center',
+            width: isOpen ? 'auto' : '100%',
+            paddingLeft: isOpen ? '10px' : '0px'
+          }}
         onClick={() => {
           if (editingId === project.id) return
           setSelectedProjectId(project.id)
@@ -121,8 +128,10 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            padding: '4px 0 4px 8px'
+            gap: isOpen ? '8px' : '0px',
+            padding: isOpen ? '4px 6px 4px 0' : '4px 0',
+            justifyContent: isOpen ? 'flex-start' : 'center',
+            width: '100%'
           }}
         >
           {(() => {
@@ -139,21 +148,23 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
                   }}
                 >
                   <div
-                     style={{
-                       width: '8px',
-                       height: '8px',
-                       borderRadius: '50%',
-                       background: displayColor
-                     }}
-                   />
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      background: displayColor,
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  />
                 </div>
               )
             }
-            if (project.icon?.startsWith('file')) {
+            if (project.icon && project.icon.startsWith('file')) {
               return (
                 <img
                   src={project.icon}
                   alt=""
+                  title={project.name}
                   style={{
                     width: '16px',
                     height: '16px',
@@ -164,11 +175,13 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
                 />
               )
             }
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const IconComponent = (LucideIcons as any)[project.icon || 'FolderOpen']
-            if (IconComponent) {
+            
+            const iconName = project.icon || 'FolderOpen'
+            const IconComponent = (LucideIcons as any)[iconName]
+            if (IconComponent && (typeof IconComponent === 'function' || typeof IconComponent === 'object')) {
               return <IconComponent size={16} style={{ color: displayColor, flexShrink: 0 }} />
             }
+            
             return (
               <span
                 style={{
@@ -181,7 +194,7 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
                   marginRight: '2px'
                 }}
               >
-                {project.icon}
+                {typeof project.icon === 'string' ? project.icon : ''}
               </span>
             )
           })()}
@@ -209,7 +222,7 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
               onClick={(e) => e.stopPropagation()}
               autoFocus
             />
-          ) : (
+          ) : isOpen && (
             <div
               style={{
                 flex: 1,
@@ -234,15 +247,16 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
                 {project.name}
               </span>
               {showTaskCounts &&
-                ((): React.ReactNode => {
+                (() => {
                   let count = 0
                   const traverse = (tasks: TaskItem[]): void => {
+                    if (!Array.isArray(tasks)) return
                     count += tasks.length
-                    tasks.forEach((t) => {
-                      if (t.subtasks) traverse(t.subtasks)
-                    })
+                    for (const t of tasks) {
+                      if (t && t.subtasks) traverse(t.subtasks)
+                    }
                   }
-                  if (project.tasks) traverse(project.tasks)
+                  if (Array.isArray(project.tasks)) traverse(project.tasks)
                   if (count === 0) return null
                   return (
                     <span
@@ -262,112 +276,114 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
             </div>
           )}
 
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: '4px',
-              marginLeft: '8px'
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button
-              className={`task-edit-btn ${project.subprojects && project.subprojects.length > 0 ? 'visible-hint' : ''
-                }`}
-              onClick={(e) => toggleProjectExpansion(project.id, e)}
+          {isOpen && (
+            <div
               style={{
-                padding: '2px',
-                color: 'var(--text-secondary)',
-                visibility:
-                  project.subprojects && project.subprojects.length > 0 ? 'visible' : 'hidden'
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: '4px',
+                marginLeft: '8px'
               }}
+              onClick={(e) => e.stopPropagation()}
             >
-              {project.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-
-            <div style={{ position: 'relative' }}>
               <button
-                className={`task-edit-btn ${activeDropdown === project.id ? 'active' : ''}`}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setActiveDropdown(activeDropdown === project.id ? null : project.id)
+                className={`task-edit-btn ${project.subprojects && project.subprojects.length > 0 ? 'visible-hint' : ''
+                  }`}
+                onClick={(e) => toggleProjectExpansion(project.id, e)}
+                style={{
+                  padding: '2px',
+                  color: 'var(--text-secondary)',
+                  visibility:
+                    project.subprojects && project.subprojects.length > 0 ? 'visible' : 'hidden'
                 }}
-                title="Project Settings"
-                style={{ padding: '2px', marginRight: '6px' }}
               >
-                <MoreVertical size={12} />
+                {project.isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
               </button>
-              {activeDropdown === project.id && (
-                <div
-                  className="project-dropdown"
-                  style={{ right: 0, left: 'auto' }}
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
+
+              <div style={{ position: 'relative' }}>
+                <button
+                  className={`task-edit-btn ${activeDropdown === project.id ? 'active' : ''}`}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setActiveDropdown(activeDropdown === project.id ? null : project.id)
+                  }}
+                  title="Project Settings"
+                  style={{ padding: '2px', marginRight: '6px' }}
                 >
-                  {level === 0 && (
+                  <MoreVertical size={12} />
+                </button>
+                {activeDropdown === project.id && (
+                  <div
+                    className="project-dropdown"
+                    style={{ right: 0, left: 'auto' }}
+                    onClick={(e) => e.stopPropagation()}
+                    onMouseDown={(e) => e.stopPropagation()}
+                  >
+                    {level === 0 && (
+                      <button
+                        className="project-dropdown-item"
+                        onClick={(e) => {
+                          const rect = e.currentTarget.getBoundingClientRect()
+                          setActiveDropdown(null)
+                          openColorPickerFor(project.id, rect)
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: '14px',
+                            height: '14px',
+                            borderRadius: '50%',
+                            background: project.color || 'var(--accent)',
+                            border: '1px solid rgba(255,255,255,0.2)'
+                          }}
+                        />
+                        <span>Project Color</span>
+                      </button>
+                    )}
                     <button
                       className="project-dropdown-item"
-                      onClick={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect()
+                      onClick={() => {
                         setActiveDropdown(null)
-                        openColorPickerFor(project.id, rect)
+                        setTimeout(() => startEditing(project.id, project.name), 0)
                       }}
                     >
-                      <div
-                        style={{
-                          width: '14px',
-                          height: '14px',
-                          borderRadius: '50%',
-                          background: project.color || 'var(--accent)',
-                          border: '1px solid rgba(255,255,255,0.2)'
-                        }}
-                      />
-                      <span>Project Color</span>
+                      <Pencil size={14} />
+                      <span>Rename Project</span>
                     </button>
-                  )}
-                  <button
-                    className="project-dropdown-item"
-                    onClick={() => {
-                      setActiveDropdown(null)
-                      setTimeout(() => startEditing(project.id, project.name), 0)
-                    }}
-                  >
-                    <Pencil size={14} />
-                    <span>Rename Project</span>
-                  </button>
-                  <button
-                    className="project-dropdown-item"
-                    onClick={() => {
-                      setActiveDropdown(null)
-                      addSubProject(project.id)
-                    }}
-                  >
-                    <Plus size={14} />
-                    <span>Add Subproject</span>
-                  </button>
-                  <div
-                    style={{
-                      height: '1px',
-                      background: 'rgba(255,255,255,0.1)',
-                      margin: '2px 0'
-                    }}
-                  />
-                  <button
-                    className="project-dropdown-item danger"
-                    onClick={() => {
-                      setActiveDropdown(null)
-                      deleteProject(project.id)
-                      if (selectedProjectId === project.id) setSelectedProjectId(null)
-                    }}
-                  >
-                    <Trash2 size={14} />
-                    <span>Delete Project</span>
-                  </button>
-                </div>
-              )}
+                    <button
+                      className="project-dropdown-item"
+                      onClick={() => {
+                        setActiveDropdown(null)
+                        addSubProject(project.id)
+                      }}
+                    >
+                      <Plus size={14} />
+                      <span>Add Subproject</span>
+                    </button>
+                    <div
+                      style={{
+                        height: '1px',
+                        background: 'rgba(255,255,255,0.1)',
+                        margin: '2px 0'
+                      }}
+                    />
+                    <button
+                      className="project-dropdown-item danger"
+                      onClick={() => {
+                        setActiveDropdown(null)
+                        deleteProject(project.id)
+                        if (selectedProjectId === project.id) setSelectedProjectId(null)
+                      }}
+                    >
+                      <Trash2 size={14} />
+                      <span>Delete Project</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
       {project.isExpanded && project.subprojects && project.subprojects.length > 0 && (
@@ -400,6 +416,7 @@ const ProjectItem: React.FC<ProjectItemProps> = memo(function ProjectItem({
               openColorPickerFor={openColorPickerFor}
               showTaskCounts={showTaskCounts}
               showColoredDots={showColoredDots}
+              isOpen={isOpen}
             />
           ))}
         </div>
