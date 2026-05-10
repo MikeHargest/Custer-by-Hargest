@@ -258,6 +258,7 @@ body {
   transition: all 0.2s !important;
   border-radius: 8px !important;
   -webkit-app-region: no-drag;
+  outline: none !important;
 }
 
 .header-icon-btn:hover {
@@ -415,6 +416,7 @@ body {
   flex-shrink: 0;
   max-width: 220px;
   position: relative;
+  outline: none;
 }
 
 .app-tab:hover {
@@ -538,13 +540,14 @@ body {
   width: 34px;
   height: 28px;
   background: transparent;
-  border: none;
+  border: 1px solid transparent;
   border-radius: 7px;
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   opacity: 0.6;
   padding: 0;
+  outline: none;
 }
 
 .view-icon-btn:hover {
@@ -874,17 +877,70 @@ body {
 }
 
 .time-input {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: none;
   color: white;
   font-size: 32px;
   font-weight: 700;
-  width: 60px;
+  width: 50px;
   text-align: center;
   padding: 4px 0;
   border-radius: var(--radius-sm);
   outline: none;
   transition: border-color 0.2s ease;
+}
+
+.time-input-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+}
+
+.spin-buttons {
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.time-input-group:hover .spin-buttons {
+  opacity: 1;
+}
+
+.spin-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-secondary);
+  width: 14px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 2px;
+  padding: 0;
+  font-size: 10px;
+}
+
+.spin-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+/* Hide native spin buttons */
+.time-input::-webkit-outer-spin-button,
+.time-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.time-input {
+  -moz-appearance: textfield;
 }
 
 .time-input:focus {
@@ -1729,24 +1785,6 @@ body {
   background: rgba(239, 68, 68, 0.1);
 }
 
-
-/* Timer Progress Bar */
-.timer-progress-track {
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 12px;
-  flex-shrink: 0;
-}
-
-.timer-progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 1s linear;
-}
 
 /* Pinned State in Main Window */
 .timer-card.pinned {

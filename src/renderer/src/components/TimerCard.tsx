@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Play, Pause, Square, Music, X, AppWindow, Settings } from 'lucide-react'
+import { Play, Pause, Square, Music, X, AppWindow, Settings, ChevronUp, ChevronDown } from 'lucide-react'
 import type { TimerData, UITheme } from '../types'
 
 interface TimerCardProps {
@@ -284,9 +284,6 @@ export default function TimerCard({ data, onUpdate, onDelete, theme, isActiveVie
 
   const pad = (num: number) => num.toString().padStart(2, '0')
 
-  const progress =
-    !data.isStopwatch && getTotalSeconds() > 0 ? (timeLeft / getTotalSeconds()) * 100 : 0
-
   return (
     <div
       className={`timer-card ${isFinished ? 'finished' : ''} ${isPinned ? 'pinned' : ''}`}
@@ -372,6 +369,20 @@ export default function TimerCard({ data, onUpdate, onDelete, theme, isActiveVie
                 value={data.hours}
                 onChange={(e) => onUpdate({ hours: Math.max(0, parseInt(e.target.value) || 0) })}
               />
+              <div className="spin-buttons">
+                <button
+                  className="spin-btn"
+                  onClick={() => onUpdate({ hours: Math.min(99, data.hours + 1) })}
+                >
+                  <ChevronUp size={10} />
+                </button>
+                <button
+                  className="spin-btn"
+                  onClick={() => onUpdate({ hours: Math.max(0, data.hours - 1) })}
+                >
+                  <ChevronDown size={10} />
+                </button>
+              </div>
               <span className="time-label">Hr</span>
             </div>
             <span className="time-separator">:</span>
@@ -386,6 +397,20 @@ export default function TimerCard({ data, onUpdate, onDelete, theme, isActiveVie
                   onUpdate({ minutes: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })
                 }
               />
+              <div className="spin-buttons">
+                <button
+                  className="spin-btn"
+                  onClick={() => onUpdate({ minutes: Math.min(59, data.minutes + 1) })}
+                >
+                  <ChevronUp size={10} />
+                </button>
+                <button
+                  className="spin-btn"
+                  onClick={() => onUpdate({ minutes: Math.max(0, data.minutes - 1) })}
+                >
+                  <ChevronDown size={10} />
+                </button>
+              </div>
               <span className="time-label">Min</span>
             </div>
             <span className="time-separator">:</span>
@@ -400,6 +425,20 @@ export default function TimerCard({ data, onUpdate, onDelete, theme, isActiveVie
                   onUpdate({ seconds: Math.max(0, Math.min(59, parseInt(e.target.value) || 0)) })
                 }
               />
+              <div className="spin-buttons">
+                <button
+                  className="spin-btn"
+                  onClick={() => onUpdate({ seconds: Math.min(59, data.seconds + 1) })}
+                >
+                  <ChevronUp size={10} />
+                </button>
+                <button
+                  className="spin-btn"
+                  onClick={() => onUpdate({ seconds: Math.max(0, data.seconds - 1) })}
+                >
+                  <ChevronDown size={10} />
+                </button>
+              </div>
               <span className="time-label">Sec</span>
             </div>
           </div>
@@ -407,13 +446,6 @@ export default function TimerCard({ data, onUpdate, onDelete, theme, isActiveVie
           <div className="timer-display" style={{ fontSize: '48px', fontWeight: 'bold' }}>
             {displayHours > 0 ? `${pad(displayHours)}:` : ''}
             {pad(displayMinutes)}:{pad(displaySeconds)}
-          </div>
-        )}
-
-        {/* Thin progress bar below timer display */}
-        {!data.isStopwatch && getTotalSeconds() > 0 && (
-          <div className="timer-progress-track">
-            <div className="timer-progress-fill" style={{ width: `${progress}%` }} />
           </div>
         )}
 
