@@ -32,7 +32,9 @@ import {
   Link2,
   Unlink,
   Image as ImageIcon,
-  ExternalLink
+  ExternalLink,
+  Settings,
+  MoreHorizontal
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -187,6 +189,13 @@ export default function NotesView({
   const [boardVersionsMenuPos, setBoardVersionsMenuPos] = useState<{ top: number; left: number } | null>(null)
   const boardVersionsButtonRef = useRef<HTMLDivElement | null>(null)
   const notesHistoryButtonRef = useRef<HTMLDivElement | null>(null)
+
+  // Selection Bubble Menu Delay
+  const [showBubbleMenu, setShowBubbleMenu] = useState(false)
+  const bubbleMenuTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const isMouseDownRef = useRef(false)
+  const [showFullBubbleMenu, setShowFullBubbleMenu] = useState(false)
+
   const lastBackedUpContentRef = useRef<Record<string, string>>({})
   const lastBoardBackupAtRef = useRef<Record<string, number>>({})
   const lastBoardBackupHashRef = useRef<Record<string, string>>({})
@@ -934,6 +943,19 @@ export default function NotesView({
       })
     ],
     content: activeNote?.content || '',
+    onSelectionUpdate: ({ editor }) => {
+      const { from, to } = editor.state.selection
+      if (from === to) {
+        setShowBubbleMenu(false)
+        setShowFullBubbleMenu(false)
+        if (bubbleMenuTimerRef.current) clearTimeout(bubbleMenuTimerRef.current)
+        return
+      }
+
+      if (!isMouseDownRef.current) {
+        setShowBubbleMenu(true)
+      }
+    },
     editorProps: {
       attributes: {
         class: 'tiptap-editor'
@@ -968,6 +990,29 @@ export default function NotesView({
       // Разрешаем file:// и local-file:// (Electron с webSecurity:false их поддерживает)
       if (url.startsWith('file://') || url.startsWith('local-file://')) return true
       return originalValidate ? originalValidate(url) : true
+    }
+
+    const handleMouseDown = () => {
+       isMouseDownRef.current = true
+       setShowBubbleMenu(false)
+       setShowFullBubbleMenu(false)
+     }
+    const handleMouseUp = () => {
+      isMouseDownRef.current = false
+      if (editor) {
+        const { from, to } = editor.state.selection
+        if (from !== to) {
+          setShowBubbleMenu(true)
+        }
+      }
+    }
+
+    editor.view.dom.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('mouseup', handleMouseUp)
+
+    return () => {
+      editor.view.dom.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('mouseup', handleMouseUp)
     }
   }, [editor])
 
@@ -3512,7 +3557,7 @@ export default function NotesView({
                           <BubbleMenu
                             editor={editor}
                             shouldShow={({ editor: bubbleEditor }) => {
-                              if (!bubbleEditor?.isEditable) return false
+                              if (!bubbleEditor?.isEditable || !showBubbleMenu) return false
                               const { from, to } = bubbleEditor.state.selection
                               return from !== to
                             }}

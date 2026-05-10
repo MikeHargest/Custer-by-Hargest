@@ -1489,22 +1489,22 @@ export default memo(function TaskSidebar({
                 minHeight: 0
               }}
             >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '0',
-                    padding: isOpen ? '16px' : '12px 0',
-                    flexShrink: 0
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isOpen ? 1 : 'none', justifyContent: isOpen ? 'flex-start' : 'center', width: isOpen ? 'auto' : '100%' }}>
-                    {isOpen ? (
-                      <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', opacity: 0.5, margin: 0, fontWeight: 700, paddingLeft: '4px' }}>
-                        Projects
-                      </h3>
-                    ) : (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '0',
+                  padding: isOpen ? '16px' : '12px 0',
+                  flexShrink: 0
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: isOpen ? 1 : 'none', justifyContent: isOpen ? 'flex-start' : 'center', width: isOpen ? 'auto' : '100%' }}>
+                  {isOpen ? (
+                    <h3 style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-secondary)', opacity: 0.5, margin: 0, fontWeight: 700, paddingLeft: '4px' }}>
+                      Projects
+                    </h3>
+                  ) : (
                     <div
                       className="sidebar-header-icon"
                       title="Projects"
@@ -1519,37 +1519,37 @@ export default memo(function TaskSidebar({
                       }}
                     >
                       <Folder size={18} />
-                  </div>
-                )}
-              </div>
-              {isOpen && (
-                    <button
-                      onClick={async () => {
-                        const result = await handleAddProject('New Project')
-                        if (result) {
-                          startEditing(result.id, result.name)
-                        }
-                      }}
-                      className="task-add-btn premium-sidebar-btn"
-                      title="Add Project"
-                      style={{
-                        width: '26px',
-                        height: '26px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        background: 'none',
-                        border: 'none',
-                        borderRadius: '6px',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        padding: 0
-                      }}
-                    >
-                      <Plus size={14} />
-                    </button>
+                    </div>
                   )}
                 </div>
+                {isOpen && (
+                  <button
+                    onClick={async () => {
+                      const result = await handleAddProject('New Project')
+                      if (result) {
+                        startEditing(result.id, result.name)
+                      }
+                    }}
+                    className="task-add-btn premium-sidebar-btn"
+                    title="Add Project"
+                    style={{
+                      width: '26px',
+                      height: '26px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'none',
+                      border: 'none',
+                      borderRadius: '6px',
+                      color: 'var(--text-secondary)',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                  >
+                    <Plus size={14} />
+                  </button>
+                )}
+              </div>
               <div
                 className="task-list custom-scrollbar"
                 style={{
@@ -1568,53 +1568,53 @@ export default memo(function TaskSidebar({
                 }}
               >
                 {projects.length === 0 ? (
-                 <div
-                   style={{
-                     display: 'flex',
-                     alignItems: 'center',
-                     justifyContent: 'center',
-                     textAlign: 'center',
-                     padding: '24px 20px',
-                     color: 'var(--text-secondary)',
-                     opacity: 0.3,
-                     fontSize: '11px',
-                     fontStyle: 'italic'
-                   }}
-                 >
-                   No projects planned
-                 </div>
-               ) : (
-                 projects.map((project) => (
-                   <ProjectItem
-                     key={project.id}
-                     project={project}
-                     level={0}
-                     selectedProjectId={selectedProjectId}
-                     setSelectedProjectId={setSelectedProjectId}
-                     editingId={editingId}
-                     editingValue={editingValue}
-                     setEditingValue={setEditingValue}
-                     saveProjectName={saveProjectName}
-                     saveTaskName={saveTaskName}
-                     cancelEditing={cancelEditing}
-                     activeDropdown={activeDropdown}
-                     setActiveDropdown={setActiveDropdown}
-                     updateProjectColor={updateProjectColor}
-                     startEditing={startEditing}
-                     deleteProject={handleDeleteProject}
-                     toggleProjectExpansion={toggleProjectExpansion}
-                     addSubProject={addSubProject}
-                     quickAddTask={quickAddTask}
-                     onDragStart={startMouseDrag}
-                     dropIndicator={dropIndicator}
-                     isDragging={isDragging}
-                     openColorPickerFor={openColorPickerFor}
-                     showTaskCounts={showTaskCounts}
-                     showColoredDots={showColoredDots}
-                     isOpen={isOpen}
-                   />
-                 ))
-               )}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      textAlign: 'center',
+                      padding: '24px 20px',
+                      color: 'var(--text-secondary)',
+                      opacity: 0.3,
+                      fontSize: '11px',
+                      fontStyle: 'italic'
+                    }}
+                  >
+                    No projects planned
+                  </div>
+                ) : (
+                  projects.map((project) => (
+                    <ProjectItem
+                      key={project.id}
+                      project={project}
+                      level={0}
+                      selectedProjectId={selectedProjectId}
+                      setSelectedProjectId={setSelectedProjectId}
+                      editingId={editingId}
+                      editingValue={editingValue}
+                      setEditingValue={setEditingValue}
+                      saveProjectName={saveProjectName}
+                      saveTaskName={saveTaskName}
+                      cancelEditing={cancelEditing}
+                      activeDropdown={activeDropdown}
+                      setActiveDropdown={setActiveDropdown}
+                      updateProjectColor={updateProjectColor}
+                      startEditing={startEditing}
+                      deleteProject={handleDeleteProject}
+                      toggleProjectExpansion={toggleProjectExpansion}
+                      addSubProject={addSubProject}
+                      quickAddTask={quickAddTask}
+                      onDragStart={startMouseDrag}
+                      dropIndicator={dropIndicator}
+                      isDragging={isDragging}
+                      openColorPickerFor={openColorPickerFor}
+                      showTaskCounts={showTaskCounts}
+                      showColoredDots={showColoredDots}
+                      isOpen={isOpen}
+                    />
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -1638,18 +1638,18 @@ export default memo(function TaskSidebar({
             }}
           />
           <div
-              ref={detailBlockRef}
-              className="sidebar-block detail-block"
-              style={{
-                height: `${projectsHeight}px`,
-                display: 'flex',
-                flexDirection: 'column',
-                transition: (isResizingSidebar || isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                overflow: 'hidden',
-                paddingBottom: '0px',
-                flexShrink: 0
-              }}
-            >
+            ref={detailBlockRef}
+            className="sidebar-block detail-block"
+            style={{
+              height: `${projectsHeight}px`,
+              display: 'flex',
+              flexDirection: 'column',
+              transition: (isResizingSidebar || isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              overflow: 'hidden',
+              paddingBottom: '0px',
+              flexShrink: 0
+            }}
+          >
             {selectedProject ? (
               <>
                 {/* --- TASKS SECTION --- */}

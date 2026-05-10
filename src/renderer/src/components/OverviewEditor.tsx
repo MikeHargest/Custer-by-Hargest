@@ -55,6 +55,7 @@ export default function OverviewEditor({
   const [linkDialogUrl, setLinkDialogUrl] = useState('')
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const selectionMenuRef = useRef<HTMLDivElement>(null)
+  const isMouseDownRef = useRef(false)
   const savedSelectionRef = useRef<{ from: number; to: number } | null>(null)
   const projectIdRef = useRef(projectId)
   const projectPathRef = useRef(projectPath)
@@ -260,7 +261,7 @@ export default function OverviewEditor({
       const clampedTop = Math.max(56, desiredTop)
       setSelectionMenuPos({ left: clampedLeft, top: clampedTop })
       setShowSelectionMenu(true)
-    }, 120)
+    }, 50)
   }, [getSelectionRect, hideSelectionMenu])
 
   const applyFormatting = useCallback(
@@ -424,7 +425,9 @@ export default function OverviewEditor({
         hideSelectionMenu()
         return
       }
-      scheduleSelectionMenu()
+      if (!isMouseDownRef.current) {
+        scheduleSelectionMenu()
+      }
     }
 
     const handleWindowChange = (): void => {
@@ -432,12 +435,26 @@ export default function OverviewEditor({
       scheduleSelectionMenu()
     }
 
+    const handleMouseDown = () => {
+      isMouseDownRef.current = true
+      hideSelectionMenu()
+    }
+
+    const handleMouseUp = () => {
+      isMouseDownRef.current = false
+      updateBySelection()
+    }
+
     editor.on('selectionUpdate', updateBySelection)
+    editor.view.dom.addEventListener('mousedown', handleMouseDown)
+    window.addEventListener('mouseup', handleMouseUp)
     window.addEventListener('resize', handleWindowChange)
     window.addEventListener('scroll', handleWindowChange, true)
 
     return () => {
       editor.off('selectionUpdate', updateBySelection)
+      editor.view.dom.removeEventListener('mousedown', handleMouseDown)
+      window.removeEventListener('mouseup', handleMouseUp)
       window.removeEventListener('resize', handleWindowChange)
       window.removeEventListener('scroll', handleWindowChange, true)
     }

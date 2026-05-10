@@ -4,6 +4,7 @@ import {
   Timer as TimerIcon,
   Pin,
   PanelLeft,
+  PanelLeftClose,
   PanelRight,
   User,
   X as CloseIcon,
@@ -17,6 +18,7 @@ import {
   Clock,
   Plus,
   Pencil,
+  MoreVertical,
   Settings,
   Image as ImageIcon,
   Move,
@@ -26,6 +28,9 @@ import {
   CalendarDays,
   CalendarRange,
   CalendarClock,
+  Target,
+  Locate,
+  CornerDownLeft,
   AlignLeft,
   RotateCcw,
   RefreshCcw,
@@ -195,6 +200,25 @@ function App() {
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
 
+  // Pipeline page menu state
+  const [activePipelineMenuId, setActivePipelineMenuId] = useState<string | null>(null)
+  const pipelineMenuRef = useRef<HTMLDivElement>(null)
+
+  // Calendar view mode menu state
+  const [showCalendarViewMenu, setShowCalendarViewMenu] = useState(false)
+  const calendarViewMenuRef = useRef<HTMLDivElement>(null)
+
+  // Calendar filter (Visibility) menu state
+  const [showCalendarFilter, setShowCalendarFilter] = useState(false)
+  const calendarFilterMenuRef = useRef<HTMLDivElement>(null)
+
+  const CALENDAR_MODES = {
+    timeline: { label: 'Timeline View', icon: AlignLeft },
+    month: { label: 'Month View', icon: CalendarDays },
+    week: { label: 'Week View', icon: CalendarRange },
+    day: { label: 'Day View', icon: CalendarIcon }
+  }
+
   // Banner settings states
   const [showBannerMenu, setShowBannerMenu] = useState(false)
   const [isRepositioning, setIsRepositioning] = useState(false)
@@ -203,11 +227,10 @@ function App() {
   // Calendar states
   const [calendarViewMode, setCalendarViewMode] = useState<'timeline' | 'month' | 'week' | 'day'>('timeline')
   const [calendarViewDate, setCalendarViewDate] = useState(new Date())
-  const [showCalendarFilter, setShowCalendarFilter] = useState(false)
   const calendarRef = useRef<{ scrollToToday: () => void } | null>(null)
 
   // Tab system
-  const [tabs, setTabs] = useState<{id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, label: string}[]>([
+  const [tabs, setTabs] = useState<{ id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, label: string }[]>([
     { id: 'initial-tab', view: 'overview', selectedProjectId: null, label: 'Overview' }
   ])
   const [activeTabId, setActiveTabId] = useState('initial-tab')
@@ -261,7 +284,7 @@ function App() {
   const handleSyncWorkspaceEvents = async () => {
     if (isSyncingCalendar) return
     setIsSyncingCalendar(true)
-    
+
     // Check if auth is valid
     const authStatus = await (window as any).api.checkGoogleAuth()
     if (!authStatus) {
@@ -272,32 +295,32 @@ function App() {
 
     // Sync all un-archived projects
     let currentProjects = JSON.parse(JSON.stringify(projectsRef.current))
-    
+
     const syncRecursive = async (projs: any[]) => {
       for (const project of projs) {
-         // Sync any project that has a name (to match with calendar)
-         // Even if project.events is empty, we want to pull events from Google
-         if (project.id) {
-            try {
-               const resolvedEvents = await (window as any).api.syncProjectEvents(project.id, project.name, project.events || [])
-               if (Array.isArray(resolvedEvents)) {
-                 console.log(`[Sync] Project "${project.name}" synced. Events count: ${resolvedEvents.length}`)
-                 project.events = resolvedEvents
-               } else {
-                 console.warn(`[Sync] Project "${project.name}" returned non-array result:`, resolvedEvents)
-               }
-            } catch(e) {
-               console.error(`Failed to sync calendar events for project ${project.id}`, e)
+        // Sync any project that has a name (to match with calendar)
+        // Even if project.events is empty, we want to pull events from Google
+        if (project.id) {
+          try {
+            const resolvedEvents = await (window as any).api.syncProjectEvents(project.id, project.name, project.events || [])
+            if (Array.isArray(resolvedEvents)) {
+              console.log(`[Sync] Project "${project.name}" synced. Events count: ${resolvedEvents.length}`)
+              project.events = resolvedEvents
+            } else {
+              console.warn(`[Sync] Project "${project.name}" returned non-array result:`, resolvedEvents)
             }
-         }
-         if (project.subprojects && project.subprojects.length > 0) {
-            await syncRecursive(project.subprojects)
-         }
+          } catch (e) {
+            console.error(`Failed to sync calendar events for project ${project.id}`, e)
+          }
+        }
+        if (project.subprojects && project.subprojects.length > 0) {
+          await syncRecursive(project.subprojects)
+        }
       }
     }
-    
+
     await syncRecursive(currentProjects)
-    
+
     // Update state to trigger JSON save automatically if we hooked it to projects
     setProjects(currentProjects)
     setIsSyncingCalendar(false)
@@ -330,6 +353,48 @@ function App() {
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [showBannerMenu])
+
+  // Click outside pipeline menu to close
+  useEffect(() => {
+    if (!activePipelineMenuId) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (pipelineMenuRef.current && !pipelineMenuRef.current.contains(event.target as Node)) {
+        setActivePipelineMenuId(null)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [activePipelineMenuId])
+
+  // Click outside calendar view menu to close
+  useEffect(() => {
+    if (!showCalendarViewMenu) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarViewMenuRef.current && !calendarViewMenuRef.current.contains(event.target as Node)) {
+        setShowCalendarViewMenu(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showCalendarViewMenu])
+
+  // Click outside calendar filter menu to close
+  useEffect(() => {
+    if (!showCalendarFilter) return
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (calendarFilterMenuRef.current && !calendarFilterMenuRef.current.contains(event.target as Node)) {
+        setShowCalendarFilter(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showCalendarFilter])
 
   useEffect(() => {
     localStorage.setItem('cluster-ui-disable-board-backups', JSON.stringify(disableBoardBackups))
@@ -814,7 +879,7 @@ function App() {
               if (choice === 'series') {
                 return {
                   ...p,
-                  events: p.events.map(ev => 
+                  events: p.events.map(ev =>
                     ev.id === realEventId ? { ...ev, syncStatus: 'pending_delete', updatedAt: Date.now() } : ev
                   ).filter(ev => ev.syncStatus === 'pending_delete' ? !!ev.externalId : true)
                 }
@@ -1323,59 +1388,59 @@ function App() {
     )
   }
 
-    const handleAddEvent = (projectId: string, title: string, date: string) => {
-      pushToHistory()
-      setProjects((prev) => {
-        const updateRecursive = (projs: Project[]): Project[] => {
-          return projs.map((p) => {
-            if (p.id === projectId) {
-              const newEvent: AppEvent = {
-                id: uuidv4(),
-                title,
-                date,
-                time: '12:00',
-                syncStatus: 'pending_push',
-                updatedAt: Date.now()
-              }
-              return { ...p, events: [...(p.events || []), newEvent] }
+  const handleAddEvent = (projectId: string, title: string, date: string) => {
+    pushToHistory()
+    setProjects((prev) => {
+      const updateRecursive = (projs: Project[]): Project[] => {
+        return projs.map((p) => {
+          if (p.id === projectId) {
+            const newEvent: AppEvent = {
+              id: uuidv4(),
+              title,
+              date,
+              time: '12:00',
+              syncStatus: 'pending_push',
+              updatedAt: Date.now()
             }
-            if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
-            return p
-          })
-        }
-        return updateRecursive(prev)
-      })
-    }
-
-    const handleAddAlarm = (date: string, time: string, title: string) => {
-      setAlarms((prev) => [
-        ...prev,
-        {
-          id: uuidv4(),
-          title,
-          taskName: null,
-          date,
-          time,
-          isEnabled: true,
-          isNotified: false
-        }
-      ])
-    }
-
-    const handleBannerChange = async (projectId: string): Promise<void> => {
-      // @ts-ignore - Electron API
-      const path = await window.api.selectImageFile()
-      if (path) {
-        const normalizedPath = path.replace(/\\/g, '/')
-        const fileUrl = `file://${normalizedPath.startsWith('/') ? '' : '/'}${encodeURI(normalizedPath)}`
-        updateProject(projectId, { banner: fileUrl })
+            return { ...p, events: [...(p.events || []), newEvent] }
+          }
+          if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
+          return p
+        })
       }
-    }
+      return updateRecursive(prev)
+    })
+  }
 
-    const handleStartReposition = () => {
-      setIsRepositioning(true)
-      setShowBannerMenu(false)
+  const handleAddAlarm = (date: string, time: string, title: string) => {
+    setAlarms((prev) => [
+      ...prev,
+      {
+        id: uuidv4(),
+        title,
+        taskName: null,
+        date,
+        time,
+        isEnabled: true,
+        isNotified: false
+      }
+    ])
+  }
+
+  const handleBannerChange = async (projectId: string): Promise<void> => {
+    // @ts-ignore - Electron API
+    const path = await window.api.selectImageFile()
+    if (path) {
+      const normalizedPath = path.replace(/\\/g, '/')
+      const fileUrl = `file://${normalizedPath.startsWith('/') ? '' : '/'}${encodeURI(normalizedPath)}`
+      updateProject(projectId, { banner: fileUrl })
     }
+  }
+
+  const handleStartReposition = () => {
+    setIsRepositioning(true)
+    setShowBannerMenu(false)
+  }
 
   const profileDisplayName = workspacePath ? workspacePath.split(/[\\/]/).pop() || 'No Workspace' : 'No Workspace'
   const profileAvatarUrl = workspacePath ? workspaceAvatarMap[workspacePath] || null : null
@@ -1461,7 +1526,7 @@ function App() {
               const tabProject = (!isGlobalView && tab.selectedProjectId) ? allProjects.find(p => p.id === tab.selectedProjectId) : null
               const iconColor = isGlobalView ? '#ffffff' : (tabProject?.color || '#FACC15')
               const tabLabel = isGlobalView ? VIEW_LABELS[tab.view] : tab.label
-              
+
               return (
                 <button
                   key={tab.id}
@@ -1495,6 +1560,213 @@ function App() {
         {/* Right side: Timer, Pin, Window controls */}
         <div className="header-right">
           <HeaderTimer currentView={currentView} />
+
+          {currentView === 'timeline' && (
+            <>
+              <button
+                className="view-icon-btn"
+                onClick={handleSyncWorkspaceEvents}
+                disabled={isSyncingCalendar}
+                title="Sync Calendar"
+                style={{
+                  opacity: isSyncingCalendar ? 1 : 0.6,
+                  marginRight: '4px'
+                }}
+              >
+                <RefreshCcw size={16} className={isSyncingCalendar ? 'pulse' : ''} />
+              </button>
+
+              <div ref={calendarFilterMenuRef} style={{ position: 'relative', display: 'flex', marginRight: '4px' }}>
+                <button
+                  className="view-icon-btn"
+                  onClick={() => setShowCalendarFilter(!showCalendarFilter)}
+                  title="Calendar Settings"
+                  style={{
+                    background: showCalendarFilter ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    opacity: showCalendarFilter ? 1 : 0.6
+                  }}
+                >
+                  <SlidersHorizontal size={16} />
+                </button>
+                {showCalendarFilter && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 12px)',
+                      right: 0,
+                      background: 'var(--card-bg)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      borderRadius: 'var(--radius-md)',
+                      padding: '6px 0',
+                      minWidth: '220px',
+                      zIndex: 1000,
+                      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                      maxHeight: '450px',
+                      overflowY: 'auto'
+                    }}
+                  >
+                    {/* VIEW MODES */}
+                    <div style={{ padding: '4px 12px 6px 12px', fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', textAlign: 'left' }}>
+                      View Mode
+                    </div>
+                    {(Object.entries(CALENDAR_MODES) as [keyof typeof CALENDAR_MODES, any][]).map(([key, info]) => (
+                      <button
+                        key={key}
+                        onClick={() => {
+                          setCalendarViewMode(key)
+                          setShowCalendarFilter(false)
+                        }}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '10px',
+                          padding: '8px 12px', background: calendarViewMode === key ? 'rgba(255,255,255,0.05)' : 'transparent',
+                          border: 'none', borderRadius: '0',
+                          color: calendarViewMode === key ? 'var(--accent)' : 'var(--text-primary)',
+                          fontSize: '13px', fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                          transition: 'background 0.2s'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = calendarViewMode === key ? 'rgba(255,255,255,0.05)' : 'transparent')}
+                      >
+                        <info.icon size={14} style={{ opacity: 0.7 }} />
+                        {info.label.replace(' View', '')}
+                      </button>
+                    ))}
+
+                    <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '6px 0' }} />
+
+                    {/* QUICK ACTIONS */}
+                    <button
+                      onClick={() => {
+                        calendarRef.current?.scrollToToday()
+                        setShowCalendarFilter(false)
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '8px 12px', background: 'transparent',
+                        border: 'none', color: 'var(--text-primary)',
+                        fontSize: '13px', fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <CornerDownLeft size={14} style={{ opacity: 0.7 }} />
+                      Go to Today
+                    </button>
+
+                    <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '6px 0' }} />
+
+                    {/* PROJECT VISIBILITY */}
+                    <div style={{ padding: '4px 12px 6px 12px', fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', textAlign: 'left' }}>
+                      Project Visibility
+                    </div>
+                    {allProjects.map((p) => (
+                      <button
+                        key={p.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          const newHidden = new Set(hiddenTimelineProjectIds)
+                          if (newHidden.has(p.id)) newHidden.delete(p.id)
+                          else newHidden.add(p.id)
+                          setHiddenTimelineProjectIds(Array.from(newHidden))
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '10px',
+                          width: '100%',
+                          padding: '8px 12px',
+                          background: 'transparent',
+                          border: 'none',
+                          color: hiddenTimelineProjectIds.includes(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
+                          cursor: 'pointer',
+                          fontSize: '13px',
+                          textAlign: 'left',
+                          transition: 'background 0.2s',
+                          opacity: hiddenTimelineProjectIds.includes(p.id) ? 0.6 : 1,
+                          position: 'relative'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        {/* Recursive hierarchy lines */}
+                        {Array.from({ length: p.depth || 0 }).map((_, idx) => (
+                          <div
+                            key={idx}
+                            style={{
+                              position: 'absolute',
+                              left: `${12 + idx * 16 + 6}px`,
+                              top: 0,
+                              bottom: 0,
+                              width: '1px',
+                              background: 'rgba(255,255,255,0.08)',
+                              zIndex: 1
+                            }}
+                          />
+                        ))}
+
+                        <div
+                          style={{
+                            width: '12px',
+                            height: '12px',
+                            borderRadius: '3px',
+                            border: `2px solid ${p.color || 'var(--accent)'}`,
+                            background: hiddenTimelineProjectIds.includes(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
+                            flexShrink: 0,
+                            marginLeft: `${(p.depth || 0) * 16}px`,
+                            zIndex: 2
+                          }}
+                        />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 2 }}>{p.name}</span>
+                      </button>
+                    ))}
+                    {hiddenTimelineProjectIds.length > 0 && (
+                      <>
+                        <div style={{ height: '1px', background: 'rgba(255,255,255,0.06)', margin: '6px 0' }} />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setHiddenTimelineProjectIds([])
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '10px',
+                            width: '100%',
+                            padding: '8px 12px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--text-primary)',
+                            cursor: 'pointer',
+                            fontSize: '13px',
+                            textAlign: 'left',
+                            fontWeight: 500
+                          }}
+                        >
+                          <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
+                          <span>Show all projects</span>
+                        </button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {currentView === 'notes' && (
+            <button
+              className="view-icon-btn"
+              onClick={() => {
+                const event = new CustomEvent('notes-sync-all')
+                window.dispatchEvent(event)
+              }}
+              title="Sync All Notes"
+              style={{ marginRight: '4px' }}
+            >
+              <RefreshCcw size={16} />
+            </button>
+          )}
 
           <button
             className={`pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
@@ -1545,376 +1817,466 @@ function App() {
           showColoredDots={showColoredDots}
         />
         <div className="main-content">
-
-          {/* Mode Switcher: Isolated "Island" */}
-          <div className="content-toolbar-left">
-            <button
-              className="view-icon-btn"
-              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              title={isSidebarOpen ? 'Close sidebar' : 'Open sidebar'}
-              style={{ opacity: isSidebarOpen ? 0.8 : 0.5 }}
-            >
-              <PanelLeft size={18} />
-            </button>
-            <div className="content-toolbar-separator" />
-            {([
-              { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
-              { id: 'pipeline', icon: GitBranch, label: 'Pipeline' },
-              { id: 'notes', icon: FileTextIcon, label: 'Notes' },
-              { id: 'separator', icon: null, label: 'separator' },
-              { id: 'timeline', icon: CalendarIcon, label: 'Calendar' },
-              { id: 'clock', icon: Clock, label: 'Clock' }
-            ] as const).map((v) => (
-              v.id === 'separator' ? (
-                <div key="sep" className="content-toolbar-separator" />
-              ) : (
-                <button
-                  key={v.id}
-                  className={`view-icon-btn ${currentView === v.id ? 'active' : ''}`}
-                  onClick={() => setCurrentView(v.id as any)}
-                  title={v.label}
-                >
-                  <v.icon size={18} />
-                </button>
-              )
-            ))}
-          </div>
-
-          {/* Right Toolbar: Part of the merged L-shape */}
-          <div className="content-toolbar-right">
-            {currentView === 'pipeline' && selectedProject && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '8px' }}>
-                {(selectedProject.pipelines || []).map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => updateProject(selectedProject.id, { activePipelineId: p.id })}
-                    className={`toolbar-action-btn ${selectedProject.activePipelineId === p.id ? 'active' : ''}`}
-                    style={{
-                      padding: '4px 10px',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      background: selectedProject.activePipelineId === p.id ? 'rgba(255,255,255,0.1)' : 'transparent',
-                      border: `1px solid ${selectedProject.activePipelineId === p.id ? 'rgba(255,255,255,0.1)' : 'transparent'}`,
-                      opacity: selectedProject.activePipelineId === p.id ? 1 : 0.6
-                    }}
-                  >
-                    {p.name}
-                  </button>
+          <div className="main-toolbar">
+            <div className="main-toolbar-left">
+              <button
+                className="view-icon-btn"
+                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
+              >
+                {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
+              </button>
+              <div className="view-switcher-separator" />
+              <div className="view-switcher-container">
+                {([
+                  { id: 'overview', icon: LayoutDashboard, label: 'Overview' },
+                  { id: 'pipeline', icon: GitBranch, label: 'Pipeline' },
+                  { id: 'notes', icon: FileTextIcon, label: 'Notes' },
+                  { id: 'separator', icon: null, label: 'separator' },
+                  { id: 'timeline', icon: CalendarIcon, label: 'Calendar' },
+                  { id: 'clock', icon: Clock, label: 'Clock' }
+                ] as const).map((v) => (
+                  v.id === 'separator' ? (
+                    <div key="sep" className="view-switcher-separator" />
+                  ) : (
+                    <button
+                      key={v.id}
+                      className={`view-icon-btn ${currentView === v.id ? 'active' : ''}`}
+                      onClick={() => setCurrentView(v.id as any)}
+                      title={v.label}
+                    >
+                      <v.icon size={18} />
+                    </button>
+                  )
                 ))}
-                <button
-                  className="view-icon-btn"
-                  onClick={() => {
-                    const newPipeline = {
-                      id: uuidv4(),
-                      name: `Page ${(selectedProject.pipelines || []).length + 1}`,
-                      stages: []
-                    }
-                    updateProject(selectedProject.id, {
-                      pipelines: [...(selectedProject.pipelines || []), newPipeline],
-                      activePipelineId: newPipeline.id
-                    })
-                  }}
-                  title="Add Page"
-                  style={{ padding: '4px', marginLeft: '4px' }}
-                >
-                  <Plus size={14} />
-                </button>
-
-                <div className="content-toolbar-separator" />
-
-                <button
-                  className="toolbar-action-btn"
-                  onClick={() => {
-                    const event = new CustomEvent('pipeline-add-stage')
-                    window.dispatchEvent(event)
-                  }}
-                >
-                  <PlusCircle size={14} /> Stage
-                </button>
-
-                <button
-                  className="view-icon-btn"
-                  onClick={() => {
-                    const event = new CustomEvent('pipeline-toggle-sidebar')
-                    window.dispatchEvent(event)
-                  }}
-                  title="Toggle Stage Sidebar"
-                  style={{ marginLeft: '4px' }}
-                >
-                  <PanelRight size={18} />
-                </button>
               </div>
-            )}
-            {currentView === 'clock' && (
-              <>
-                <button className="toolbar-action-btn" onClick={addTimer}>
-                  <PlusCircle size={14} /> Timer
-                </button>
-                <button className="toolbar-action-btn" onClick={addStopwatch}>
-                  <TimerIcon size={14} /> Stopwatch
-                </button>
-                <button className="toolbar-action-btn" onClick={addAlarm}>
-                  <Bell size={14} /> Alarm
-                </button>
-              </>
-            )}
-            {currentView === 'overview' && selectedProject && (
-              <>
-                <div ref={bannerMenuRef} style={{ position: 'relative', display: 'flex' }}>
-                  <button
-                    className="view-icon-btn"
-                    onClick={() => setShowBannerMenu(!showBannerMenu)}
-                    title="Banner Settings"
-                    style={{
-                      opacity: showBannerMenu ? 1 : 0.6,
-                      background: showBannerMenu ? 'rgba(255,255,255,0.08)' : 'transparent'
-                    }}
-                  >
-                    <Settings size={18} />
-                  </button>
+            </div>
 
-                  {showBannerMenu && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: '100%',
-                        right: 0,
-                        marginTop: '8px',
-                        background: '#1a1a1a',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: '10px',
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
-                        padding: '6px',
-                        minWidth: '180px',
-                        zIndex: 1000,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px'
-                      }}
-                    >
+            {/* Right Toolbar: Part of the merged L-shape */}
+            <div className="content-toolbar-right">
+              {currentView === 'pipeline' && selectedProject && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '8px' }}>
+                  {(selectedProject.pipelines || []).map((p) => (
+                    <div key={p.id} style={{ position: 'relative' }}>
                       <button
-                        onClick={() => { handleBannerChange(selectedProject.id); setShowBannerMenu(false) }}
+                        onClick={() => updateProject(selectedProject.id, { activePipelineId: p.id })}
+                        className={`toolbar-action-btn ${selectedProject.activePipelineId === p.id ? 'active' : ''}`}
                         style={{
-                          display: 'flex', alignItems: 'center', gap: '10px',
-                          padding: '8px 12px', background: 'transparent', border: 'none',
-                          borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px',
-                          fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
-                          transition: 'background 0.2s'
+                          padding: '4px 10px',
+                          paddingRight: '28px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          background: selectedProject.activePipelineId === p.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                          border: `1px solid ${selectedProject.activePipelineId === p.id ? 'rgba(255,255,255,0.1)' : 'transparent'}`,
+                          opacity: selectedProject.activePipelineId === p.id ? 1 : 0.6,
+                          position: 'relative'
                         }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                       >
-                        <ImageIcon size={14} style={{ opacity: 0.7 }} />
-                        Select Banner Image
-                      </button>
-
-                      <button
-                        disabled={!selectedProject.banner}
-                        onClick={handleStartReposition}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '10px',
-                          padding: '8px 12px', background: 'transparent', border: 'none',
-                          borderRadius: '6px',
-                          color: selectedProject.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '13px', fontWeight: 500,
-                          cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
-                          opacity: selectedProject.banner ? 1 : 0.4,
-                          width: '100%', textAlign: 'left', transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <Move size={14} style={{ opacity: 0.7 }} />
-                        Reposition Banner
-                      </button>
-
-                      <button
-                        disabled={!selectedProject.banner}
-                        onClick={() => { updateProject(selectedProject.id, { banner: undefined }); setShowBannerMenu(false) }}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: '10px',
-                          padding: '8px 12px', background: 'transparent', border: 'none',
-                          borderRadius: '6px',
-                          color: selectedProject.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          fontSize: '13px', fontWeight: 500,
-                          cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
-                          opacity: selectedProject.banner ? 1 : 0.4,
-                          width: '100%', textAlign: 'left', transition: 'background 0.2s'
-                        }}
-                        onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <Trash2 size={14} style={{ opacity: 0.7 }} />
-                        Remove Banner
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <button
-                  className="view-icon-btn"
-                  disabled={!selectedProject.banner}
-                  onClick={() => updateProject(selectedProject.id, { bannerCollapsed: !selectedProject.bannerCollapsed })}
-                  style={{
-                    opacity: selectedProject.banner ? 0.6 : 0.2,
-                    cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
-                    marginLeft: '4px'
-                  }}
-                  title={selectedProject.bannerCollapsed ? 'Expand Banner' : 'Collapse Banner'}
-                  onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.opacity = '1' }}
-                  onMouseLeave={(e) => { if (selectedProject.banner) e.currentTarget.style.opacity = '0.6' }}
-                >
-                  {selectedProject.bannerCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
-                </button>
-              </>
-            )}
-            {currentView === 'timeline' && (
-              <>
-                <button
-                  className="view-icon-btn"
-                  onClick={() => setCalendarViewMode('timeline')}
-                  title="Timeline View"
-                  style={{ background: calendarViewMode === 'timeline' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-                >
-                  <AlignLeft size={18} />
-                </button>
-                <button
-                  className="view-icon-btn"
-                  onClick={() => setCalendarViewMode('month')}
-                  title="Month View"
-                  style={{ background: calendarViewMode === 'month' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-                >
-                  <CalendarDays size={18} />
-                </button>
-                <button
-                  className="view-icon-btn"
-                  onClick={() => setCalendarViewMode('week')}
-                  title="Week View"
-                  style={{ background: calendarViewMode === 'week' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-                >
-                  <CalendarRange size={18} />
-                </button>
-                <button
-                  className="view-icon-btn"
-                  onClick={() => setCalendarViewMode('day')}
-                  title="Day View"
-                  style={{ background: calendarViewMode === 'day' ? 'rgba(255,255,255,0.1)' : 'transparent' }}
-                >
-                  <CalendarIcon size={18} />
-                </button>
-
-                <div className="content-toolbar-separator" />
-
-                <button
-                  className="view-icon-btn"
-                  onClick={() => calendarRef.current?.scrollToToday()}
-                  title="Go to Today"
-                >
-                  <RotateCcw size={18} />
-                </button>
-                <button
-                  className="view-icon-btn"
-                  onClick={handleSyncWorkspaceEvents}
-                  disabled={isSyncingCalendar}
-                  title="Sync Calendar"
-                >
-                  <RefreshCcw size={18} className={isSyncingCalendar ? 'pulse' : ''} />
-                </button>
-                <button
-                  className="view-icon-btn"
-                  onClick={() => setShowCalendarFilter(!showCalendarFilter)}
-                  title="Filter Projects"
-                  style={{ background: showCalendarFilter ? 'rgba(255,255,255,0.1)' : 'transparent', position: 'relative' }}
-                >
-                  <SlidersHorizontal size={18} />
-                  {showCalendarFilter && (
-                    <div
-                      style={{
-                        position: 'absolute',
-                        top: 'calc(100% + 8px)',
-                        right: 0,
-                        background: 'var(--card-bg)',
-                        border: '1px solid rgba(255,255,255,0.1)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '6px 0',
-                        minWidth: '200px',
-                        zIndex: 1000,
-                        boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-                        maxHeight: '400px',
-                        overflowY: 'auto'
-                      }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em', textAlign: 'left' }}>
-                        Visibility
-                      </div>
-                      {allProjects.map((p) => (
-                        <button
-                          key={p.id}
+                        {p.name}
+                        <span
                           onClick={(e) => {
-                            e.stopPropagation()
-                            const newHidden = new Set(hiddenTimelineProjectIds)
-                            if (newHidden.has(p.id)) newHidden.delete(p.id)
-                            else newHidden.add(p.id)
-                            setHiddenTimelineProjectIds(Array.from(newHidden))
+                            e.stopPropagation();
+                            setActivePipelineMenuId(activePipelineMenuId === p.id ? null : p.id);
                           }}
                           style={{
+                            position: 'absolute',
+                            right: '4px',
+                            top: '50%',
+                            transform: 'translateY(-50%)',
+                            width: '20px',
+                            height: '20px',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '10px',
-                            width: '100%',
-                            padding: '8px 12px',
-                            background: 'transparent',
-                            border: 'none',
-                            color: hiddenTimelineProjectIds.includes(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
-                            cursor: 'pointer',
-                            fontSize: '13px',
-                            textAlign: 'left',
-                            transition: 'background 0.2s',
-                            opacity: hiddenTimelineProjectIds.includes(p.id) ? 0.6 : 1,
-                            position: 'relative'
+                            justifyContent: 'center',
+                            borderRadius: '4px',
+                            opacity: 0.5,
+                            transition: 'opacity 0.2s, background 0.2s'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.opacity = '1';
+                            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.opacity = '0.5';
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <MoreVertical size={12} />
+                        </span>
+                      </button>
+
+                      {activePipelineMenuId === p.id && (
+                        <div
+                          ref={pipelineMenuRef}
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            marginTop: '8px',
+                            background: '#1a1a1a',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: '10px',
+                            boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                            padding: '6px',
+                            minWidth: '160px',
+                            zIndex: 1000,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '2px'
+                          }}
+                        >
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newName = prompt('Enter new page name:', p.name);
+                              if (newName && newName.trim()) {
+                                const updatedPipelines = (selectedProject.pipelines || []).map(pl =>
+                                  pl.id === p.id ? { ...pl, name: newName.trim() } : pl
+                                );
+                                updateProject(selectedProject.id, { pipelines: updatedPipelines });
+                              }
+                              setActivePipelineMenuId(null);
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '8px 12px', background: 'transparent', border: 'none',
+                              borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px',
+                              fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <Pencil size={14} style={{ opacity: 0.7 }} />
+                            Rename Page
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (confirm(`Are you sure you want to delete page "${p.name}"?`)) {
+                                const updatedPipelines = (selectedProject.pipelines || []).filter(pl => pl.id !== p.id);
+                                let nextActiveId = selectedProject.activePipelineId;
+                                if (nextActiveId === p.id) {
+                                  nextActiveId = updatedPipelines && updatedPipelines.length > 0 ? updatedPipelines[0].id : undefined;
+                                }
+                                updateProject(selectedProject.id, {
+                                  pipelines: updatedPipelines,
+                                  activePipelineId: nextActiveId
+                                });
+                              }
+                              setActivePipelineMenuId(null);
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '8px 12px', background: 'transparent', border: 'none',
+                              borderRadius: '6px', color: '#ff4444', fontSize: '13px',
+                              fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,68,68,0.1)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                          >
+                            <Trash2 size={14} style={{ opacity: 0.7 }} />
+                            Delete Page
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => {
+                      const newPipeline = {
+                        id: uuidv4(),
+                        name: `Page ${(selectedProject.pipelines || []).length + 1}`,
+                        stages: []
+                      }
+                      updateProject(selectedProject.id, {
+                        pipelines: [...(selectedProject.pipelines || []), newPipeline],
+                        activePipelineId: newPipeline.id
+                      })
+                    }}
+                    title="Add Page"
+                    style={{ padding: '4px', marginLeft: '4px' }}
+                  >
+                    <Plus size={14} />
+                  </button>
+
+                  <div className="content-toolbar-separator" />
+
+                  <button
+                    className="toolbar-action-btn"
+                    onClick={() => {
+                      const event = new CustomEvent('pipeline-add-stage')
+                      window.dispatchEvent(event)
+                    }}
+                  >
+                    <PlusCircle size={14} /> Stage
+                  </button>
+
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => {
+                      const event = new CustomEvent('pipeline-toggle-sidebar')
+                      window.dispatchEvent(event)
+                    }}
+                    title="Toggle Stage Sidebar"
+                    style={{ marginLeft: '4px' }}
+                  >
+                    <PanelRight size={18} />
+                  </button>
+                </div>
+              )}
+
+              {currentView === 'clock' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button className="toolbar-action-btn" onClick={addTimer}>
+                    <PlusCircle size={14} /> Timer
+                  </button>
+                  <button className="toolbar-action-btn" onClick={addStopwatch}>
+                    <TimerIcon size={14} /> Stopwatch
+                  </button>
+                  <button className="toolbar-action-btn" onClick={addAlarm}>
+                    <Bell size={14} /> Alarm
+                  </button>
+                </div>
+              )}
+
+              {currentView === 'overview' && selectedProject && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <div ref={bannerMenuRef} style={{ position: 'relative', display: 'flex' }}>
+                    <button
+                      className="view-icon-btn"
+                      onClick={() => setShowBannerMenu(!showBannerMenu)}
+                      title="Banner Settings"
+                      style={{
+                        opacity: showBannerMenu ? 1 : 0.6,
+                        background: showBannerMenu ? 'rgba(255,255,255,0.08)' : 'transparent'
+                      }}
+                    >
+                      <Settings size={18} />
+                    </button>
+
+                    {showBannerMenu && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          right: 0,
+                          marginTop: '8px',
+                          background: '#1a1a1a',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '10px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          padding: '6px',
+                          minWidth: '180px',
+                          zIndex: 1000,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px'
+                        }}
+                      >
+                        <button
+                          onClick={() => { handleBannerChange(selectedProject.id); setShowBannerMenu(false) }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '8px 12px', background: 'transparent', border: 'none',
+                            borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px',
+                            fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                            transition: 'background 0.2s'
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
                           onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                         >
-                          {/* Recursive hierarchy lines */}
-                          {Array.from({ length: p.depth || 0 }).map((_, idx) => (
-                            <div
-                              key={idx}
-                              style={{
-                                position: 'absolute',
-                                left: `${12 + idx * 16 + 6}px`,
-                                top: 0,
-                                bottom: 0,
-                                width: '1px',
-                                background: 'rgba(255,255,255,0.08)',
-                                zIndex: 1
-                              }}
-                            />
-                          ))}
-
-                          <div
-                            style={{
-                              width: '12px',
-                              height: '12px',
-                              borderRadius: '3px',
-                              border: `2px solid ${p.color || 'var(--accent)'}`,
-                              background: hiddenTimelineProjectIds.includes(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
-                              flexShrink: 0,
-                              marginLeft: `${(p.depth || 0) * 16}px`,
-                              zIndex: 2
-                            }}
-                          />
-                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 2 }}>{p.name}</span>
+                          <ImageIcon size={14} style={{ opacity: 0.7 }} />
+                          Select Banner Image
                         </button>
-                      ))}
-                      {hiddenTimelineProjectIds.length > 0 && (
-                        <>
-                          <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
+
+                        <button
+                          disabled={!selectedProject.banner}
+                          onClick={handleStartReposition}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '8px 12px', background: 'transparent', border: 'none',
+                            borderRadius: '6px',
+                            color: selectedProject.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            fontSize: '13px', fontWeight: 500,
+                            cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
+                            opacity: selectedProject.banner ? 1 : 0.4,
+                            width: '100%', textAlign: 'left', transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Move size={14} style={{ opacity: 0.7 }} />
+                          Reposition Banner
+                        </button>
+
+                        <button
+                          disabled={!selectedProject.banner}
+                          onClick={() => { updateProject(selectedProject.id, { banner: undefined }); setShowBannerMenu(false) }}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '8px 12px', background: 'transparent', border: 'none',
+                            borderRadius: '6px',
+                            color: selectedProject.banner ? 'var(--text-primary)' : 'var(--text-secondary)',
+                            fontSize: '13px', fontWeight: 500,
+                            cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
+                            opacity: selectedProject.banner ? 1 : 0.4,
+                            width: '100%', textAlign: 'left', transition: 'background 0.2s'
+                          }}
+                          onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.background = 'rgba(255,255,255,0.05)' }}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <Trash2 size={14} style={{ opacity: 0.7 }} />
+                          Remove Banner
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <button
+                    className="view-icon-btn"
+                    disabled={!selectedProject.banner}
+                    onClick={() => updateProject(selectedProject.id, { bannerCollapsed: !selectedProject.bannerCollapsed })}
+                    style={{
+                      opacity: selectedProject.banner ? 0.6 : 0.2,
+                      cursor: selectedProject.banner ? 'pointer' : 'not-allowed',
+                      marginLeft: '4px'
+                    }}
+                    title={selectedProject.bannerCollapsed ? 'Expand Banner' : 'Collapse Banner'}
+                    onMouseEnter={(e) => { if (selectedProject.banner) e.currentTarget.style.opacity = '1' }}
+                    onMouseLeave={(e) => { if (selectedProject.banner) e.currentTarget.style.opacity = '0.6' }}
+                  >
+                    {selectedProject.bannerCollapsed ? <ChevronDown size={18} /> : <ChevronUp size={18} />}
+                  </button>
+                </div>
+              )}
+              {currentView === 'timeline' && (
+                <>
+                  <div ref={calendarViewMenuRef} style={{ position: 'relative', display: 'flex' }}>
+                    <button
+                      className="view-icon-btn"
+                      onClick={() => setShowCalendarViewMenu(!showCalendarViewMenu)}
+                      title="Calendar Mode"
+                      style={{
+                        background: showCalendarViewMenu ? 'rgba(255,255,255,0.08)' : 'transparent',
+                        padding: '0 8px',
+                        width: '160px',
+                        gap: '8px',
+                        justifyContent: 'flex-start'
+                      }}
+                    >
+                      {(() => {
+                        const ModeIcon = CALENDAR_MODES[calendarViewMode as keyof typeof CALENDAR_MODES].icon
+                        return <ModeIcon size={18} />
+                      })()}
+                      <span style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-secondary)', flex: 1, textAlign: 'left' }}>
+                        {CALENDAR_MODES[calendarViewMode as keyof typeof CALENDAR_MODES].label.replace(' View', '')}
+                      </span>
+                      <ChevronDown size={14} style={{ opacity: 0.5, marginLeft: '2px' }} />
+                    </button>
+
+                    {showCalendarViewMenu && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: '100%',
+                          left: 0,
+                          marginTop: '8px',
+                          background: '#1a1a1a',
+                          border: '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: '10px',
+                          boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                          padding: '6px',
+                          minWidth: '160px',
+                          zIndex: 1000,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '2px'
+                        }}
+                      >
+                        {(Object.entries(CALENDAR_MODES) as [keyof typeof CALENDAR_MODES, any][]).map(([key, info]) => (
                           <button
+                            key={key}
+                            onClick={() => {
+                              setCalendarViewMode(key)
+                              setShowCalendarViewMenu(false)
+                            }}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: '10px',
+                              padding: '8px 12px', background: calendarViewMode === key ? 'rgba(255,255,255,0.05)' : 'transparent',
+                              border: 'none', borderRadius: '6px',
+                              color: calendarViewMode === key ? 'var(--accent)' : 'var(--text-primary)',
+                              fontSize: '13px', fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                              transition: 'background 0.2s'
+                            }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = calendarViewMode === key ? 'rgba(255,255,255,0.05)' : 'transparent')}
+                          >
+                            <info.icon size={14} style={{ opacity: 0.7 }} />
+                            {info.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="main-toolbar-separator" />
+
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => calendarRef.current?.scrollToToday()}
+                    title="Go to Today"
+                  >
+                    <CornerDownLeft size={18} />
+                  </button>
+                  <button
+                    className="view-icon-btn"
+                    onClick={handleSyncWorkspaceEvents}
+                    disabled={isSyncingCalendar}
+                    title="Sync Calendar"
+                  >
+                    <RefreshCcw size={18} className={isSyncingCalendar ? 'pulse' : ''} />
+                  </button>
+                  <div ref={calendarFilterMenuRef} style={{ position: 'relative', display: 'flex' }}>
+                    <button
+                      className="view-icon-btn"
+                      onClick={() => setShowCalendarFilter(!showCalendarFilter)}
+                      title="Filter Projects"
+                      style={{ background: showCalendarFilter ? 'rgba(255,255,255,0.1)' : 'transparent' }}
+                    >
+                      <SlidersHorizontal size={18} />
+                    </button>
+                    {showCalendarFilter && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          top: 'calc(100% + 8px)',
+                          right: 0,
+                          background: 'var(--card-bg)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '6px 0',
+                          minWidth: '200px',
+                          zIndex: 1000,
+                          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+                          maxHeight: '400px',
+                          overflowY: 'auto'
+                        }}
+                      >
+                        <div style={{ padding: '4px 12px 8px 12px', fontSize: '11px', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '0.05em', textAlign: 'left' }}>
+                          Visibility
+                        </div>
+                        {allProjects.map((p) => (
+                          <button
+                            key={p.id}
                             onClick={(e) => {
                               e.stopPropagation()
-                              setHiddenTimelineProjectIds([])
+                              const newHidden = new Set(hiddenTimelineProjectIds)
+                              if (newHidden.has(p.id)) newHidden.delete(p.id)
+                              else newHidden.add(p.id)
+                              setHiddenTimelineProjectIds(Array.from(newHidden))
                             }}
                             style={{
                               display: 'flex',
@@ -1924,23 +2286,82 @@ function App() {
                               padding: '8px 12px',
                               background: 'transparent',
                               border: 'none',
-                              color: 'var(--text-primary)',
+                              color: hiddenTimelineProjectIds.includes(p.id) ? 'var(--text-secondary)' : 'var(--text-primary)',
                               cursor: 'pointer',
                               fontSize: '13px',
                               textAlign: 'left',
-                              fontWeight: 500
+                              transition: 'background 0.2s',
+                              opacity: hiddenTimelineProjectIds.includes(p.id) ? 0.6 : 1,
+                              position: 'relative'
                             }}
+                            onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                            onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                           >
-                            <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
-                            <span>Show all projects</span>
+                            {/* Recursive hierarchy lines */}
+                            {Array.from({ length: p.depth || 0 }).map((_, idx) => (
+                              <div
+                                key={idx}
+                                style={{
+                                  position: 'absolute',
+                                  left: `${12 + idx * 16 + 6}px`,
+                                  top: 0,
+                                  bottom: 0,
+                                  width: '1px',
+                                  background: 'rgba(255,255,255,0.08)',
+                                  zIndex: 1
+                                }}
+                              />
+                            ))}
+
+                            <div
+                              style={{
+                                width: '12px',
+                                height: '12px',
+                                borderRadius: '3px',
+                                border: `2px solid ${p.color || 'var(--accent)'}`,
+                                background: hiddenTimelineProjectIds.includes(p.id) ? 'transparent' : (p.color || 'var(--accent)'),
+                                flexShrink: 0,
+                                marginLeft: `${(p.depth || 0) * 16}px`,
+                                zIndex: 2
+                              }}
+                            />
+                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', zIndex: 2 }}>{p.name}</span>
                           </button>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </button>
-              </>
-            )}
+                        ))}
+                        {hiddenTimelineProjectIds.length > 0 && (
+                          <>
+                            <div style={{ height: '1px', background: 'rgba(255,255,255,0.1)', margin: '6px 0' }} />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setHiddenTimelineProjectIds([])
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '10px',
+                                width: '100%',
+                                padding: '8px 12px',
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-primary)',
+                                cursor: 'pointer',
+                                fontSize: '13px',
+                                textAlign: 'left',
+                                fontWeight: 500
+                              }}
+                            >
+                              <RotateCcw size={12} style={{ color: 'var(--text-secondary)' }} />
+                              <span>Show all projects</span>
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           <div className="views-wrapper">
@@ -2022,7 +2443,7 @@ function App() {
                 setShowFilterMenu={setShowCalendarFilter}
                 viewDate={calendarViewDate}
                 setViewDate={setCalendarViewDate}
-                scrollToToday={() => {}} // This will be handled by ref if needed, but we can pass it
+                scrollToToday={() => { }} // This will be handled by ref if needed, but we can pass it
                 ref={calendarRef}
               />
             </div>
@@ -2136,7 +2557,7 @@ function App() {
         setDisableBoardBackups={setDisableBoardBackups}
         enableBoardAutosave={enableBoardAutosave}
         setEnableBoardAutosave={setEnableBoardAutosave}
-                calendarTimezone={calendarTimezone}
+        calendarTimezone={calendarTimezone}
         setCalendarTimezone={setCalendarTimezone}
         onSaveThemeAsDefault={async () => {
           // @ts-ignore
