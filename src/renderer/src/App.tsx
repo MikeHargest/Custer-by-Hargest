@@ -554,8 +554,9 @@ function App() {
       if (workspaceData) {
         if (workspaceData.timers) setTimers(workspaceData.timers)
         if (workspaceData.alarms) setAlarms(workspaceData.alarms)
-        if (workspaceData.projects) {
+        if (workspaceData.projects && Array.isArray(workspaceData.projects)) {
           const ensurePathsRecursive = (projs: Project[]): Project[] => {
+            if (!Array.isArray(projs)) return []
             return projs.map((p) => ({
               ...p,
               notesPath: p.notesPath || (p.path ? p.path + '/notes' : ''),
@@ -605,7 +606,7 @@ function App() {
       } else {
         // Fresh start for a new workspace
         // Initialize default project folder
-        const defaultProjectPath = await (window as any).api.initProject(
+        const defaultProjectPath = await (window as any).api.initProjectFolder(
           savedWorkspace,
           'My Project'
         )
