@@ -18,6 +18,7 @@ interface EventItemProps {
   saveEventName: (projectId: string, eventId: string) => void
   isExpanded: boolean
   setExpandedEventId: (id: string | null) => void
+  startEditing: (id: string, value: string) => void
   projectColor?: string
 }
 
@@ -33,6 +34,7 @@ const EventItem = memo(function EventItem({
   saveEventName,
   isExpanded,
   setExpandedEventId,
+  startEditing,
   projectColor
 }: EventItemProps) {
   const [activeSelect, setActiveSelect] = useState<string | null>(null) // 'reminder', 'frequency', 'ends'
@@ -258,6 +260,10 @@ const EventItem = memo(function EventItem({
                 color: 'var(--text-primary)',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word'
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation()
+                startEditing(event.id, event.title || '')
               }}
             >
               {event.title}

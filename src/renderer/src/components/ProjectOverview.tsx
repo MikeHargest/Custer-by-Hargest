@@ -2,11 +2,6 @@ import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   Image as ImageIcon,
   FileText,
-  ChevronDown,
-  ChevronUp,
-  Trash2,
-  Settings,
-  Move,
   Check,
   X,
   ArrowRight

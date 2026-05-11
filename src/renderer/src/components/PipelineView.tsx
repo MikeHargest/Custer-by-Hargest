@@ -2,7 +2,6 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import {
   Plus,
   Trash2,
-  PlusCircle,
   GripVertical,
   MoreVertical,
   RefreshCw,
@@ -164,7 +163,6 @@ export default function PipelineView({
   const [pipelineNameValue, setPipelineNameValue] = useState('')
   const [activeStageDropdown, setActiveStageDropdown] = useState<string | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
-  const [hoveredPipelineId, setHoveredPipelineId] = useState<string | null>(null)
   const [stageColorPickerAnchor, setStageColorPickerAnchor] = useState<{
     stageId: string
     rect: DOMRect
@@ -554,9 +552,11 @@ export default function PipelineView({
   )
 
   const parentProject = useMemo(() => {
-    if (!project.parentId) return null
-    return allProjects.find(p => p.id === project.parentId)
-  }, [project.parentId, allProjects])
+    // @ts-ignore
+    if (!project.subprojects) return null
+    // @ts-ignore
+    return allProjects.find(p => p.subprojects?.some(sub => sub.id === project.id))
+  }, [project.id, allProjects])
 
   const handleUpdateStageDetails = (stageId: string, updates: Partial<PipelineStage>) => {
     if (!activePipeline) return

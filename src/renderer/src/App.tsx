@@ -1,44 +1,40 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
-  PlusCircle,
   Timer as TimerIcon,
-  Pin,
   PanelLeft,
   PanelLeftClose,
   PanelRight,
   User,
   X as CloseIcon,
-  Minus as MinimizeIcon,
-  Maximize2 as MaximizeIcon,
+  MinimizeIcon,
+  MaximizeIcon,
   Search,
   LayoutDashboard,
   GitBranch,
-  FileText as FileTextIcon,
-  Calendar as CalendarIcon,
+  FileTextIcon,
+  CalendarIcon,
   Clock,
   Plus,
   Pencil,
   MoreVertical,
   Settings,
-  Image as ImageIcon,
+  ImageIcon,
   Move,
   ChevronDown,
   ChevronUp,
   Trash2,
   CalendarDays,
   CalendarRange,
-  CalendarClock,
-  Target,
-  Locate,
   CornerDownLeft,
-  AlignLeft,
+  PlusCircle,
   RotateCcw,
   RefreshCcw,
-  SlidersHorizontal
+  SlidersHorizontal,
+  AlignLeft
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import TimerCard from './components/TimerCard'
-import TaskSidebar from './components/sidebar/TaskSidebar'
+import LeftSidebar from './components/sidebar/LeftSidebar'
 import MiniTimer from './components/MiniTimer'
 import CalendarView from './components/CalendarView'
 import NotesView from './components/NotesView'
@@ -1570,7 +1566,7 @@ function App() {
       </header>
 
       <div className="app-body">
-        <TaskSidebar
+        <LeftSidebar
           isOpen={isSidebarOpen}
           projects={projects}
           setProjects={handleSetProjects}
