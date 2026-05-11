@@ -32,9 +32,7 @@ import {
   Link2,
   Unlink,
   Image as ImageIcon,
-  ExternalLink,
-  Settings,
-  MoreHorizontal
+  ExternalLink
 } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
@@ -194,7 +192,7 @@ export default function NotesView({
   const [showBubbleMenu, setShowBubbleMenu] = useState(false)
   const bubbleMenuTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isMouseDownRef = useRef(false)
-  const [showFullBubbleMenu, setShowFullBubbleMenu] = useState(false)
+  const [_showFullBubbleMenu, setShowFullBubbleMenu] = useState(false)
 
   const lastBackedUpContentRef = useRef<Record<string, string>>({})
   const lastBoardBackupAtRef = useRef<Record<string, number>>({})

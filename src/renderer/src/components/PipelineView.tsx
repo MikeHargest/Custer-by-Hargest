@@ -11,26 +11,10 @@ import {
   Calendar,
   Layout,
   Info,
-  PanelRight,
   ArrowLeft
 } from 'lucide-react'
 import { Project, PipelineStage, PipelineItem, PipelineData } from '../types'
 import ColorPicker from './ColorPicker'
-
-// --- Shared style helpers ---
-const editBtnStyle: React.CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  borderRadius: '6px',
-  padding: '6px 12px',
-  color: 'var(--text-secondary)',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '6px',
-  fontSize: '12px',
-  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-}
 
 const TinyButton = ({
   onClick,
@@ -159,8 +143,6 @@ export default function PipelineView({
     [pipelines, activePipelineId]
   )
 
-  const [editingPipelineId, setEditingPipelineId] = useState<string | null>(null)
-  const [pipelineNameValue, setPipelineNameValue] = useState('')
   const [activeStageDropdown, setActiveStageDropdown] = useState<string | null>(null)
   const [showSidebar, setShowSidebar] = useState(true)
   const [stageColorPickerAnchor, setStageColorPickerAnchor] = useState<{
@@ -233,45 +215,6 @@ export default function PipelineView({
   } | null>(null)
 
   // --- PIPELINE CRUD ---
-  const handleAddPipeline = (): void => {
-    const newPipeline: PipelineData = {
-      id: Math.random().toString(36).substr(2, 9),
-      name: `Page ${pipelines.length + 1}`,
-      stages: []
-    }
-    onUpdate(currentViewingProject.id, {
-      pipelines: [...pipelines, newPipeline],
-      activePipelineId: newPipeline.id
-    })
-  }
-
-  const handleDeletePipeline = (e: React.MouseEvent, id: string): void => {
-    e.stopPropagation()
-    const newPipelines = pipelines.filter((p) => p.id !== id)
-    const newActiveId =
-      id === activePipelineId
-        ? newPipelines.length > 0
-          ? newPipelines[0].id
-          : ''
-        : activePipelineId
-    onUpdate(currentViewingProject.id, { pipelines: newPipelines, activePipelineId: newActiveId })
-  }
-
-  const startEditingPipeline = (e: React.MouseEvent, p: PipelineData): void => {
-    e.stopPropagation()
-    setEditingPipelineId(p.id)
-    setPipelineNameValue(p.name)
-  }
-
-  const savePipelineName = (): void => {
-    if (!editingPipelineId) return
-    const newPipelines = pipelines.map((p) =>
-      p.id === editingPipelineId ? { ...p, name: pipelineNameValue || 'Untitled' } : p
-    )
-    onUpdate(currentViewingProject.id, { pipelines: newPipelines })
-    setEditingPipelineId(null)
-  }
-
   const handleAddStage = useCallback((): void => {
     if (!activePipeline) return
     const newStage: PipelineStage = {

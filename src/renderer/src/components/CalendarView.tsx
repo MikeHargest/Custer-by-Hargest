@@ -10,14 +10,7 @@ import * as LucideIcons from 'lucide-react'
 import {
   FolderOpen,
   X,
-  CheckSquare,
-  CalendarDays,
-  CalendarRange,
-  Calendar as CalendarIcon,
-  AlignLeft,
-  RotateCcw,
-  RefreshCcw,
-  SlidersHorizontal
+  CheckSquare
 } from 'lucide-react'
 import CalendarQuickAdd from './calendar/CalendarQuickAdd'
 import CalendarContextMenu from './calendar/CalendarContextMenu'
@@ -62,14 +55,14 @@ const CalendarView = forwardRef<
     onAddEvent,
     onAddAlarm,
     hiddenProjectIds,
-    setHiddenProjectIds,
-    onSyncWorkspaceEvents,
-    isSyncing,
+    setHiddenProjectIds: _setHiddenProjectIds,
+    onSyncWorkspaceEvents: _onSyncWorkspaceEvents,
+    isSyncing: _isSyncing,
     setProjects,
     viewMode,
-    setViewMode,
-    showFilterMenu,
-    setShowFilterMenu,
+    setViewMode: _setViewMode,
+    showFilterMenu: _showFilterMenu,
+    setShowFilterMenu: _setShowFilterMenu,
     viewDate,
     setViewDate
   },
@@ -131,13 +124,6 @@ const CalendarView = forwardRef<
 
   const hiddenProjects = useMemo(() => new Set(hiddenProjectIds), [hiddenProjectIds])
 
-  const toggleProjectVisibility = (id: string, e?: React.MouseEvent): void => {
-    e?.stopPropagation()
-    const newHidden = new Set(hiddenProjectIds)
-    if (newHidden.has(id)) newHidden.delete(id)
-    else newHidden.add(id)
-    setHiddenProjectIds(Array.from(newHidden))
-  }
 
   // 2. Memoized values next
   const flattenedProjects = useMemo(() => {

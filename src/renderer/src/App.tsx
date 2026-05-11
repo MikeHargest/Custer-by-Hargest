@@ -154,7 +154,6 @@ function App() {
     return DEFAULT_THEME
   })
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null)
-  const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<
@@ -1270,12 +1269,6 @@ function App() {
     return newTaskId
   }
 
-  const toggleAlwaysOnTop = async () => {
-    const newState = !isAlwaysOnTop
-    setIsAlwaysOnTop(newState)
-    // @ts-ignore
-    await window.api.toggleAlwaysOnTop(newState)
-  }
 
   const handleWorkspaceSelected = useCallback(
     (path: string): void => {
@@ -1573,10 +1566,13 @@ function App() {
           timelineTasks={timelineTasks}
           selectedProjectId={selectedProjectId}
           setSelectedProjectId={setSelectedProjectId}
-          onAddProject={addProject}
+          onAddProject={async (name: string) => {
+            const res = await addProject(name)
+            return res ? { ...res, isExpanded: false, tasks: [], events: [], subprojects: [] } : null
+          }}
           onDeleteProject={deleteProject}
           onTaskAdded={(projectId, name, parentId, explicitId) => {
-            onAddProjectItem(projectId, name, parentId, explicitId)
+            onAddProjectItem(projectId, name, parentId ?? undefined, explicitId)
           }}
           onTaskDeleted={(taskName, taskId) => {
             pushToHistory()

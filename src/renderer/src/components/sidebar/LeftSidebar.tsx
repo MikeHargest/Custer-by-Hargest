@@ -1,4 +1,4 @@
-import { forwardRef, useState, useEffect, useRef, memo } from 'react'
+import { forwardRef, useState, useEffect, useRef } from 'react'
 import {
   Plus,
   Folder,
@@ -6,10 +6,9 @@ import {
   Calendar as CalendarIcon,
   ChevronDown,
   ChevronRight,
-  Archive,
-  Trash2
+  Archive
 } from 'lucide-react'
-import type { Project, TaskItem, AppEvent, UITheme } from '../../types'
+import type { Project, TaskItem, AppEvent } from '../../types'
 import ProjectItem from './subcomponents/ProjectItem'
 import TaskTree from './subcomponents/TaskTree'
 import EventItem from './subcomponents/EventItem'
@@ -32,7 +31,7 @@ interface LeftSidebarProps {
   showColoredDots: boolean
 }
 
-const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, ref) => {
+const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) => {
   const {
     projects = [],
     setProjects,
@@ -434,7 +433,7 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, ref) =>
                     saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }} 
                     cancelEditing={() => setEditingId(null)} 
                     startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
-                    deleteTask={(pid, tid) => {
+                    deleteTask={(_pid, tid) => {
                       const findTask = (tasks: TaskItem[]): TaskItem | null => {
                         for (const t of tasks) {
                           if (t.id === tid) return t
