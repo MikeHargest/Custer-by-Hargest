@@ -233,22 +233,22 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
               {isOpen ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 16px', height: '100%' }}>
                   <h3>Projects</h3>
-                  <button
-                    onClick={async () => { const res = await onAddProject('New Project'); if (res) { setEditingId(res.id); setEditingValue(res.name) } }}
-                    className="task-add-btn premium-sidebar-btn"
-                    title="Add Project"
-                    style={{
-                      width: '28px',
-                      height: '28px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      background: 'none',
-                      border: 'none',
-                      borderRadius: '6px',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: 0
+                  <button 
+                    onClick={async () => { const res = await onAddProject('New Project'); if (res) { setEditingId(res.id); setEditingValue(res.name) } }} 
+                    className="task-add-btn premium-sidebar-btn" 
+                    title="Add Project" 
+                    style={{ 
+                      width: '28px', 
+                      height: '28px', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      background: 'none', 
+                      border: 'none', 
+                      borderRadius: '6px', 
+                      color: 'var(--text-secondary)', 
+                      cursor: 'pointer', 
+                      padding: 0 
                     }}
                   >
                     <Plus size={14} />
@@ -261,40 +261,40 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
             {isProjectsExpanded && (
               <div className="task-list custom-scrollbar" style={{ marginBottom: isOpen ? '8px' : '16px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', padding: isOpen ? '0 12px' : '0', display: 'flex', flexDirection: 'column', alignItems: isOpen ? 'stretch' : 'center' }}>
                 {projects.map((project) => (
-                  <ProjectItem
-                    key={project.id}
-                    project={project}
-                    level={0}
-                    selectedProjectId={selectedProjectId}
-                    setSelectedProjectId={setSelectedProjectId}
-                    editingId={editingId}
-                    editingValue={editingValue}
-                    setEditingValue={setEditingValue}
-                    saveProjectName={(id) => { onUpdateProject(id, { name: editingValue }); setEditingId(null) }}
-                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }}
-                    cancelEditing={() => setEditingId(null)}
-                    activeDropdown={activeDropdown}
-                    setActiveDropdown={setActiveDropdown}
-                    updateProjectColor={(id, col) => onUpdateProject(id, { color: col })}
-                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }}
-                    deleteProject={onDeleteProject}
-                    toggleProjectExpansion={(id) => onUpdateProject(id, { isExpanded: !projects.find(p => p.id === id)?.isExpanded })}
-                    addSubProject={async (id) => {
-                      const res = await onAddProject('New Sub-project');
+                  <ProjectItem 
+                    key={project.id} 
+                    project={project} 
+                    level={0} 
+                    selectedProjectId={selectedProjectId} 
+                    setSelectedProjectId={setSelectedProjectId} 
+                    editingId={editingId} 
+                    editingValue={editingValue} 
+                    setEditingValue={setEditingValue} 
+                    saveProjectName={(id) => { onUpdateProject(id, { name: editingValue }); setEditingId(null) }} 
+                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }} 
+                    cancelEditing={() => setEditingId(null)} 
+                    activeDropdown={activeDropdown} 
+                    setActiveDropdown={setActiveDropdown} 
+                    updateProjectColor={(id, col) => onUpdateProject(id, { color: col })} 
+                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
+                    deleteProject={onDeleteProject} 
+                    toggleProjectExpansion={(id) => onUpdateProject(id, { isExpanded: !projects.find(p => p.id === id)?.isExpanded })} 
+                    addSubProject={async (id) => { 
+                      const res = await onAddProject('New Sub-project'); 
                       if (res) {
                         const targetProject = projects.find(p => p.id === id);
                         // @ts-ignore
                         onUpdateProject(id, { subprojects: [...(targetProject?.subprojects || []), res] })
                       }
-                    }}
-                    quickAddTask={(id) => onTaskAdded(id, 'New Task', undefined)}
-                    onDragStart={() => { }}
-                    dropIndicator={null}
-                    isDragging={null}
-                    openColorPickerFor={(id, rect) => setColorPickerState({ projectId: id, anchorRect: rect })}
-                    showTaskCounts={showTaskCounts}
-                    showColoredDots={showColoredDots}
-                    isOpen={isOpen}
+                    }} 
+                    quickAddTask={(id) => onTaskAdded(id, 'New Task', undefined)} 
+                    onDragStart={() => {}} 
+                    dropIndicator={null} 
+                    isDragging={null} 
+                    openColorPickerFor={(id, rect) => setColorPickerState({ projectId: id, anchorRect: rect })} 
+                    showTaskCounts={showTaskCounts} 
+                    showColoredDots={showColoredDots} 
+                    isOpen={isOpen} 
                   />
                 ))}
               </div>
@@ -304,16 +304,16 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
           {/* --- BOTTOM ANCHORED AREA (Tasks and Events) --- */}
           <div className="sidebar-bottom-area" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--card-bg)' }}>
             {/* --- TASKS SECTION --- */}
-            <div
-              className={`sidebar-resizer section-divider is-resizable ${isResizingTasks ? 'is-resizing' : ''}`}
+            <div 
+              className={`sidebar-resizer section-divider is-resizable ${isResizingTasks ? 'is-resizing' : ''}`} 
               style={{ height: '12px', zIndex: 100 }}
-              onMouseDown={(e) => {
+              onMouseDown={(e) => { 
                 if (!isOpen) return;
-                e.preventDefault();
-                setResizeStartY(e.clientY);
-                setResizeStartHeight(isTasksExpanded ? tasksHeight : 0);
-                setIsResizingTasks(true)
-              }}
+                e.preventDefault(); 
+                setResizeStartY(e.clientY); 
+                setResizeStartHeight(isTasksExpanded ? tasksHeight : 0); 
+                setIsResizingTasks(true) 
+              }} 
             />
             <div className="sidebar-block" style={{ height: isTasksExpanded ? `${tasksHeight}px` : '40px', display: 'flex', flexDirection: 'column', transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden', flexShrink: 0 }}>
               <div className="sidebar-section-header" style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
@@ -323,64 +323,64 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       <h3>{isArchiveView ? 'Archive' : 'Tasks'}</h3>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <button
-                        onClick={() => setIsArchiveView(!isArchiveView)}
-                        className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`}
-                        title={isArchiveView ? 'View Active Tasks' : 'View Archive'}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: isArchiveView ? 'rgba(255,255,255,0.1)' : 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: isArchiveView ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: 0
-                        }}
-                      >
-                        <Archive size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); if (isTasksExpanded && selectedProject) onTaskAdded(selectedProject.id, 'New Task', undefined) }}
-                        className="task-add-btn premium-sidebar-btn"
-                        title="Add Task"
-                        disabled={!isTasksExpanded || !selectedProject}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: isTasksExpanded ? 'pointer' : 'default',
-                          padding: 0,
-                          opacity: isTasksExpanded ? 1 : 0.3
-                        }}
-                      >
-                        <Plus size={14} />
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setIsTasksExpanded(!isTasksExpanded) }}
-                        className="premium-sidebar-btn"
-                        title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: 0
+                      <button 
+                      onClick={() => setIsArchiveView(!isArchiveView)} 
+                      className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`} 
+                      title={isArchiveView ? 'View Active Tasks' : 'View Archive'} 
+                      style={{ 
+                        width: '28px', 
+                        height: '28px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        background: isArchiveView ? 'rgba(255,255,255,0.1)' : 'none', 
+                        border: 'none', 
+                        borderRadius: '6px', 
+                        color: isArchiveView ? 'var(--text-primary)' : 'var(--text-secondary)', 
+                        cursor: 'pointer', 
+                        padding: 0 
+                      }}
+                    >
+                      <Archive size={14} />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); if (isTasksExpanded && selectedProject) onTaskAdded(selectedProject.id, 'New Task', undefined) }} 
+                      className="task-add-btn premium-sidebar-btn" 
+                      title="Add Task" 
+                      disabled={!isTasksExpanded || !selectedProject} 
+                      style={{ 
+                        width: '28px', 
+                        height: '28px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        background: 'none', 
+                        border: 'none', 
+                        borderRadius: '6px', 
+                        color: 'var(--text-secondary)', 
+                        cursor: isTasksExpanded ? 'pointer' : 'default', 
+                        padding: 0, 
+                        opacity: isTasksExpanded ? 1 : 0.3 
+                      }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setIsTasksExpanded(!isTasksExpanded) }} 
+                        className="premium-sidebar-btn" 
+                        title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'} 
+                        style={{ 
+                          width: '28px', 
+                          height: '28px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          background: 'none', 
+                          border: 'none', 
+                          borderRadius: '6px', 
+                          color: 'var(--text-secondary)', 
+                          cursor: 'pointer', 
+                          padding: 0 
                         }}
                       >
                         {isTasksExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -395,10 +395,10 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
               </div>
               {isTasksExpanded && selectedProject && (
                 <div className="tasks-list custom-scrollbar" style={{ flex: 1, padding: '0 12px 12px 12px', overflowY: 'auto' }}>
-                  <TaskTree
-                    project={selectedProject}
-                    isRoot={true}
-                    isArchiveView={isArchiveView}
+                  <TaskTree 
+                    project={selectedProject} 
+                    isRoot={true} 
+                    isArchiveView={isArchiveView} 
                     toggleTask={(pid, tid) => {
                       const findTask = (tasks: TaskItem[]): TaskItem | null => {
                         for (const t of tasks) {
@@ -427,12 +427,12 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       const task = findTask(selectedProject.tasks || [])
                       onUpdateTask(pid, tid, { isExpanded: !task?.isExpanded })
                     }}
-                    editingId={editingId}
-                    editingValue={editingValue}
-                    setEditingValue={setEditingValue}
-                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }}
-                    cancelEditing={() => setEditingId(null)}
-                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }}
+                    editingId={editingId} 
+                    editingValue={editingValue} 
+                    setEditingValue={setEditingValue} 
+                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }} 
+                    cancelEditing={() => setEditingId(null)} 
+                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
                     deleteTask={(_pid, tid) => {
                       const findTask = (tasks: TaskItem[]): TaskItem | null => {
                         for (const t of tasks) {
@@ -446,29 +446,29 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       }
                       const task = findTask(selectedProject.tasks || [])
                       onTaskDeleted(task?.text || '', tid)
-                    }}
-                    getTaskTimelineDate={() => null}
-                    onTaskAdded={onTaskAdded}
-                    isDragging={null}
-                    dropIndicator={null}
-                    startMouseDrag={() => { }}
-                    showTaskCounts={showTaskCounts}
+                    }} 
+                    getTaskTimelineDate={() => null} 
+                    onTaskAdded={onTaskAdded} 
+                    isDragging={null} 
+                    dropIndicator={null} 
+                    startMouseDrag={() => {}} 
+                    showTaskCounts={showTaskCounts} 
                   />
                 </div>
               )}
             </div>
 
             {/* --- EVENTS SECTION --- */}
-            <div
-              className={`sidebar-resizer section-divider is-resizable ${isResizingEvents ? 'is-resizing' : ''}`}
+            <div 
+              className={`sidebar-resizer section-divider is-resizable ${isResizingEvents ? 'is-resizing' : ''}`} 
               style={{ height: '12px', zIndex: 100 }}
-              onMouseDown={(e) => {
+              onMouseDown={(e) => { 
                 if (!isOpen) return;
-                e.preventDefault();
-                setResizeStartY(e.clientY);
-                setResizeStartHeight(isEventsExpanded ? eventsHeight : 0);
-                setIsResizingEvents(true)
-              }}
+                e.preventDefault(); 
+                setResizeStartY(e.clientY); 
+                setResizeStartHeight(isEventsExpanded ? eventsHeight : 0); 
+                setIsResizingEvents(true) 
+              }} 
             />
             <div className="sidebar-block" style={{ height: isEventsExpanded ? `${eventsHeight}px` : '40px', display: 'flex', flexDirection: 'column', transition: (isResizingEvents || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden', flexShrink: 0 }}>
               <div className="sidebar-section-header" style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
@@ -478,44 +478,44 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       <h3>Events</h3>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); if (isEventsExpanded && selectedProject) onAddEvent(selectedProject.id, 'New Event') }}
-                        className="event-add-btn premium-sidebar-btn"
-                        title="Add Event"
-                        disabled={!isEventsExpanded || !selectedProject}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: isEventsExpanded ? 'pointer' : 'default',
-                          padding: 0,
-                          opacity: isEventsExpanded ? 1 : 0.3
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); if (isEventsExpanded && selectedProject) onAddEvent(selectedProject.id, 'New Event') }} 
+                        className="event-add-btn premium-sidebar-btn" 
+                        title="Add Event" 
+                        disabled={!isEventsExpanded || !selectedProject} 
+                        style={{ 
+                          width: '28px', 
+                          height: '28px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          background: 'none', 
+                          border: 'none', 
+                          borderRadius: '6px', 
+                          color: 'var(--text-secondary)', 
+                          cursor: isEventsExpanded ? 'pointer' : 'default', 
+                          padding: 0, 
+                          opacity: isEventsExpanded ? 1 : 0.3 
                         }}
                       >
                         <Plus size={14} />
                       </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setIsEventsExpanded(!isEventsExpanded) }}
-                        className="premium-sidebar-btn"
-                        title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'}
-                        style={{
-                          width: '28px',
-                          height: '28px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          background: 'none',
-                          border: 'none',
-                          borderRadius: '6px',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: 0
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); setIsEventsExpanded(!isEventsExpanded) }} 
+                        className="premium-sidebar-btn" 
+                        title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'} 
+                        style={{ 
+                          width: '28px', 
+                          height: '28px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          background: 'none', 
+                          border: 'none', 
+                          borderRadius: '6px', 
+                          color: 'var(--text-secondary)', 
+                          cursor: 'pointer', 
+                          padding: 0 
                         }}
                       >
                         {isEventsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -532,20 +532,20 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                 <div className="events-list custom-scrollbar" style={{ flex: 1, padding: '0 12px 12px 12px', overflowY: 'auto' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {selectedProject.events?.map((event) => (
-                      <EventItem
-                        key={event.id}
-                        selectedProjectId={selectedProject.id}
-                        event={event}
-                        editingId={editingId}
-                        editingValue={editingValue}
-                        setEditingValue={setEditingValue}
-                        saveEventName={(pid, eid) => { onUpdateEvent(pid, eid, { title: editingValue }); setEditingId(null) }}
-                        cancelEditing={() => setEditingId(null)}
-                        startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }}
-                        deleteEvent={onDeleteEvent}
-                        updateEvent={onUpdateEvent}
-                        isExpanded={expandedEventId === event.id}
-                        setExpandedEventId={setExpandedEventId}
+                      <EventItem 
+                        key={event.id} 
+                        selectedProjectId={selectedProject.id} 
+                        event={event} 
+                        editingId={editingId} 
+                        editingValue={editingValue} 
+                        setEditingValue={setEditingValue} 
+                        saveEventName={(pid, eid) => { onUpdateEvent(pid, eid, { title: editingValue }); setEditingId(null) }} 
+                        cancelEditing={() => setEditingId(null)} 
+                        startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
+                        deleteEvent={onDeleteEvent} 
+                        updateEvent={onUpdateEvent} 
+                        isExpanded={expandedEventId === event.id} 
+                        setExpandedEventId={setExpandedEventId} 
                         projectColor={selectedProject.color}
                       />
                     ))}

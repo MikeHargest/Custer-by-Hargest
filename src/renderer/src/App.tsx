@@ -1578,24 +1578,6 @@ function App() {
             pushToHistory()
             setTimelineTasks((prev) => prev.filter((t) => t.taskId !== taskId))
             setTimers((prev) => prev.filter((t) => t.taskName !== taskName))
-
-            // Actually remove the task from the project's task tree
-            const removeTaskFromList = (tasks: any[]): any[] => {
-              return tasks
-                .filter((t: any) => t.id !== taskId)
-                .map((t: any) => ({
-                  ...t,
-                  subtasks: t.subtasks ? removeTaskFromList(t.subtasks) : []
-                }))
-            }
-            const removeFromProjects = (projs: any[]): any[] => {
-              return projs.map((p: any) => ({
-                ...p,
-                tasks: removeTaskFromList(p.tasks || []),
-                subprojects: p.subprojects ? removeFromProjects(p.subprojects) : []
-              }))
-            }
-            setProjects((prev) => removeFromProjects(prev))
           }}
           onAssignTaskToTimer={(timerId, taskText) => {
             updateTimer(timerId, { taskName: taskText })

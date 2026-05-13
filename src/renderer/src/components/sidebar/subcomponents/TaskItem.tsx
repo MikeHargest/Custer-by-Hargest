@@ -256,6 +256,7 @@ const TaskItemRenderer: React.FC<TaskItemProps> = memo(function TaskItemRenderer
                 {getTaskTimelineDate(project.id, task.id)}
               </span>
             )}
+
           </div>
         </div>
 
