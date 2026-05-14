@@ -1,8 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import {
   Timer as TimerIcon,
-  PanelLeft,
-  PanelLeftClose,
   PanelRight,
   User,
   X as CloseIcon,
@@ -1587,18 +1585,11 @@ function App() {
           }}
           showTaskCounts={showTaskCounts}
           showColoredDots={showColoredDots}
+          setIsOpen={setIsSidebarOpen}
         />
         <div className="main-content">
           <div className="main-toolbar">
             <div className="main-toolbar-left">
-              <button
-                className="view-icon-btn"
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                title={isSidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'}
-              >
-                {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeft size={18} />}
-              </button>
-              <div className="view-switcher-separator" />
               <div className="view-switcher-container">
                 {([
                   { id: 'overview', icon: LayoutDashboard, label: 'Overview' },

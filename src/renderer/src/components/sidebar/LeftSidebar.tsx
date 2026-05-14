@@ -1,13 +1,14 @@
 import { forwardRef, useState, useEffect, useRef } from 'react'
 import {
   Plus,
-  Folder,
   CheckSquare,
   Calendar as CalendarIcon,
   ChevronDown,
   ChevronRight,
   Archive,
-  Trash2
+  Trash2,
+  PanelLeft,
+  PanelLeftClose
 } from 'lucide-react'
 import type { Project, TaskItem, AppEvent } from '../../types'
 import ProjectItem from './subcomponents/ProjectItem'
@@ -18,7 +19,7 @@ import { removeTaskFromTree, removeTaskFromProjects, migrateProjectTasks } from 
 
 interface LeftSidebarProps {
   projects: Project[]
-  setProjects: (projects: Project[]) => void
+  setProjects: React.Dispatch<React.SetStateAction<Project[]>>
   timelineTasks: any[]
   selectedProjectId: string | null
   setSelectedProjectId: (id: string | null) => void
@@ -29,6 +30,7 @@ interface LeftSidebarProps {
   onAssignTaskToTimer: (timerId: string, taskText: string) => void
   onAssignTaskToAlarm: (alarmId: string, taskText: string) => void
   isOpen: boolean
+  setIsOpen: (open: boolean) => void
   showTaskCounts: boolean
   showColoredDots: boolean
 }
@@ -333,33 +335,75 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
         <div className="sidebar-content" style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
           {/* --- PROJECTS SECTION (Flexible, stays at top) --- */}
           <div className="sidebar-block" style={{ flex: '1 1 0%', display: 'flex', flexDirection: 'column', minHeight: '40px', transition: isInitialLoading ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden' }}>
+            <div style={{ height: '6px', flexShrink: 0 }} />
             <div className="sidebar-section-header" style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
               {isOpen ? (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 16px', height: '100%' }}>
                   <h3>Projects</h3>
-                  <button 
-                    onClick={async () => { const res = await onAddProject('New Project'); if (res) { setEditingId(res.id); setEditingValue(res.name) } }} 
-                    className="task-add-btn premium-sidebar-btn" 
-                    title="Add Project" 
-                    style={{ 
-                      width: '28px', 
-                      height: '28px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center', 
-                      background: 'none', 
-                      border: 'none', 
-                      borderRadius: '6px', 
-                      color: 'var(--text-secondary)', 
-                      cursor: 'pointer', 
-                      padding: 0 
-                    }}
-                  >
-                    <Plus size={14} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button 
+                      onClick={async () => { const res = await onAddProject('New Project'); if (res) { setEditingId(res.id); setEditingValue(res.name) } }} 
+                      className="task-add-btn premium-sidebar-btn" 
+                      title="Add Project" 
+                      style={{ 
+                        width: '28px', 
+                        height: '28px', 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        background: 'none', 
+                        border: 'none', 
+                        borderRadius: '6px', 
+                        color: 'var(--text-secondary)', 
+                        cursor: 'pointer', 
+                        padding: 0 
+                      }}
+                    >
+                      <Plus size={14} />
+                    </button>
+                    <button
+                      className="premium-sidebar-btn"
+                      onClick={() => props.setIsOpen(!isOpen)}
+                      title="Collapse sidebar"
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'none',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: 0
+                      }}
+                    >
+                      <PanelLeftClose size={16} />
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="sidebar-header-icon" title="Projects" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', color: 'var(--text-secondary)', opacity: 0.8 }}><Folder size={18} /></div>
+                <button
+                  className="sidebar-header-icon premium-sidebar-btn"
+                  onClick={() => props.setIsOpen(!isOpen)}
+                  title="Expand sidebar"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    background: 'none',
+                    border: 'none',
+                    borderRadius: '6px',
+                    color: 'var(--text-secondary)',
+                    cursor: 'pointer',
+                    opacity: 0.8
+                  }}
+                >
+                  <PanelLeft size={18} />
+                </button>
               )}
             </div>
             {(isProjectsExpanded || !isOpen) && (
