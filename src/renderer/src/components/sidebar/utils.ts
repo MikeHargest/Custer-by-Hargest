@@ -55,11 +55,16 @@ export const removeTaskFromProjects = (
 ): { projects: Project[]; extracted: TaskItem | null } => {
   let extracted: TaskItem | null = null
   const projects = projs.map((p) => {
-    const result = removeTaskFromTree(p.tasks || [], taskId)
-    if (result.extracted) extracted = result.extracted
+    const activeResult = removeTaskFromTree(p.tasks || [], taskId)
+    if (activeResult.extracted) extracted = activeResult.extracted
+
+    const archivedResult = removeTaskFromTree(p.archivedTasks || [], taskId)
+    if (archivedResult.extracted) extracted = archivedResult.extracted
+
     return {
       ...p,
-      tasks: result.remaining,
+      tasks: activeResult.remaining,
+      archivedTasks: archivedResult.remaining,
       subprojects: (() => {
         if (!p.subprojects) return []
         const subResult = removeTaskFromProjects(p.subprojects, taskId)
@@ -121,4 +126,38 @@ export const removeProjectFromTree = (
     return acc
   }, [])
   return { projects, extracted }
+}
+
+export const extractCompletedTasks = (
+  tasks: TaskItem[]
+): { remaining: TaskItem[]; extracted: TaskItem[] } => {
+  const extracted: TaskItem[] = []
+  const remaining = tasks.reduce((acc: TaskItem[], t) => {
+    if (t.completed) {
+      extracted.push(t)
+      return acc
+    }
+    if (t.subtasks && t.subtasks.length > 0) {
+      const result = extractCompletedTasks(t.subtasks)
+      extracted.push(...result.extracted)
+      acc.push({ ...t, subtasks: result.remaining })
+    } else {
+      acc.push(t)
+    }
+    return acc
+  }, [])
+  return { remaining, extracted }
+}
+
+export const migrateProjectTasks = (p: Project): Project => {
+  const { remaining, extracted } = extractCompletedTasks(p.tasks || [])
+  return {
+    ...p,
+    tasks: remaining,
+    archivedTasks: [
+      ...(p.archivedTasks || []).map((t) => ({ ...t, completed: true })),
+      ...extracted.map((t) => ({ ...t, completed: true }))
+    ],
+    subprojects: (p.subprojects || []).map(migrateProjectTasks)
+  }
 }

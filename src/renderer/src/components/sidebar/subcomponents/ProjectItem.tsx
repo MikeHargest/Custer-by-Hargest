@@ -387,7 +387,7 @@ const ProjectItem = memo(({
         </div>
       </div>
       {project.isExpanded && project.subprojects && project.subprojects.length > 0 && (
-        <div style={{ marginLeft: '16px', borderLeft: '1px solid rgba(255,255,255,0.15)', paddingLeft: '4px' }}>
+        <div style={{ marginLeft: isOpen ? '16px' : '10px', borderLeft: isOpen ? '1px solid rgba(255,255,255,0.15)' : 'none', paddingLeft: isOpen ? '4px' : '2px' }}>
           {project.subprojects.map((sub) => (
             <ProjectItem
               key={sub.id}

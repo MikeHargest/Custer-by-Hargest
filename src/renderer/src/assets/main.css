@@ -1106,7 +1106,7 @@ body {
 
 .task-sidebar.closed {
   /* Collapsed (mini) sidebar: fixed narrow width that still shows icons */
-  width: 72px;
+  width: 54px;
   margin-right: 0;
 }
 
@@ -1182,8 +1182,8 @@ body {
 
 /* Collapsed sidebar inner adjustments */
 .task-sidebar.closed .sidebar-content {
-  width: 72px;
-  min-width: 72px;
+  width: 54px;
+  min-width: 54px;
 }
 
 /* Hide resizers in collapsed mode but keep dividers visible */

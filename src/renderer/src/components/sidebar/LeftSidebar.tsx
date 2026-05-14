@@ -6,13 +6,15 @@ import {
   Calendar as CalendarIcon,
   ChevronDown,
   ChevronRight,
-  Archive
+  Archive,
+  Trash2
 } from 'lucide-react'
 import type { Project, TaskItem, AppEvent } from '../../types'
 import ProjectItem from './subcomponents/ProjectItem'
 import TaskTree from './subcomponents/TaskTree'
 import EventItem from './subcomponents/EventItem'
 import ColorPicker from '../ColorPicker'
+import { removeTaskFromTree, removeTaskFromProjects, migrateProjectTasks } from './utils'
 
 interface LeftSidebarProps {
   projects: Project[]
@@ -74,6 +76,19 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
 
   // Refs
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const hasMigrated = useRef(false)
+
+  // Migration for old completed tasks
+  useEffect(() => {
+    if (!isInitialLoading && projects.length > 0 && !hasMigrated.current) {
+      const migrated = projects.map(migrateProjectTasks)
+      // Simple check to see if anything actually changed
+      if (JSON.stringify(migrated) !== JSON.stringify(projects)) {
+        setProjects(migrated)
+      }
+      hasMigrated.current = true
+    }
+  }, [isInitialLoading, projects, setProjects])
 
   // Persistence: Load on Mount
   useEffect(() => {
@@ -180,13 +195,23 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
     if (!isOpen) {
       setIsTasksExpanded(false)
       setIsEventsExpanded(false)
-      setIsProjectsExpanded(false)
+      // Note: We no longer force isProjectsExpanded to false here 
+      // to allow the compact project list to show in collapsed mode.
     }
   }, [isOpen])
 
   // Handlers
   const onUpdateProject = (id: string, updates: Partial<Project>) => {
-    setProjects(projects.map(p => p.id === id ? { ...p, ...updates } : p))
+    const updateRecursive = (list: Project[]): Project[] => {
+      return list.map(p => {
+        if (p.id === id) return { ...p, ...updates }
+        if (p.subprojects && p.subprojects.length > 0) {
+          return { ...p, subprojects: updateRecursive(p.subprojects) }
+        }
+        return p
+      })
+    }
+    setProjects(updateRecursive(projects))
   }
 
   const handleColorChange = (color: string) => {
@@ -195,15 +220,70 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
     }
   }
   const onUpdateTask = (projectId: string, taskId: string, updates: Partial<TaskItem>) => {
-    const updateInTasks = (tasks: TaskItem[]): TaskItem[] => {
-      return tasks.map(t => {
-        if (t.id === taskId) return { ...t, ...updates }
-        if (t.subtasks) return { ...t, subtasks: updateInTasks(t.subtasks) }
-        return t
-      })
+    // 1. Immediate update for UI responsiveness (toggle checkbox, rename, etc.)
+    setProjects(prev => {
+      const updateRecursive = (list: Project[]): Project[] => {
+        return list.map(p => {
+          if (p.id === projectId) {
+            const upTask = (tasks: TaskItem[]): TaskItem[] =>
+              tasks.map(t => {
+                if (t.id === taskId) return { ...t, ...updates }
+                if (t.subtasks) return { ...t, subtasks: upTask(t.subtasks) }
+                return t
+              })
+            return {
+              ...p,
+              tasks: upTask(p.tasks || []),
+              archivedTasks: upTask(p.archivedTasks || [])
+            }
+          }
+          if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
+          return p
+        })
+      }
+      return updateRecursive(prev)
+    })
+
+    // 2. Handle delayed archiving/unarchiving if completion state changed
+    if (updates.completed !== undefined) {
+      const isArchiving = updates.completed === true && !isArchiveView
+      const isUnarchiving = updates.completed === false && isArchiveView
+
+      if (isArchiving || isUnarchiving) {
+        setTimeout(() => {
+          setProjects(prev => {
+            const moveRecursive = (list: Project[]): Project[] => {
+              return list.map(p => {
+                if (p.id === projectId) {
+                  if (isArchiving) {
+                    const { remaining, extracted } = removeTaskFromTree(p.tasks || [], taskId)
+                    if (extracted) {
+                      return {
+                        ...p,
+                        tasks: remaining,
+                        archivedTasks: [...(p.archivedTasks || []), { ...extracted, completed: true }]
+                      }
+                    }
+                  } else if (isUnarchiving) {
+                    const { remaining, extracted } = removeTaskFromTree(p.archivedTasks || [], taskId)
+                    if (extracted) {
+                      return {
+                        ...p,
+                        archivedTasks: remaining,
+                        tasks: [...(p.tasks || []), { ...extracted, completed: false }]
+                      }
+                    }
+                  }
+                }
+                if (p.subprojects) return { ...p, subprojects: moveRecursive(p.subprojects) }
+                return p
+              })
+            }
+            return moveRecursive(prev)
+          })
+        }, 1000)
+      }
     }
-    // @ts-ignore
-    setProjects(projects.map(p => p.id === projectId ? { ...p, tasks: updateInTasks(p.tasks || []) } : p))
   }
   const onUpdateEvent = (projectId: string, eventId: string, updates: Partial<AppEvent>) => {
     // @ts-ignore
@@ -219,7 +299,31 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
     setProjects(projects.map(p => p.id === projectId ? { ...p, events: (p.events || []).filter(e => e.id !== eventId) } : p))
   }
 
-  const selectedProject = projects.find(p => p.id === selectedProjectId)
+  const onClearArchive = (projectId: string) => {
+    setProjects(prev => {
+      const updateRecursive = (list: Project[]): Project[] => {
+        return list.map(p => {
+          if (p.id === projectId) return { ...p, archivedTasks: [] }
+          if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
+          return p
+        })
+      }
+      return updateRecursive(prev)
+    })
+  }
+
+  const findProjectRecursive = (list: Project[], id: string | null): Project | undefined => {
+    if (!id) return undefined
+    for (const p of list) {
+      if (p.id === id) return p
+      if (p.subprojects) {
+        const found = findProjectRecursive(p.subprojects, id)
+        if (found) return found
+      }
+    }
+    return undefined
+  }
+  const selectedProject = findProjectRecursive(projects, selectedProjectId)
 
   if (!projects) return null
 
@@ -258,7 +362,7 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                 <div className="sidebar-header-icon" title="Projects" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', color: 'var(--text-secondary)', opacity: 0.8 }}><Folder size={18} /></div>
               )}
             </div>
-            {isProjectsExpanded && (
+            {(isProjectsExpanded || !isOpen) && (
               <div className="task-list custom-scrollbar" style={{ marginBottom: isOpen ? '8px' : '16px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', padding: isOpen ? '0 12px' : '0', display: 'flex', flexDirection: 'column', alignItems: isOpen ? 'stretch' : 'center' }}>
                 {projects.map((project) => (
                   <ProjectItem 
@@ -278,12 +382,34 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                     updateProjectColor={(id, col) => onUpdateProject(id, { color: col })} 
                     startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
                     deleteProject={onDeleteProject} 
-                    toggleProjectExpansion={(id) => onUpdateProject(id, { isExpanded: !projects.find(p => p.id === id)?.isExpanded })} 
+                    toggleProjectExpansion={(id) => {
+                      const findProjectRecursive = (list: Project[]): Project | undefined => {
+                        for (const p of list) {
+                          if (p.id === id) return p
+                          if (p.subprojects) {
+                            const found = findProjectRecursive(p.subprojects)
+                            if (found) return found
+                          }
+                        }
+                        return undefined
+                      }
+                      const project = findProjectRecursive(projects)
+                      onUpdateProject(id, { isExpanded: !project?.isExpanded })
+                    }} 
                     addSubProject={async (id) => { 
                       const res = await onAddProject('New Sub-project'); 
                       if (res) {
-                        const targetProject = projects.find(p => p.id === id);
-                        // @ts-ignore
+                        const findProjectRecursive = (list: Project[]): Project | undefined => {
+                          for (const p of list) {
+                            if (p.id === id) return p
+                            if (p.subprojects) {
+                              const found = findProjectRecursive(p.subprojects)
+                              if (found) return found
+                            }
+                          }
+                          return undefined
+                        }
+                        const targetProject = findProjectRecursive(projects);
                         onUpdateProject(id, { subprojects: [...(targetProject?.subprojects || []), res] })
                       }
                     }} 
@@ -343,28 +469,58 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                     >
                       <Archive size={14} />
                     </button>
-                    <button 
-                      onClick={(e) => { e.stopPropagation(); if (isTasksExpanded && selectedProject) onTaskAdded(selectedProject.id, 'New Task', undefined) }} 
-                      className="task-add-btn premium-sidebar-btn" 
-                      title="Add Task" 
-                      disabled={!isTasksExpanded || !selectedProject} 
-                      style={{ 
-                        width: '28px', 
-                        height: '28px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        background: 'none', 
-                        border: 'none', 
-                        borderRadius: '6px', 
-                        color: 'var(--text-secondary)', 
-                        cursor: isTasksExpanded ? 'pointer' : 'default', 
-                        padding: 0, 
-                        opacity: isTasksExpanded ? 1 : 0.3 
-                      }}
-                    >
-                      <Plus size={14} />
-                    </button>
+                    {isArchiveView ? (
+                      <button 
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          if (selectedProject && window.confirm('Are you sure you want to clear the archive for this project? This action cannot be undone.')) {
+                            onClearArchive(selectedProject.id) 
+                          }
+                        }} 
+                        className="task-clear-btn premium-sidebar-btn" 
+                        title="Clear Archive" 
+                        disabled={!selectedProject || !selectedProject.archivedTasks || selectedProject.archivedTasks.length === 0} 
+                        style={{ 
+                          width: '28px', 
+                          height: '28px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          background: 'none', 
+                          border: 'none', 
+                          borderRadius: '6px', 
+                          color: 'var(--text-secondary)', 
+                          cursor: (selectedProject?.archivedTasks?.length || 0) > 0 ? 'pointer' : 'default', 
+                          padding: 0, 
+                          opacity: (selectedProject?.archivedTasks?.length || 0) > 0 ? 1 : 0.3 
+                        }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    ) : (
+                      <button 
+                        onClick={(e) => { e.stopPropagation(); if (isTasksExpanded && selectedProject) onTaskAdded(selectedProject.id, 'New Task', undefined) }} 
+                        className="task-add-btn premium-sidebar-btn" 
+                        title="Add Task" 
+                        disabled={!isTasksExpanded || !selectedProject} 
+                        style={{ 
+                          width: '28px', 
+                          height: '28px', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          background: 'none', 
+                          border: 'none', 
+                          borderRadius: '6px', 
+                          color: 'var(--text-secondary)', 
+                          cursor: isTasksExpanded ? 'pointer' : 'default', 
+                          padding: 0, 
+                          opacity: isTasksExpanded ? 1 : 0.3 
+                        }}
+                      >
+                        <Plus size={14} />
+                      </button>
+                    )}
                       <button 
                         onClick={(e) => { e.stopPropagation(); setIsTasksExpanded(!isTasksExpanded) }} 
                         className="premium-sidebar-btn" 
@@ -400,31 +556,59 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                     isRoot={true} 
                     isArchiveView={isArchiveView} 
                     toggleTask={(pid, tid) => {
-                      const findTask = (tasks: TaskItem[]): TaskItem | null => {
-                        for (const t of tasks) {
-                          if (t.id === tid) return t
-                          if (t.subtasks) {
-                            const found = findTask(t.subtasks)
-                            if (found) return found
+                      const findTaskInTree = (p: Project): TaskItem | null => {
+                        const search = (list: TaskItem[]): TaskItem | null => {
+                          for (const t of list) {
+                            if (t.id === tid) return t
+                            if (t.subtasks) {
+                              const f = search(t.subtasks)
+                              if (f) return f
+                            }
+                          }
+                          return null
+                        }
+                        const f1 = search(p.tasks || [])
+                        if (f1) return f1
+                        const f2 = search(p.archivedTasks || [])
+                        if (f2) return f2
+                        if (p.subprojects) {
+                          for (const sub of p.subprojects) {
+                            const f3 = findTaskInTree(sub)
+                            if (f3) return f3
                           }
                         }
                         return null
                       }
-                      const task = findTask(selectedProject.tasks || [])
+                      if (!selectedProject) return
+                      const task = findTaskInTree(selectedProject)
                       onUpdateTask(pid, tid, { completed: !task?.completed })
                     }}
                     toggleTaskExpansion={(pid, tid) => {
-                      const findTask = (tasks: TaskItem[]): TaskItem | null => {
-                        for (const t of tasks) {
-                          if (t.id === tid) return t
-                          if (t.subtasks) {
-                            const found = findTask(t.subtasks)
-                            if (found) return found
+                      const findTaskInTree = (p: Project): TaskItem | null => {
+                        const search = (list: TaskItem[]): TaskItem | null => {
+                          for (const t of list) {
+                            if (t.id === tid) return t
+                            if (t.subtasks) {
+                              const f = search(t.subtasks)
+                              if (f) return f
+                            }
+                          }
+                          return null
+                        }
+                        const f1 = search(p.tasks || [])
+                        if (f1) return f1
+                        const f2 = search(p.archivedTasks || [])
+                        if (f2) return f2
+                        if (p.subprojects) {
+                          for (const sub of p.subprojects) {
+                            const f3 = findTaskInTree(sub)
+                            if (f3) return f3
                           }
                         }
                         return null
                       }
-                      const task = findTask(selectedProject.tasks || [])
+                      if (!selectedProject) return
+                      const task = findTaskInTree(selectedProject)
                       onUpdateTask(pid, tid, { isExpanded: !task?.isExpanded })
                     }}
                     editingId={editingId} 
@@ -434,18 +618,35 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                     cancelEditing={() => setEditingId(null)} 
                     startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
                     deleteTask={(_pid, tid) => {
-                      const findTask = (tasks: TaskItem[]): TaskItem | null => {
-                        for (const t of tasks) {
-                          if (t.id === tid) return t
-                          if (t.subtasks) {
-                            const found = findTask(t.subtasks)
-                            if (found) return found
+                      const findTaskInTree = (p: Project): TaskItem | null => {
+                        const search = (list: TaskItem[]): TaskItem | null => {
+                          for (const t of list) {
+                            if (t.id === tid) return t
+                            if (t.subtasks) {
+                              const f = search(t.subtasks)
+                              if (f) return f
+                            }
+                          }
+                          return null
+                        }
+                        const f1 = search(p.tasks || [])
+                        if (f1) return f1
+                        const f2 = search(p.archivedTasks || [])
+                        if (f2) return f2
+                        if (p.subprojects) {
+                          for (const sub of p.subprojects) {
+                            const f3 = findTaskInTree(sub)
+                            if (f3) return f3
                           }
                         }
                         return null
                       }
-                      const task = findTask(selectedProject.tasks || [])
+                      if (!selectedProject) return
+                      const task = findTaskInTree(selectedProject)
                       onTaskDeleted(task?.text || '', tid)
+                      
+                      // Also remove from project tree
+                      setProjects(removeTaskFromProjects(projects, tid).projects)
                     }} 
                     getTaskTimelineDate={() => null} 
                     onTaskAdded={onTaskAdded} 
