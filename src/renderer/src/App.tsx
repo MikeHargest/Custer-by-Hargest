@@ -176,6 +176,7 @@ function App() {
   const [previousWorkspacePath, setPreviousWorkspacePath] = useState<string | null>(null)
   const [hiddenTimelineProjectIds, setHiddenTimelineProjectIds] = useState<string[]>([])
   const [backupIntervalMinutes, setBackupIntervalMinutes] = useState(10)
+  const [boardAutosaveIntervalMinutes, setBoardAutosaveIntervalMinutes] = useState(5)
   const [boardBackupIntervalMinutes, setBoardBackupIntervalMinutes] = useState(10)
   const [disableBoardBackups, setDisableBoardBackups] = useState(() => {
     try {
@@ -185,7 +186,6 @@ function App() {
       return false
     }
   })
-  const [enableBoardAutosave, setEnableBoardAutosave] = useState(false)
   const [calendarTimezone, setCalendarTimezone] = useState(() => {
     try { return Intl.DateTimeFormat().resolvedOptions().timeZone } catch { return 'UTC' }
   })
@@ -641,10 +641,10 @@ function App() {
           setHiddenTimelineProjectIds(workspaceData.hiddenTimelineProjectIds)
         if (workspaceData.backupIntervalMinutes !== undefined)
           setBackupIntervalMinutes(workspaceData.backupIntervalMinutes)
+        if (workspaceData.boardAutosaveIntervalMinutes !== undefined)
+          setBoardAutosaveIntervalMinutes(workspaceData.boardAutosaveIntervalMinutes)
         if (workspaceData.boardBackupIntervalMinutes !== undefined)
           setBoardBackupIntervalMinutes(workspaceData.boardBackupIntervalMinutes)
-        if (workspaceData.enableBoardAutosave !== undefined)
-          setEnableBoardAutosave(workspaceData.enableBoardAutosave)
         if (workspaceData.showColoredDots !== undefined)
           setShowColoredDots(workspaceData.showColoredDots)
 
@@ -1092,8 +1092,8 @@ function App() {
         timerVolume,
         hiddenTimelineProjectIds,
         backupIntervalMinutes,
+        boardAutosaveIntervalMinutes,
         boardBackupIntervalMinutes,
-        enableBoardAutosave,
         showColoredDots,
         isCleanedV1: true // Mark as clean
       }
@@ -1118,8 +1118,8 @@ function App() {
     timerVolume,
     hiddenTimelineProjectIds,
     backupIntervalMinutes,
+    boardAutosaveIntervalMinutes,
     boardBackupIntervalMinutes,
-    enableBoardAutosave,
     showColoredDots,
     isLoadingWorkspace
   ])
@@ -2224,6 +2224,7 @@ function App() {
                 showFPS={showFPS}
                 setCurrentView={setCurrentView}
                 backupIntervalMinutes={backupIntervalMinutes}
+                boardAutosaveIntervalMinutes={boardAutosaveIntervalMinutes}
                 boardBackupIntervalMinutes={boardBackupIntervalMinutes}
                 disableBoardBackups={disableBoardBackups}
               />
@@ -2318,8 +2319,8 @@ function App() {
         setBoardBackupIntervalMinutes={setBoardBackupIntervalMinutes}
         disableBoardBackups={disableBoardBackups}
         setDisableBoardBackups={setDisableBoardBackups}
-        enableBoardAutosave={enableBoardAutosave}
-        setEnableBoardAutosave={setEnableBoardAutosave}
+        boardAutosaveIntervalMinutes={boardAutosaveIntervalMinutes}
+        setBoardAutosaveIntervalMinutes={setBoardAutosaveIntervalMinutes}
         calendarTimezone={calendarTimezone}
         setCalendarTimezone={setCalendarTimezone}
         onSaveThemeAsDefault={async () => {

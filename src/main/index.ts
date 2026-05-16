@@ -1706,6 +1706,78 @@ ipcMain.handle('boards:close-board', async (_, boardId: string) => {
   }
 })
 
+/**
+ * boards:backup-board
+ * Creates a timestamped backup of the board FROM CACHE (temp file).
+ * Packs board.json + assets from cache into <dirPath>/backup/<boardName>/<TIMESTAMP>.board.
+ * Does NOT read from or modify the source .board file.
+ */
+ipcMain.handle('boards:backup-board', async (_, boardId: string, dirPath: string, fileName: string) => {
+  try {
+    const cacheDir = getBoardCacheDir(boardId)
+    const boardJsonPath = join(cacheDir, 'board.json')
+
+    // Cache must exist (temp file must be written first via writeBoardJson)
+    if (!fs.existsSync(boardJsonPath)) {
+      console.warn('[boards:backup-board] Cache not found, skipping backup for board:', boardId)
+      return false
+    }
+
+    // Safety: skip backup if board is empty
+    try {
+      const boardData = JSON.parse(fs.readFileSync(boardJsonPath, 'utf-8'))
+      if (!Array.isArray(boardData.elements) || boardData.elements.length === 0) {
+        console.log('[boards:backup-board] Board is empty, skipping backup')
+        return false
+      }
+    } catch {
+      return false
+    }
+
+    // Create backup directory: <boardsDir>/backup/<boardName>/
+    const baseName = path.basename(fileName, path.extname(fileName))
+    const backupDir = join(dirPath, 'backup', baseName)
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true })
+    }
+
+    // Timestamped backup filename
+    const now = new Date()
+    const pad = (n: number): string => n.toString().padStart(2, '0')
+    const timestamp = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
+    const backupPath = join(backupDir, `${timestamp}.board`)
+    const tmpPath = backupPath + '.tmp'
+
+    // Pack from cache into backup (same as pack-board but to backup destination)
+    const zipfile = new yazl.ZipFile()
+    const writeStream = fs.createWriteStream(tmpPath)
+    zipfile.outputStream.pipe(writeStream)
+
+    zipfile.addFile(boardJsonPath, 'board.json')
+
+    const assetsDir = join(cacheDir, 'assets')
+    if (fs.existsSync(assetsDir)) {
+      const assetFiles = fs.readdirSync(assetsDir)
+      for (const f of assetFiles) {
+        zipfile.addFile(join(assetsDir, f), `assets/${f}`, { compress: false })
+      }
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      zipfile.end()
+      writeStream.on('close', resolve)
+      writeStream.on('error', reject)
+    })
+
+    await fs.promises.rename(tmpPath, backupPath)
+    console.log('[boards:backup-board] Backup created:', backupPath)
+    return true
+  } catch (error) {
+    console.error('boards:backup-board error:', error)
+    return false
+  }
+})
+
 ipcMain.on('notification:show', (_, title, body) => {
   new Notification({ title, body, icon: globalIconPath }).show()
   // Notify renderer windows for the internal Notification Center

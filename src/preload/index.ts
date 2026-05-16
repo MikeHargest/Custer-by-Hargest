@@ -110,6 +110,8 @@ const api = {
     ipcRenderer.invoke('boards:delete-version', versionPath),
   closeBoard: (boardId: string) =>
     ipcRenderer.invoke('boards:close-board', boardId),
+  backupBoard: (boardId: string, dirPath: string, fileName: string) =>
+    ipcRenderer.invoke('boards:backup-board', boardId, dirPath, fileName),
 
   // Legacy stubs (kept for backward compat during transition)
   saveIbo: (dirPath: string, fileName: string, boardContent: string) =>

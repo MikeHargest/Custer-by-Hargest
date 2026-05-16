@@ -68,9 +68,9 @@ interface NotesViewProps {
   showFPS?: boolean
   setCurrentView: (view: any) => void
   backupIntervalMinutes?: number
+  boardAutosaveIntervalMinutes?: number
   boardBackupIntervalMinutes?: number
   disableBoardBackups?: boolean
-  enableBoardAutosave?: boolean
 }
 
 const findProjectRecursive = (projs: Project[], id: string | null): Project | undefined => {
@@ -114,9 +114,9 @@ export default function NotesView({
   showFPS,
   setCurrentView,
   backupIntervalMinutes = 10,
+  boardAutosaveIntervalMinutes = 5,
   boardBackupIntervalMinutes = 10,
-  disableBoardBackups = false,
-  enableBoardAutosave = false
+  disableBoardBackups = false
 }: NotesViewProps): React.ReactElement {
   const floatingBtnStyle = (active = false): React.CSSProperties => ({
     width: '28px',
@@ -197,6 +197,8 @@ export default function NotesView({
   const lastBackedUpContentRef = useRef<Record<string, string>>({})
   const lastBoardBackupAtRef = useRef<Record<string, number>>({})
   const lastBoardBackupHashRef = useRef<Record<string, string>>({})
+  // Tracks boards that have changes not yet flushed to source (.board) file
+  const boardIsDirtyRef = useRef<Record<string, boolean>>({})
 
   // Custom Confirmation Dialog State
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -350,7 +352,12 @@ export default function NotesView({
       // @ts-ignore
       const ok = await window.api.writeBoardJson(activeNoteId, boardPayload)
       // @ts-ignore
-      if (ok) await window.api.packBoard(activeNoteId, targetDir, fileName)
+      if (ok) {
+        // @ts-ignore
+        await window.api.packBoard(activeNoteId, targetDir, fileName)
+        // Source file is now up to date — clear dirty flag
+        boardIsDirtyRef.current[activeNoteId] = false
+      }
     } else {
       // @ts-ignore
       await window.api.saveNote(targetDir, fileName, currentNote)
@@ -503,22 +510,84 @@ export default function NotesView({
     getNoteTargetDir
   ])
 
-  // Periodic Backup Timer
+  // ── Timer 1: Notes backup (markdown notes only, not boards) ──────────────────
   useEffect(() => {
-    const currentActive = notesRef.current.find(n => n.id === activeNoteIdRef.current)
-    const isBoard = currentActive?.type === 'board'
-    const intervalMinutes = isBoard ? boardBackupIntervalMinutes : backupIntervalMinutes
-    const ms = Math.max(1, intervalMinutes) * 60 * 1000
+    const ms = Math.max(1, backupIntervalMinutes) * 60 * 1000
     const interval = setInterval(() => {
       const activeId = activeNoteIdRef.current
       if (!activeId || isPreviewMode) return
       const currentNote = notesRef.current.find(n => n.id === activeId)
-      if (currentNote) {
+      if (currentNote && currentNote.type !== 'board') {
         createBackupSnapshot(currentNote, 'interval')
       }
     }, ms)
     return () => clearInterval(interval)
-  }, [activeNoteId, backupIntervalMinutes, boardBackupIntervalMinutes, createBackupSnapshot, isPreviewMode])
+  }, [backupIntervalMinutes, createBackupSnapshot, isPreviewMode])
+
+  // ── Timer 2: Board autosave — flushes temp → source file ─────────────────────
+  // Runs every boardAutosaveIntervalMinutes for the active board.
+  // Only saves if board has unsaved changes and is not empty.
+  useEffect(() => {
+    const ms = Math.max(1, boardAutosaveIntervalMinutes) * 60 * 1000
+    const interval = setInterval(async () => {
+      const activeId = activeNoteIdRef.current
+      if (!activeId) return
+      if (!boardIsDirtyRef.current[activeId]) return
+      const currentNote = notesRef.current.find(n => n.id === activeId)
+      if (!currentNote || currentNote.type !== 'board') return
+
+      // Skip empty boards
+      const cachedContent = boardContentRef.current[activeId]
+      if (!cachedContent) return
+      try {
+        const parsed = JSON.parse(cachedContent)
+        if (!Array.isArray(parsed.elements) || parsed.elements.length === 0) return
+      } catch { return }
+
+      const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      const fileName = currentNote.fileName || getFileName(currentNote.title, activeId, 'board')
+      const boardPayload = buildBoardPayload(currentNote)
+
+      // @ts-ignore
+      const ok = await window.api.writeBoardJson(activeId, boardPayload)
+      if (ok) {
+        // @ts-ignore
+        await window.api.packBoard(activeId, targetDir, fileName)
+        boardIsDirtyRef.current[activeId] = false
+        console.log('[board-autosave] Source file updated for board:', activeId)
+      }
+    }, ms)
+    return () => clearInterval(interval)
+  }, [boardAutosaveIntervalMinutes, buildBoardPayload, getBoardTargetDir])
+
+  // ── Timer 3: Board backup — creates timestamped copy from temp file ───────────
+  // Runs every boardBackupIntervalMinutes for the active board.
+  // Reads from cache (temp file), never from source file.
+  useEffect(() => {
+    if (disableBoardBackups) return
+    const ms = Math.max(1, boardBackupIntervalMinutes) * 60 * 1000
+    const interval = setInterval(async () => {
+      const activeId = activeNoteIdRef.current
+      if (!activeId || isPreviewMode) return
+      const currentNote = notesRef.current.find(n => n.id === activeId)
+      if (!currentNote || currentNote.type !== 'board') return
+
+      // Skip empty boards (check handled in IPC handler too, but guard here as well)
+      const cachedContent = boardContentRef.current[activeId]
+      if (!cachedContent) return
+      try {
+        const parsed = JSON.parse(cachedContent)
+        if (!Array.isArray(parsed.elements) || parsed.elements.length === 0) return
+      } catch { return }
+
+      const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
+      const fileName = currentNote.fileName || getFileName(currentNote.title, activeId, 'board')
+
+      // @ts-ignore
+      await window.api.backupBoard(activeId, targetDir, fileName)
+    }, ms)
+    return () => clearInterval(interval)
+  }, [boardBackupIntervalMinutes, disableBoardBackups, getBoardTargetDir, isPreviewMode])
 
   // Save final snapshot on Note Switch
   useEffect(() => {
@@ -801,11 +870,10 @@ export default function NotesView({
       if (updates.content !== undefined) {
         setSaveStatus('unsaved')
 
-        // Conditional Auto-Save for Boards
+        // Board content is managed exclusively by handleBoardChange.
+        // The autosave timer (boardAutosaveIntervalMinutes) handles source file writes.
         const currentNote = notesRef.current.find(n => n.id === id)
-        if (currentNote?.type === 'board' && !enableBoardAutosave) {
-          return // Manual save only unless enabled in settings
-        }
+        if (currentNote?.type === 'board') return
 
         if (saveTimers.current[id]) clearTimeout(saveTimers.current[id])
         saveTimers.current[id] = setTimeout(
@@ -818,45 +886,12 @@ export default function NotesView({
               return
             }
 
-            const type = currentNoteVersion.type || 'markdown'
-            const isBoard = type === 'board'
-            let targetDir = isBoard
-              ? getBoardTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
-              : getNoteTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
-
+            const targetDir = getNoteTargetDir(currentNoteVersion.projectId, currentNoteVersion.isTrash)
             if (!targetDir) return
 
-            const ext = isBoard ? 'board' : 'md'
+            const fileName = currentNoteVersion.fileName || getFileName(currentNoteVersion.title, id, 'md')
             // @ts-ignore
-            const fileName = currentNoteVersion.fileName || getFileName(currentNoteVersion.title, id, ext)
-
-            if (isBoard) {
-              // Write to cache only (fast, no ZIP repacking)
-              let boardPayload = updates.content || '{}'
-              try {
-                const parsedContent = JSON.parse(boardPayload)
-                boardPayload = JSON.stringify({
-                  ...parsedContent,
-                  id: currentNoteVersion.id,
-                  title: currentNoteVersion.title,
-                  projectId: currentNoteVersion.projectId,
-                  type: 'board'
-                })
-              } catch (e) { }
-
-              // @ts-ignore
-              const ok = await window.api.writeBoardJson(id, boardPayload)
-              if (ok) {
-                // Pack to .board file
-                // @ts-ignore
-                await window.api.packBoard(id, targetDir, fileName)
-              } else {
-                console.error("writeBoardJson failed, skipping packBoard to prevent ZIP overwrite")
-              }
-            } else {
-              // @ts-ignore
-              window.api.saveNote(targetDir, fileName, currentNoteVersion)
-            }
+            window.api.saveNote(targetDir, fileName, currentNoteVersion)
             setSaveStatus('saved')
             delete saveTimers.current[id]
           },
@@ -864,7 +899,7 @@ export default function NotesView({
         )
       }
     },
-    [workspacePath, projects, setNotes, getBoardTargetDir, getNoteTargetDir]
+    [workspacePath, projects, setNotes, getNoteTargetDir]
   )
 
 
@@ -1876,25 +1911,26 @@ export default function NotesView({
 
       const noteId = activeNote.id
 
-      // Track board content separately without triggering full note re-save
+      // ── Step 1: Update in-memory state (temp file in memory) ──
       setBoardContent(prev => {
         const next = { ...prev, [noteId]: content }
         boardContentRef.current = next
         return next
       })
-      // Update the main notes array too, so handleManualSave sees it
       setNotes((prev) =>
         prev.map((n) => {
-          if (n.id === noteId) {
-            return { ...n, content, lastModified: Date.now() }
-          }
+          if (n.id === noteId) return { ...n, content, lastModified: Date.now() }
           return n
         })
       )
 
-      // --- Persist to disk (debounced, 1 s) ---
-      // Without this, the board data only lives in memory and is lost on reload
-      // unless the user manually saves (Ctrl+S) or switches boards.
+      // Mark as dirty: source file (.board) is now out of date
+      boardIsDirtyRef.current[noteId] = true
+      setSaveStatus('unsaved')
+
+      // ── Step 2: Debounced write to temp file on disk (writeBoardJson only, NO packBoard) ──
+      // This persists the working state to cache so it survives a crash.
+      // The source .board file is updated only by autosave timer or manual save.
       if (saveTimers.current[noteId]) clearTimeout(saveTimers.current[noteId])
       saveTimers.current[noteId] = setTimeout(async () => {
         const currentNote = notesRef.current.find(n => n.id === noteId)
@@ -1903,12 +1939,6 @@ export default function NotesView({
           return
         }
 
-        const targetDir = getBoardTargetDir(currentNote.projectId, currentNote.isTrash)
-        if (!targetDir) { delete saveTimers.current[noteId]; return }
-
-        const fileName = currentNote.fileName || getFileName(currentNote.title, noteId, 'board')
-
-        // Use latest content from ref to avoid stale closure
         let boardPayload = boardContentRef.current[noteId] || content || '{}'
         try {
           const parsedContent = JSON.parse(boardPayload)
@@ -1919,21 +1949,15 @@ export default function NotesView({
             projectId: currentNote.projectId,
             type: 'board'
           })
-        } catch (e) { /* keep boardPayload as-is if unparseable */ }
+        } catch (e) { /* keep as-is */ }
 
+        // Write to temp file (cache) only — source file NOT updated here
         // @ts-ignore
-        const ok = await window.api.writeBoardJson(noteId, boardPayload)
-        if (ok) {
-          // @ts-ignore
-          await window.api.packBoard(noteId, targetDir, fileName)
-        } else {
-          console.error('[handleBoardChange] writeBoardJson failed, skipping packBoard')
-        }
-
+        await window.api.writeBoardJson(noteId, boardPayload)
         delete saveTimers.current[noteId]
-      }, 1000)
+      }, 500)
     },
-    [activeNote, setNotes, getBoardTargetDir]
+    [activeNote, setNotes]
   )
 
   // Open board: unpack from .board archive into cache when switching to a board

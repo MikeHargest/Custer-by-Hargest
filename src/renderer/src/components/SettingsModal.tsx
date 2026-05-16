@@ -27,8 +27,8 @@ interface SettingsModalProps {
   setBoardBackupIntervalMinutes: (val: number) => void
   disableBoardBackups: boolean
   setDisableBoardBackups: (val: boolean) => void
-  enableBoardAutosave: boolean
-  setEnableBoardAutosave: (val: boolean) => void
+  boardAutosaveIntervalMinutes: number
+  setBoardAutosaveIntervalMinutes: (val: number) => void
   calendarTimezone: string
   setCalendarTimezone: (tz: string) => void
   // Profile props
@@ -62,8 +62,8 @@ export default function SettingsModal({
   setBoardBackupIntervalMinutes,
   disableBoardBackups,
   setDisableBoardBackups,
-  enableBoardAutosave,
-  setEnableBoardAutosave,
+  boardAutosaveIntervalMinutes,
+  setBoardAutosaveIntervalMinutes,
   calendarTimezone,
   setCalendarTimezone,
   workspacePath,
@@ -770,52 +770,33 @@ export default function SettingsModal({
 
                       <div style={{ padding: '1px 0', background: 'rgba(255,255,255,0.05)', margin: '16px 0' }} />
 
-                      <div
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          cursor: 'pointer'
-                        }}
-                        onClick={() => setEnableBoardAutosave(!enableBoardAutosave)}
-                      >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div>
-                          <div style={{ fontSize: '13px', fontWeight: 500 }}>
-                            Enable Board Auto-Save (Experimental)
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '11px',
-                              color: 'var(--text-secondary)',
-                              marginTop: '2px'
-                            }}
-                          >
-                            Periodically auto-save board changes to the main file.
+                          <div style={{ fontSize: '13px', fontWeight: 500 }}>Board Auto-Save Interval</div>
+                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                            How often the active board is saved to the source file. Changes are always kept in the temp file.
                           </div>
                         </div>
-                        <button
-                          style={{
-                            width: '36px',
-                            height: '20px',
-                            borderRadius: '10px',
-                            background: enableBoardAutosave ? 'var(--accent)' : 'rgba(255,255,255,0.1)',
-                            border: 'none',
-                            position: 'relative',
-                            transition: 'all 0.2s'
-                          }}
-                        >
-                          <motion.div
-                            animate={{ x: enableBoardAutosave ? 16 : 2 }}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={boardAutosaveIntervalMinutes}
+                            onChange={(e) => setBoardAutosaveIntervalMinutes(Math.max(1, parseInt(e.target.value) || 5))}
                             style={{
-                              width: '14px',
-                              height: '14px',
-                              background: '#fff',
-                              borderRadius: '50%',
-                              position: 'absolute',
-                              top: '3px'
+                              width: '50px',
+                              background: '#0a0a0a',
+                              border: '1px solid rgba(255,255,255,0.08)',
+                              borderRadius: '6px',
+                              padding: '4px 8px',
+                              color: 'var(--text-primary)',
+                              fontSize: '12px',
+                              outline: 'none'
                             }}
                           />
-                        </button>
+                          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>min</span>
+                        </div>
                       </div>
 
                       <div style={{ padding: '1px 0', background: 'rgba(255,255,255,0.05)', margin: '16px 0' }} />
