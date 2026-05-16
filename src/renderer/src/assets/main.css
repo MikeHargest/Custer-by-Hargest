@@ -1,5 +1,4 @@
 :root {
-  --bg-color: #333333;
   --card-bg: #121212;
   --text-primary: #EAEAEA;
   --text-secondary: #a1a1aa;
@@ -26,7 +25,7 @@
 }
 
 html {
-  background: var(--bg-color);
+  background: var(--card-bg);
   overflow: hidden;
 }
 
@@ -40,7 +39,7 @@ body {
     Helvetica,
     Arial,
     sans-serif;
-  background-color: var(--bg-color);
+  background-color: var(--card-bg);
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -94,7 +93,7 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--bg-color);
+  background-color: var(--card-bg);
   overflow: hidden;
   border-radius: 0;
   padding: 0;
@@ -104,8 +103,8 @@ body {
 .app-body {
   display: flex;
   flex: 1;
-  gap: 2px;
-  padding: 2px 0 0 0;
+  gap: 0;
+  padding: 0;
   overflow: hidden;
 }
 
@@ -469,7 +468,7 @@ body {
   background: var(--card-bg);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   flex-shrink: 0;
-  border-top-left-radius: var(--radius-lg);
+  border-top-left-radius: 0;
 }
 
 .main-toolbar-left {
@@ -1086,8 +1085,9 @@ body {
   background-color: var(--card-bg);
   border-top-left-radius: 0;
   border-bottom-left-radius: 0;
-  border-top-right-radius: var(--radius-lg);
+  border-top-right-radius: 0;
   border-bottom-right-radius: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
   transition:
     width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
     margin-right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1114,7 +1114,6 @@ body {
   background-color: var(--card-bg);
   border-radius: 0;
   border: none;
-  border-right: 1px solid rgba(255, 255, 255, 0.05);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1122,7 +1121,7 @@ body {
 }
 
 .sidebar-block:not(:last-child):not(.has-resizer-after) {
-  margin-bottom: 2px;
+  margin-bottom: 0;
 }
 
 .sidebar-block.has-resizer-after {
@@ -2461,7 +2460,7 @@ body {
 .welcome-screen {
   position: fixed;
   inset: 0;
-  background: var(--bg-color);
+  background: var(--card-bg);
   display: flex;
   align-items: center;
   justify-content: center;

@@ -1479,7 +1479,7 @@ function App() {
             >
               <Bell size={16} />
               {notifications.some((n) => !n.isRead) && (
-                <span style={{ position: 'absolute', top: '6px', right: '6px', width: '6px', height: '6px', background: 'var(--accent)', borderRadius: '50%', border: '2px solid var(--bg-color)' }} />
+                <span style={{ position: 'absolute', top: '6px', right: '6px', width: '6px', height: '6px', background: 'var(--accent)', borderRadius: '50%', border: '2px solid var(--card-bg)' }} />
               )}
             </button>
             {showNotifications && (

@@ -219,7 +219,7 @@ export default function SettingsModal({
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
-          background: '#0F0F0F',
+          background: 'var(--card-bg)',
           width: '890px',
           height: '590px',
           borderRadius: 'var(--radius-lg)',
@@ -237,7 +237,7 @@ export default function SettingsModal({
           <div
             style={{
               width: '200px',
-              background: '#0F0F0F',
+              background: 'var(--card-bg)',
               borderRight: '1px solid rgba(255,255,255,0.05)',
               padding: '20px 10px',
               display: 'flex',
@@ -332,7 +332,7 @@ export default function SettingsModal({
           </div>
 
           {/* Content Area */}
-          <div style={{ flex: 1, padding: '30px', overflowY: 'auto', background: '#0F0F0F' }}>
+          <div style={{ flex: 1, padding: '30px', overflowY: 'auto', background: 'var(--card-bg)' }}>
             <AnimatePresence mode="wait">
               {activeTab === 'profile' && (
                 <motion.div
@@ -473,21 +473,19 @@ export default function SettingsModal({
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     {(Object.keys(DEFAULT_THEME) as Array<keyof UITheme>)
-                      .filter((key) => key !== 'boardAccent' && key !== 'boardBg')
+                      .filter((key) => key !== 'boardAccent' && key !== 'boardBg' && key !== 'bgColor')
                       .map((key) => (
                         <ColorPickerItem
                           key={key}
                           label={
-                            key === 'bgColor'
-                              ? 'Background'
-                              : key === 'cardBg'
-                                ? 'Cards'
-                                : key === 'accent'
-                                  ? 'Accent'
-                                  : key === 'textPrimary'
-                                    ? 'Text'
-                                    : key === 'calendarTaskBg'
-                                      ? 'Calendar Tasks'
+                            key === 'cardBg'
+                              ? 'Cards'
+                              : key === 'accent'
+                                ? 'Accent'
+                                : key === 'textPrimary'
+                                  ? 'Text'
+                                  : key === 'calendarTaskBg'
+                                    ? 'Calendar Tasks'
                                     : key === 'calendarEventBg'
                                       ? 'Calendar Events'
                                       : key === 'timerBg'
@@ -1386,7 +1384,7 @@ export default function SettingsModal({
         <div
           style={{
             padding: '12px 20px',
-            background: '#0F0F0F',
+            background: 'var(--card-bg)',
             borderTop: '1px solid rgba(255,255,255,0.05)',
             display: 'flex',
             justifyContent: 'flex-end'
