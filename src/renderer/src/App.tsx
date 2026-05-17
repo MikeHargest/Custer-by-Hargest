@@ -29,14 +29,18 @@ import {
   RotateCcw,
   RefreshCcw,
   SlidersHorizontal,
-  AlignLeft
+  AlignLeft,
+  History,
+  Save,
+  Check,
+  Layers
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import TimerCard from './components/TimerCard'
 import LeftSidebar from './components/sidebar/LeftSidebar'
 import MiniTimer from './components/MiniTimer'
 import CalendarView from './components/CalendarView'
-import NotesView from './components/NotesView'
+import NotesView, { NotesViewHandle } from './components/NotesView'
 import WelcomeScreen from './components/WelcomeScreen'
 import SettingsModal from './components/SettingsModal'
 import WindowResizeHandles from './components/WindowResizeHandles'
@@ -193,6 +197,14 @@ function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
+
+  // Notes toolbar state
+  const notesToolbarActionsRef = useRef<NotesViewHandle | null>(null)
+  const [notesSaveStatus, setNotesSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved')
+  const [notesSidebarOpen, setNotesSidebarOpen] = useState(true)
+  const [notesActiveNoteType, setNotesActiveNoteType] = useState<'markdown' | 'board' | null>(null)
+  const notesHistoryBtnRef = useRef<HTMLButtonElement>(null)
+  const notesBoardVersionsBtnRef = useRef<HTMLButtonElement>(null)
 
   // Pipeline page menu state
   const [activePipelineMenuId, setActivePipelineMenuId] = useState<string | null>(null)
@@ -1696,6 +1708,78 @@ function App() {
 
             {/* Right Toolbar: Part of the merged L-shape */}
             <div className="content-toolbar-right">
+              {currentView === 'notes' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '2px', marginLeft: 'auto' }}>
+                  {/* History — for both note types */}
+                  <button
+                    ref={notesHistoryBtnRef}
+                    className="view-icon-btn"
+                    onClick={() => {
+                      const rect = notesHistoryBtnRef.current?.getBoundingClientRect()
+                      if (!rect) return
+                      if (notesActiveNoteType === 'board') {
+                        notesToolbarActionsRef.current?.openBoardHistory(rect)
+                      } else {
+                        notesToolbarActionsRef.current?.openHistory(rect)
+                      }
+                    }}
+                    title="Version History"
+                  >
+                    <History size={16} />
+                  </button>
+
+                  {/* Versions (board only) */}
+                  {notesActiveNoteType === 'board' && (
+                    <button
+                      ref={notesBoardVersionsBtnRef}
+                      className="view-icon-btn"
+                      onClick={() => {
+                        const rect = notesBoardVersionsBtnRef.current?.getBoundingClientRect()
+                        if (!rect) return
+                        notesToolbarActionsRef.current?.openBoardVersions(rect)
+                      }}
+                      title="Board Versions"
+                    >
+                      <Layers size={16} />
+                    </button>
+                  )}
+
+                  {/* Save (markdown only) */}
+                  {notesActiveNoteType !== 'board' && (
+                    <button
+                      className="view-icon-btn"
+                      onClick={() => notesToolbarActionsRef.current?.manualSave()}
+                      title={notesSaveStatus === 'saved' ? 'Saved' : notesSaveStatus === 'saving' ? 'Saving...' : 'Save (Ctrl+S)'}
+                      style={{ position: 'relative' }}
+                    >
+                      {notesSaveStatus === 'saved' ? (
+                        <Check size={16} style={{ opacity: 0.6 }} />
+                      ) : (
+                        <Save size={16} style={{ opacity: notesSaveStatus === 'unsaved' ? 1 : 0.7 }} />
+                      )}
+                      {notesSaveStatus === 'unsaved' && (
+                        <div style={{
+                          position: 'absolute', top: 4, right: 4,
+                          width: 5, height: 5, borderRadius: '50%',
+                          background: 'var(--accent)', border: '1px solid var(--card-bg)'
+                        }} />
+                      )}
+                    </button>
+                  )}
+
+                  {/* PanelRight — sidebar toggle */}
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => notesToolbarActionsRef.current?.toggleSidebar()}
+                    title={notesSidebarOpen ? 'Hide notes sidebar' : 'Show notes sidebar'}
+                    style={{ opacity: notesSidebarOpen ? 1 : 0.5 }}
+                  >
+                    <PanelRight size={16} />
+                  </button>
+
+                  <div className="content-toolbar-separator" />
+                </div>
+              )}
               {currentView === 'pipeline' && selectedProject && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginRight: '8px' }}>
                   {(selectedProject.pipelines || []).map((p) => (
@@ -2306,6 +2390,10 @@ function App() {
                 boardAutosaveIntervalMinutes={boardAutosaveIntervalMinutes}
                 boardBackupIntervalMinutes={boardBackupIntervalMinutes}
                 disableBoardBackups={disableBoardBackups}
+                onSaveStatusChange={setNotesSaveStatus}
+                onSidebarChange={setNotesSidebarOpen}
+                onActiveNoteTypeChange={setNotesActiveNoteType}
+                notesToolbarActionsRef={notesToolbarActionsRef}
               />
             </div>
             <div

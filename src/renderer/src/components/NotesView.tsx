@@ -55,6 +55,17 @@ import ColorPicker from './ColorPicker'
 import BoardsView from './boards/BoardsView'
 import { shouldCreateBackup } from '../utils/backupManager'
 
+export interface NotesViewHandle {
+  manualSave: () => void
+  toggleSidebar: () => void
+  openHistory: (rect: DOMRect) => void
+  openBoardHistory: (rect: DOMRect) => void
+  openBoardVersions: (rect: DOMRect) => void
+  getSaveStatus: () => 'saved' | 'saving' | 'unsaved'
+  getSidebarOpen: () => boolean
+  getActiveNoteType: () => 'markdown' | 'board' | null
+}
+
 interface NotesViewProps {
   notes: AppNote[]
   setNotes: React.Dispatch<React.SetStateAction<AppNote[]>>
@@ -71,6 +82,10 @@ interface NotesViewProps {
   boardAutosaveIntervalMinutes?: number
   boardBackupIntervalMinutes?: number
   disableBoardBackups?: boolean
+  onSaveStatusChange?: (status: 'saved' | 'saving' | 'unsaved') => void
+  onSidebarChange?: (open: boolean) => void
+  onActiveNoteTypeChange?: (type: 'markdown' | 'board' | null) => void
+  notesToolbarActionsRef?: React.MutableRefObject<NotesViewHandle | null>
 }
 
 const findProjectRecursive = (projs: Project[], id: string | null): Project | undefined => {
@@ -116,7 +131,11 @@ export default function NotesView({
   backupIntervalMinutes = 10,
   boardAutosaveIntervalMinutes = 5,
   boardBackupIntervalMinutes = 10,
-  disableBoardBackups = false
+  disableBoardBackups = false,
+  onSaveStatusChange,
+  onSidebarChange,
+  onActiveNoteTypeChange,
+  notesToolbarActionsRef
 }: NotesViewProps): React.ReactElement {
   const floatingBtnStyle = (active = false): React.CSSProperties => ({
     width: '28px',
@@ -2082,6 +2101,56 @@ export default function NotesView({
     return result
   }, [filteredNotes, activeProjectId, extendedProjects, collapsedNotes])
 
+  // Sync state to parent toolbar
+  useEffect(() => { onSaveStatusChange?.(saveStatus) }, [saveStatus, onSaveStatusChange])
+  useEffect(() => { onSidebarChange?.(showSidebar) }, [showSidebar, onSidebarChange])
+  useEffect(() => { onActiveNoteTypeChange?.(activeNote?.type ?? null) }, [activeNote?.type, onActiveNoteTypeChange])
+
+  // Expose toolbar actions to parent via mutable ref
+  useEffect(() => {
+    if (!notesToolbarActionsRef) return
+    notesToolbarActionsRef.current = {
+      getSaveStatus: () => saveStatus,
+      getSidebarOpen: () => showSidebar,
+      getActiveNoteType: () => activeNote?.type ?? null,
+      manualSave: handleManualSave,
+      toggleSidebar: () => setShowSidebar(prev => !prev),
+      openHistory: (rect: DOMRect) => {
+        setShowBoardVersionsDropdown(false)
+        setBoardVersionsMenuPos(null)
+        if (showHistoryDropdown) {
+          setShowHistoryDropdown(false)
+          setBoardHistoryMenuPos(null)
+          return
+        }
+        setBoardHistoryMenuPos({ top: rect.bottom + 8, left: rect.left })
+        handleLoadHistory()
+      },
+      openBoardHistory: (rect: DOMRect) => {
+        setShowBoardVersionsDropdown(false)
+        setBoardVersionsMenuPos(null)
+        if (showHistoryDropdown) {
+          setShowHistoryDropdown(false)
+          setBoardHistoryMenuPos(null)
+          return
+        }
+        setBoardHistoryMenuPos({ top: rect.bottom + 8, left: rect.left })
+        handleLoadHistory()
+      },
+      openBoardVersions: (rect: DOMRect) => {
+        setShowHistoryDropdown(false)
+        setBoardHistoryMenuPos(null)
+        if (showBoardVersionsDropdown) {
+          setShowBoardVersionsDropdown(false)
+          setBoardVersionsMenuPos(null)
+          return
+        }
+        setBoardVersionsMenuPos({ top: rect.bottom + 8, left: rect.left })
+        handleLoadBoardVersions()
+      }
+    }
+  }) // no deps — always keep ref current
+
   return (
     <>
       <div
@@ -2784,28 +2853,8 @@ export default function NotesView({
                           cursor: isEditingTitle ? 'text' : 'pointer'
                         }}
                       />
-                      <div style={{ position: 'relative' }}>
-                        <div data-history-menu-button="true" ref={boardHistoryButtonRef}>
-                          <ToolbarButton onClick={() => {
-                            setShowBoardVersionsDropdown(false)
-                            setBoardVersionsMenuPos(null)
-                            if (showHistoryDropdown) {
-                              setShowHistoryDropdown(false)
-                              setBoardHistoryMenuPos(null)
-                              return
-                            }
-                            const rect = boardHistoryButtonRef.current?.getBoundingClientRect()
-                            if (!rect) return
-                            setBoardHistoryMenuPos({
-                              top: rect.bottom + 8,
-                              left: rect.left
-                            })
-                            handleLoadHistory()
-                          }} title="Board Backup History">
-                            <History size={16} />
-                          </ToolbarButton>
-                        </div>
-                        {showHistoryDropdown && boardHistoryMenuPos && (
+                      {/* History dropdown portal (trigger moved to App toolbar) */}
+                      {showHistoryDropdown && boardHistoryMenuPos && (
                           <div data-history-menu-root="true" style={{
                             position: 'fixed',
                             top: `${boardHistoryMenuPos.top}px`,
@@ -2862,32 +2911,9 @@ export default function NotesView({
                             )}
                           </div>
                         )}
-                      </div>
 
-                      {/* BOARD VERSIONS MENU */}
-                      <div style={{ position: 'relative' }}>
-                        <div data-versions-menu-button="true" ref={boardVersionsButtonRef}>
-                          <ToolbarButton
-                            onClick={() => {
-                            setShowHistoryDropdown(false)
-                            setBoardHistoryMenuPos(null)
-                            if (showBoardVersionsDropdown) {
-                              setShowBoardVersionsDropdown(false)
-                              setBoardVersionsMenuPos(null)
-                              return
-                            }
-                            const rect = boardVersionsButtonRef.current?.getBoundingClientRect()
-                            if (!rect) return
-                            setBoardVersionsMenuPos({
-                               top: rect.bottom + 8,
-                               left: rect.left
-                             })
-                             handleLoadBoardVersions()
-                           }} title="Board Versions">
-                             <Layers size={16} />
-                           </ToolbarButton>
-                         </div>
-                         {showBoardVersionsDropdown && boardVersionsMenuPos && (
+                      {/* Board Versions dropdown portal (trigger moved to App toolbar) */}
+                      {showBoardVersionsDropdown && boardVersionsMenuPos && (
                            <div
                              data-versions-menu-root="true"
                              style={{
@@ -3002,29 +3028,6 @@ export default function NotesView({
                             )}
                           </div>
                         )}
-                      </div>
-                      <button
-                        onClick={() => setShowSidebar(!showSidebar)}
-                        title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: showSidebar ? 0.6 : 0.4,
-                          flexShrink: 0
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.4')
-                        }
-                      >
-                        <PanelRight size={18} />
-                      </button>
                     </div>
                     <div
                       style={{
@@ -3053,320 +3056,6 @@ export default function NotesView({
                   </>
                 ) : (
                   <>
-                    {/* Toolbar at top */}
-                    <div
-                      style={{
-                        padding: '0 15px',
-                        borderBottom: '1px solid rgba(255,255,255,0.05)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        background: 'transparent',
-                        height: '45px',
-                        boxSizing: 'border-box',
-                        gap: '12px'
-                      }}
-                    >
-                      <button
-                        onClick={() => setCurrentView('overview')}
-                        title="Back to Project"
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderRadius: 'var(--radius-sm)',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-                          e.currentTarget.style.color = 'var(--text-primary)'
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'transparent'
-                          e.currentTarget.style.color = 'var(--text-secondary)'
-                        }}
-                      >
-                        <ArrowLeft size={18} />
-                      </button>
-                      <div
-                           className="centered-container toolbar-scroll-container"
-                           onWheel={handleToolbarWheel}
-                           style={{
-                             gap: '8px',
-                             flexWrap: 'nowrap',
-                             flex: 1,
-                             overflowX: 'auto',
-                             justifyContent: 'flex-start'
-                           }}
-                         >
-                        <div style={{ position: 'relative' }}>
-                          <div data-history-menu-button="true" ref={notesHistoryButtonRef}>
-                            <ToolbarButton onClick={() => {
-                              if (showHistoryDropdown) {
-                                setShowHistoryDropdown(false)
-                                setBoardHistoryMenuPos(null)
-                                return
-                              }
-                              const rect = notesHistoryButtonRef.current?.getBoundingClientRect()
-                              if (!rect) return
-                              setBoardHistoryMenuPos({
-                                 top: rect.bottom + 8,
-                                 left: rect.left
-                               })
-                               handleLoadHistory()
-                             }} title="Version History">
-                               <History size={16} />
-                             </ToolbarButton>
-                           </div>
-                         </div>
-                         {showHistoryDropdown && boardHistoryMenuPos && (
-                           <div 
-                             data-history-menu-root="true"
-                             style={{
-                             position: 'fixed',
-                             top: `${boardHistoryMenuPos.top}px`,
-                             left: `${boardHistoryMenuPos.left}px`,
-                             zIndex: 2147483000,
-                            background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
-                            borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
-                          }}>
-                            <div style={{ padding: '0 4px 6px', fontSize: '11px', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '4px' }}>Version History</div>
-                            {historyList.length === 0 ? (
-                              <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>No backups yet.</div>
-                            ) : (
-                              <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                                {historyList.map((h, i) => {
-                                  const dt = new Date(h.timestamp)
-                                  const dateStr = dt.toLocaleDateString()
-                                  const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                  return (
-                                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '2px' }} className="file-item-hover">
-                                      <button onClick={() => handlePreviewHistory(h)} style={{
-                                        flex: 1, padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
-                                        background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none'
-                                      }}>
-                                        <RotateCcw size={12} color="var(--text-secondary)" />
-                                        <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
-                                      </button>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation()
-                                          handleDeleteBackup(h)
-                                        }}
-                                        title="Delete backup"
-                                        style={{
-                                          background: 'transparent',
-                                          border: 'none',
-                                          color: 'rgba(255,255,255,0.2)',
-                                          padding: '6px',
-                                          cursor: 'pointer',
-                                          borderRadius: '4px',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          justifyContent: 'center'
-                                        }}
-                                        onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
-                                        onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}
-                                      >
-                                        <Trash2 size={14} />
-                                      </button>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        )}
-                        <div style={{ position: 'relative' }}>
-                          <ToolbarButton
-                            onClick={handleManualSave}
-                            title={saveStatus === 'saved' ? 'Saved' : saveStatus === 'saving' ? 'Saving...' : 'Save'}
-                          >
-                            {saveStatus === 'saved' ? (
-                              <Check size={16} style={{ opacity: 0.7 }} />
-                            ) : (
-                              <Save size={16} style={{ opacity: saveStatus === 'unsaved' ? 1 : 0.7 }} />
-                            )}
-                            {saveStatus === 'unsaved' && (
-                              <div style={{
-                                position: 'absolute',
-                                top: 4,
-                                right: 4,
-                                width: 6,
-                                height: 6,
-                                borderRadius: '50%',
-                                background: 'var(--accent-primary, #7c5cbf)',
-                                border: '1px solid var(--card-bg)'
-                              }} />
-                            )}
-                          </ToolbarButton>
-                        </div>
-                        <div
-                          style={{
-                            width: '1px',
-                            height: '20px',
-                            background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px',
-                            flexShrink: 0
-                          }}
-                        />
-                        <ToolbarButton onClick={() => applyFormatting('bold')} title="Bold">
-                          <Bold size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton onClick={() => applyFormatting('italic')} title="Italic">
-                          <Italic size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton
-                          onClick={() => applyFormatting('underline')}
-                          title="Underline"
-                        >
-                          <Underline size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton
-                          onClick={() => applyFormatting('strikethrough')}
-                          title="Strikethrough"
-                        >
-                          <Strikethrough size={16} />
-                        </ToolbarButton>
-
-                        <div
-                          style={{
-                            width: '1px',
-                            height: '20px',
-                            background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px',
-                            flexShrink: 0
-                          }}
-                        />
-
-                        <div style={{ position: 'relative' }}>
-                          <ToolbarButton
-                            onClick={() => {
-                              const btn = document.querySelector(
-                                '[title="Text Color"]'
-                              ) as HTMLElement
-                              if (btn) setTextColorPickerRect(btn.getBoundingClientRect())
-                            }}
-                            title="Text Color"
-                          >
-                            <Palette size={16} />
-                          </ToolbarButton>
-                        </div>
-
-                        <ToolbarButton
-                          onClick={() => applyFormatting('clear')}
-                          title="Clear Formatting"
-                        >
-                          <Eraser size={16} />
-                        </ToolbarButton>
-
-                        <div
-                          style={{
-                            width: '1px',
-                            height: '20px',
-                            background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px',
-                            flexShrink: 0
-                          }}
-                        />
-
-                        <ToolbarButton onClick={() => applyFormatting('h1')} title="Heading 1">
-                          <Heading1 size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton onClick={() => applyFormatting('h2')} title="Heading 2">
-                          <Heading2 size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton onClick={() => applyFormatting('h3')} title="Heading 3">
-                          <Heading3 size={16} />
-                        </ToolbarButton>
-
-                        <div
-                          style={{
-                            width: '1px',
-                            height: '20px',
-                            background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px',
-                            flexShrink: 0
-                          }}
-                        />
-
-                        <ToolbarButton onClick={() => applyFormatting('list')} title="Bullet List">
-                          <List size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton onClick={() => applyFormatting('task')} title="Task List">
-                          <ListTodo size={16} />
-                        </ToolbarButton>
-                        <ToolbarButton
-                          onClick={() => applyFormatting('separator')}
-                          title="Separator"
-                        >
-                          <Minus size={16} />
-                        </ToolbarButton>
-
-                        <div
-                          style={{
-                            width: '1px',
-                            height: '20px',
-                            background: 'rgba(255,255,255,0.1)',
-                            margin: '0 4px',
-                            flexShrink: 0
-                          }}
-                        />
-
-                        <ToolbarButton
-                          onClick={handleOpenLinkDialog}
-                          title="Insert Link (Ctrl+K)"
-                        >
-                          <Link2 size={16} />
-                        </ToolbarButton>
-
-                        <ToolbarButton
-                          onClick={handleUnlink}
-                          title="Remove Link"
-                          disabled={!editor?.isActive('link')}
-                        >
-                          <Unlink size={16} style={{ opacity: editor?.isActive('link') ? 1 : 0.5 }} />
-                        </ToolbarButton>
-
-                        <ToolbarButton
-                          onClick={handleInsertImage}
-                          title="Insert Image"
-                        >
-                          <ImageIcon size={16} />
-                        </ToolbarButton>
-                      </div>
-                      <button
-                        onClick={() => setShowSidebar(!showSidebar)}
-                        title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          opacity: showSidebar ? 0.6 : 0.4,
-                          flexShrink: 0
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                        onMouseLeave={(e) =>
-                          (e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.4')
-                        }
-                      >
-                        <PanelRight size={18} />
-                      </button>
-                    </div>
-
-                    {/* Title below toolbar */}
-
                     <div
                       style={{
                         flex: 1,
@@ -3382,7 +3071,7 @@ export default function NotesView({
                         className="centered-container"
                         style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
                       >
-                        {/* Breadcrumbs & Date */}
+                        {/* Breadcrumbs & Action Bar */}
                         <div
                           style={{
                             display: 'flex',
@@ -3390,17 +3079,49 @@ export default function NotesView({
                             justifyContent: 'space-between',
                             width: '100%',
                             padding: '8px 0 4px',
-                            minHeight: '24px'
+                            minHeight: '32px',
+                            gap: '12px'
                           }}
                         >
                           <div
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '4px',
-                              flexWrap: 'wrap'
+                              gap: '8px',
+                              flexWrap: 'wrap',
+                              flex: 1
                             }}
                           >
+                            <button
+                              onClick={() => setCurrentView('overview')}
+                              title="Back to Project"
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-secondary)',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: 'var(--radius-sm)',
+                                transition: 'all 0.2s',
+                                opacity: 0.6
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
+                                e.currentTarget.style.color = 'var(--text-primary)'
+                                e.currentTarget.style.opacity = '1'
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = 'transparent'
+                                e.currentTarget.style.color = 'var(--text-secondary)'
+                                e.currentTarget.style.opacity = '0.6'
+                              }}
+                            >
+                              <ArrowLeft size={16} />
+                            </button>
+                            
                             {breadcrumbs.map((crumb) => (
                               <React.Fragment key={crumb.id}>
                                 <button
@@ -3439,23 +3160,88 @@ export default function NotesView({
                             </span>
                           </div>
 
-                          {activeNote.createdAt && (
-                            <div
-                              style={{
-                                color: 'var(--text-secondary)',
-                                opacity: 0.5,
-                                fontSize: '12px',
-                                padding: '2px 4px'
-                              }}
-                            >
-                              {new Date(activeNote.createdAt).toLocaleDateString(undefined, {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric'
-                              })}
-                            </div>
-                          )}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            {/* History dropdown portal (trigger moved to App toolbar) */}
+                            {showHistoryDropdown && boardHistoryMenuPos && (
+                              <div
+                                data-history-menu-root="true"
+                                style={{
+                                  position: 'fixed',
+                                  top: `${boardHistoryMenuPos.top}px`,
+                                  left: `${boardHistoryMenuPos.left}px`,
+                                  zIndex: 2147483000,
+                                  background: 'var(--card-bg)', border: '1px solid rgba(255,255,255,0.1)',
+                                  borderRadius: 'var(--radius-md)', padding: '8px', minWidth: '220px',
+                                  boxShadow: '0 8px 32px rgba(0,0,0,0.7)'
+                                }}>
+                                <div style={{ padding: '0 4px 6px', fontSize: '11px', color: 'var(--text-secondary)', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: '4px' }}>Version History</div>
+                                {historyList.length === 0 ? (
+                                  <div style={{ padding: '8px 4px', fontSize: '12px', color: 'var(--text-secondary)' }}>No backups yet.</div>
+                                ) : (
+                                  <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                    {historyList.map((h, i) => {
+                                      const dt = new Date(h.timestamp)
+                                      const dateStr = dt.toLocaleDateString()
+                                      const timeStr = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                      return (
+                                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '2px' }} className="file-item-hover">
+                                          <button onClick={() => handlePreviewHistory(h)} style={{
+                                            flex: 1, padding: '6px 8px', fontSize: '12px', cursor: 'pointer', borderRadius: '4px', display: 'flex', alignItems: 'center', gap: '8px',
+                                            background: 'transparent', border: 'none', color: 'var(--text-primary)', textAlign: 'left', outline: 'none'
+                                          }}>
+                                            <RotateCcw size={12} color="var(--text-secondary)" />
+                                            <span style={{ flex: 1 }}>{dateStr} <span style={{ opacity: 0.6 }}>{timeStr}</span></span>
+                                          </button>
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              handleDeleteBackup(h)
+                                            }}
+                                            title="Delete backup"
+                                            style={{
+                                              background: 'transparent',
+                                              border: 'none',
+                                              color: 'rgba(255,255,255,0.2)',
+                                              padding: '6px',
+                                              cursor: 'pointer',
+                                              borderRadius: '4px',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'center'
+                                            }}
+                                            onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--danger)')}
+                                            onMouseLeave={(e) => (e.currentTarget.style.color = 'rgba(255,255,255,0.2)')}
+                                          >
+                                            <Trash2 size={14} />
+                                          </button>
+                                        </div>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+
+                            {activeNote.createdAt && (
+                              <div
+                                style={{
+                                  color: 'var(--text-secondary)',
+                                  opacity: 0.5,
+                                  fontSize: '11px',
+                                  padding: '2px 4px',
+                                  marginLeft: '4px'
+                                }}
+                              >
+                                {new Date(activeNote.createdAt).toLocaleDateString(undefined, {
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric'
+                                })}
+                              </div>
+                            )}
+                          </div>
                         </div>
+
                         <input
                           type="text"
                           value={localTitle}
