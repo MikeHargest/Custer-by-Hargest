@@ -981,7 +981,6 @@ export default function NotesView({
       if (from === to) {
         setShowBubbleMenu(false)
         setShowFullBubbleMenu(false)
-        if (bubbleMenuTimerRef.current) clearTimeout(bubbleMenuTimerRef.current)
         return
       }
 
@@ -1026,18 +1025,24 @@ export default function NotesView({
     }
 
     const handleMouseDown = () => {
-       isMouseDownRef.current = true
-       setShowBubbleMenu(false)
-       setShowFullBubbleMenu(false)
-     }
+      isMouseDownRef.current = true
+      if (bubbleMenuTimerRef.current) clearTimeout(bubbleMenuTimerRef.current)
+      setShowBubbleMenu(false)
+      setShowFullBubbleMenu(false)
+    }
     const handleMouseUp = () => {
       isMouseDownRef.current = false
-      if (editor) {
-        const { from, to } = editor.state.selection
-        if (from !== to) {
-          setShowBubbleMenu(true)
+      if (bubbleMenuTimerRef.current) clearTimeout(bubbleMenuTimerRef.current)
+
+      // Use a small delay to ensure the editor state is fully updated with the final selection
+      bubbleMenuTimerRef.current = setTimeout(() => {
+        if (editor) {
+          const { from, to } = editor.state.selection
+          if (from !== to) {
+            setShowBubbleMenu(true)
+          }
         }
-      }
+      }, 50)
     }
 
     editor.view.dom.addEventListener('mousedown', handleMouseDown)
@@ -3609,7 +3614,9 @@ export default function NotesView({
                               <button title="Strikethrough" onClick={() => applyFormatting('strikethrough')} style={floatingBtnStyle(editor.isActive('strike'))}>
                                 <Strikethrough size={14} />
                               </button>
+
                               <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+
                               <button
                                 title="Text Color"
                                 onClick={(e) => setTextColorPickerRect((e.currentTarget as HTMLButtonElement).getBoundingClientRect())}
@@ -3620,7 +3627,9 @@ export default function NotesView({
                               <button title="Clear Formatting" onClick={() => applyFormatting('clear')} style={floatingBtnStyle(false)}>
                                 <Eraser size={14} />
                               </button>
+
                               <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+
                               <button title="Heading 1" onClick={() => applyFormatting('h1')} style={floatingBtnStyle(editor.isActive('heading', { level: 1 }))}>
                                 <Heading1 size={14} />
                               </button>
@@ -3630,12 +3639,34 @@ export default function NotesView({
                               <button title="Heading 3" onClick={() => applyFormatting('h3')} style={floatingBtnStyle(editor.isActive('heading', { level: 3 }))}>
                                 <Heading3 size={14} />
                               </button>
+
+                              <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+
                               <button title="Bullet List" onClick={() => applyFormatting('list')} style={floatingBtnStyle(editor.isActive('bulletList'))}>
                                 <List size={14} />
                               </button>
+                              <button title="Task List" onClick={() => applyFormatting('task')} style={floatingBtnStyle(editor.isActive('taskList'))}>
+                                <ListTodo size={14} />
+                              </button>
+                              <button title="Separator" onClick={() => applyFormatting('separator')} style={floatingBtnStyle(false)}>
+                                <Minus size={14} />
+                              </button>
+
                               <div style={{ width: '1px', height: '20px', background: 'rgba(255,255,255,0.12)', margin: '0 4px' }} />
+
                               <button title="Insert Link (Ctrl+K)" onClick={handleOpenLinkDialog} style={floatingBtnStyle(editor.isActive('link'))}>
                                 <Link2 size={14} />
+                              </button>
+                              <button
+                                title="Remove Link"
+                                onClick={handleUnlink}
+                                disabled={!editor?.isActive('link')}
+                                style={floatingBtnStyle(false)}
+                              >
+                                <Unlink size={14} style={{ opacity: editor?.isActive('link') ? 1 : 0.5 }} />
+                              </button>
+                              <button title="Insert Image" onClick={handleInsertImage} style={floatingBtnStyle(false)}>
+                                <ImageIcon size={14} />
                               </button>
                             </div>
                           </BubbleMenu>
