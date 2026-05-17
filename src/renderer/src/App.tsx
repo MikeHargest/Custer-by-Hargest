@@ -223,8 +223,8 @@ function App() {
   const calendarRef = useRef<{ scrollToToday: () => void } | null>(null)
 
   // Tab system
-  const [tabs, setTabs] = useState<{ id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, label: string }[]>([
-    { id: 'initial-tab', view: 'overview', selectedProjectId: null, label: 'Overview' }
+  const [tabs, setTabs] = useState<{ id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, activeNoteId: string | null, label: string }[]>([
+    { id: 'initial-tab', view: 'overview', selectedProjectId: null, activeNoteId: null, label: 'Overview' }
   ])
   const [activeTabId, setActiveTabId] = useState('initial-tab')
 
@@ -395,8 +395,11 @@ function App() {
 
   const allProjects = useMemo((): Project[] => {
     const flat: Project[] = []
+    if (!Array.isArray(projects)) return flat
     const traverse = (projs: Project[], depth = 0): void => {
+      if (!Array.isArray(projs)) return
       projs.forEach((p) => {
+        if (!p) return
         flat.push({ ...p, depth })
         if (p.subprojects) traverse(p.subprojects, depth + 1)
       })
@@ -406,6 +409,7 @@ function App() {
   }, [projects])
 
   const selectedProject = useMemo((): Project | undefined => {
+    if (!Array.isArray(allProjects)) return undefined
     return allProjects.find((p) => p.id === selectedProjectId)
   }, [allProjects, selectedProjectId])
 
@@ -660,6 +664,25 @@ function App() {
         const savedSidebarOpen = await api.getStoreValue('sidebar-is-open')
         if (savedSidebarOpen !== undefined && savedSidebarOpen !== null) {
           setIsSidebarOpen(savedSidebarOpen)
+        }
+
+        const savedTabs = await api.getStoreValue('app-tabs')
+        const savedActiveTabId = await api.getStoreValue('active-tab-id')
+        if (savedTabs && Array.isArray(savedTabs) && savedTabs.length > 0) {
+          // Validate saved tabs structure
+          const validTabs = savedTabs.filter(t => t && typeof t === 'object' && t.id && t.view)
+          if (validTabs.length > 0) {
+            setTabs(validTabs)
+            if (savedActiveTabId) {
+              setActiveTabId(savedActiveTabId)
+              const activeTab = validTabs.find(t => t.id === savedActiveTabId)
+              if (activeTab) {
+                if (activeTab.view) setCurrentView(activeTab.view)
+                setSelectedProjectId(activeTab.selectedProjectId || null)
+                setActiveNoteId(activeTab.activeNoteId || null)
+              }
+            }
+          }
         }
       } else {
         // Fresh start for a new workspace
@@ -1143,7 +1166,11 @@ function App() {
     window.api.setStoreValue('last-note-id', activeNoteId)
     // @ts-ignore
     window.api.setStoreValue('sidebar-is-open', isSidebarOpen)
-  }, [currentView, selectedProjectId, activeNoteId, isSidebarOpen, workspacePath, isLoadingWorkspace])
+    // @ts-ignore
+    window.api.setStoreValue('app-tabs', tabs)
+    // @ts-ignore
+    window.api.setStoreValue('active-tab-id', activeTabId)
+  }, [currentView, selectedProjectId, activeNoteId, isSidebarOpen, tabs, activeTabId, workspacePath, isLoadingWorkspace])
 
   const addTimer = () => {
     setTimers((prev) => [
@@ -1312,21 +1339,42 @@ function App() {
 
   // Sync active tab when view/project changes
   useEffect(() => {
-    setTabs(prev => prev.map(t =>
-      t.id === activeTabId
-        ? { ...t, view: currentView, selectedProjectId, label: selectedProject?.name || VIEW_LABELS[currentView] || 'Tab' }
-        : t
-    ))
-  }, [currentView, selectedProjectId, activeTabId, selectedProject?.name])
+    setTabs(prev => prev.map(t => {
+      if (t.id !== activeTabId) return t;
+
+      let subLabel = '';
+      if (currentView === 'notes' && activeNoteId) {
+        const activeNote = notes.find(n => n.id === activeNoteId);
+        if (activeNote) subLabel = ` / ${activeNote.title}`;
+      } else if (currentView === 'pipeline' && selectedProject) {
+        // Find active pipeline/page name
+        const activePipeline = (selectedProject.pipelines || []).find(p => p.id === selectedProject.activePipelineId);
+        if (activePipeline) subLabel = ` / ${activePipeline.name}`;
+        else subLabel = ' / Pipeline';
+      }
+
+      const projectLabel = selectedProject?.name || VIEW_LABELS[currentView] || 'Tab';
+      const fullLabel = subLabel ? `${projectLabel}${subLabel}` : projectLabel;
+
+      return {
+        ...t,
+        view: currentView,
+        selectedProjectId,
+        activeNoteId,
+        label: fullLabel
+      };
+    }))
+  }, [currentView, selectedProjectId, activeTabId, selectedProject, activeNoteId, notes])
 
   const addTab = useCallback(() => {
     const newId = uuidv4()
-    setTabs(prev => [...prev, { id: newId, view: 'overview' as const, selectedProjectId: selectedProjectId, label: 'Overview' }])
+    setTabs(prev => [...prev, { id: newId, view: 'overview' as const, selectedProjectId: selectedProjectId, activeNoteId: activeNoteId, label: 'Overview' }])
     setActiveTabId(newId)
     setCurrentView('overview')
     // Keep the current selected project instead of resetting to null
     setSelectedProjectId(selectedProjectId)
-  }, [selectedProjectId])
+    setActiveNoteId(activeNoteId)
+  }, [selectedProjectId, activeNoteId])
 
   const closeTab = useCallback((tabId: string) => {
     setTabs(prev => {
@@ -1338,6 +1386,7 @@ function App() {
         setActiveTabId(newActive.id)
         setCurrentView(newActive.view)
         setSelectedProjectId(newActive.selectedProjectId)
+        setActiveNoteId(newActive.activeNoteId)
       }
       return newTabs
     })
@@ -1345,23 +1394,22 @@ function App() {
 
   const switchTab = useCallback((tabId: string) => {
     if (tabId === activeTabId) return
-    // Save current state to current tab
+    const targetTab = tabs.find(t => t.id === tabId)
+    if (!targetTab) return
+
+    // Save current state to the active tab before switching
     setTabs(prev => prev.map(t =>
       t.id === activeTabId
-        ? { ...t, view: currentView, selectedProjectId }
+        ? { ...t, view: currentView, selectedProjectId, activeNoteId }
         : t
     ))
+
     // Load new tab state
-    setTabs(prev => {
-      const tab = prev.find(t => t.id === tabId)
-      if (tab) {
-        setActiveTabId(tabId)
-        setCurrentView(tab.view)
-        setSelectedProjectId(tab.selectedProjectId)
-      }
-      return prev
-    })
-  }, [activeTabId, currentView, selectedProjectId])
+    setActiveTabId(tabId)
+    setCurrentView(targetTab.view)
+    setSelectedProjectId(targetTab.selectedProjectId)
+    setActiveNoteId(targetTab.activeNoteId)
+  }, [activeTabId, currentView, selectedProjectId, activeNoteId, tabs])
 
   if (miniTimerId) {
     return <MiniTimer timerId={miniTimerId} />
@@ -1507,7 +1555,8 @@ function App() {
         <div className="header-tabs-group">
           {/* Tabs */}
           <div className="tab-bar-tabs">
-            {tabs.map((tab) => {
+            {Array.isArray(tabs) && tabs.map((tab) => {
+              if (!tab) return null
               const Icon = VIEW_ICONS[tab.view] || Pencil
               const isGlobalView = tab.view === 'clock' || tab.view === 'timeline'
               const tabProject = (!isGlobalView && tab.selectedProjectId) ? allProjects.find(p => p.id === tab.selectedProjectId) : null
