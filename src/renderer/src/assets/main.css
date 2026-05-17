@@ -469,23 +469,26 @@ body {
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
   flex-shrink: 0;
   border-top-left-radius: 0;
+  box-sizing: border-box;
 }
 
 .main-toolbar-left {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 0 1px;
+  padding: 0 1px 0 2px;
 }
 
 .view-switcher-container {
   display: flex;
   align-items: center;
-  gap: px;
+  gap: 0;
   background: rgb(28 28 28);
   padding: 2px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.03);
+  height: 37px;
+  box-sizing: border-box;
 }
 
 .view-switcher-separator {
@@ -537,7 +540,7 @@ body {
   align-items: center;
   justify-content: center;
   width: 34px;
-  height: 28px;
+  height: 31px;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 7px;
