@@ -13,6 +13,7 @@ import {
   CalendarIcon,
   Clock,
   Plus,
+  Pin,
   Pencil,
   MoreVertical,
   Settings,
@@ -221,6 +222,15 @@ function App() {
   const [calendarViewMode, setCalendarViewMode] = useState<'timeline' | 'month' | 'week' | 'day'>('timeline')
   const [calendarViewDate, setCalendarViewDate] = useState(new Date())
   const calendarRef = useRef<{ scrollToToday: () => void } | null>(null)
+
+  const [isAlwaysOnTop, setIsAlwaysOnTop] = useState(false)
+
+  const handleToggleAlwaysOnTop = useCallback(async () => {
+    const newState = !isAlwaysOnTop
+    setIsAlwaysOnTop(newState)
+    // @ts-ignore
+    await window.api.toggleAlwaysOnTop(newState)
+  }, [isAlwaysOnTop])
 
   // Tab system
   const [tabs, setTabs] = useState<{ id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, activeNoteId: string | null, label: string }[]>([
@@ -668,6 +678,11 @@ function App() {
 
         const savedTabs = await api.getStoreValue('app-tabs')
         const savedActiveTabId = await api.getStoreValue('active-tab-id')
+        const savedIsAlwaysOnTop = await api.getStoreValue('is-always-on-top')
+        if (savedIsAlwaysOnTop !== undefined && savedIsAlwaysOnTop !== null) {
+          setIsAlwaysOnTop(savedIsAlwaysOnTop)
+          await api.toggleAlwaysOnTop(savedIsAlwaysOnTop)
+        }
         if (savedTabs && Array.isArray(savedTabs) && savedTabs.length > 0) {
           // Validate saved tabs structure
           const validTabs = savedTabs.filter(t => t && typeof t === 'object' && t.id && t.view)
@@ -1170,7 +1185,9 @@ function App() {
     window.api.setStoreValue('app-tabs', tabs)
     // @ts-ignore
     window.api.setStoreValue('active-tab-id', activeTabId)
-  }, [currentView, selectedProjectId, activeNoteId, isSidebarOpen, tabs, activeTabId, workspacePath, isLoadingWorkspace])
+    // @ts-ignore
+    window.api.setStoreValue('is-always-on-top', isAlwaysOnTop)
+  }, [currentView, selectedProjectId, activeNoteId, isSidebarOpen, tabs, activeTabId, isAlwaysOnTop, workspacePath, isLoadingWorkspace])
 
   const addTimer = () => {
     setTimers((prev) => [
@@ -1596,6 +1613,19 @@ function App() {
         {/* Right side: Timer, Pin, Window controls */}
         <div className="header-right">
           <HeaderTimer currentView={currentView} />
+
+          <button
+            className={`header-icon-btn pin-btn ${isAlwaysOnTop ? 'active' : ''}`}
+            onClick={handleToggleAlwaysOnTop}
+            title={isAlwaysOnTop ? "Unpin from Top" : "Pin to Top"}
+            style={{
+              marginRight: '8px',
+              color: isAlwaysOnTop ? 'var(--accent)' : 'var(--text-secondary)',
+              background: isAlwaysOnTop ? 'rgba(255, 255, 255, 0.05)' : 'transparent'
+            }}
+          >
+            <Pin size={14} style={{ transform: isAlwaysOnTop ? 'none' : 'rotate(45deg)', transition: 'transform 0.2s' }} />
+          </button>
 
           <div className="window-controls-group">
             <button className="window-control-btn minimize" onClick={() => (window as any).api.minimizeWindow()} title="Minimize"><MinimizeIcon size={8} strokeWidth={4} /></button>
