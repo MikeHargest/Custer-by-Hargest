@@ -12,8 +12,7 @@ import {
   Info,
   ArrowLeft,
   Pencil,
-  PlusCircle,
-  PanelRight
+  PlusCircle
 } from 'lucide-react'
 import { v4 as uuidv4 } from 'uuid'
 import { Project, PipelineStage, PipelineItem, PipelineData } from '../types'
@@ -624,10 +623,10 @@ export default function PipelineView({
       >
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
           {/* Pipeline Pages (Tabs) */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '4px', 
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
             padding: '10px 10px 0 10px',
             flexShrink: 0
           }}>
@@ -737,13 +736,13 @@ export default function PipelineView({
                         e.stopPropagation();
                         if (confirm(`Are you sure you want to delete page "${p.name}"?`)) {
                           const updatedPipelines = pipelines.filter(pl => pl.id !== p.id);
-                          let nextActiveId = activePipelineId;
+                          let nextActiveId: string | undefined = activePipelineId;
                           if (nextActiveId === p.id) {
                             nextActiveId = updatedPipelines && updatedPipelines.length > 0 ? updatedPipelines[0].id : undefined;
                           }
                           onUpdate(currentViewingProject.id, {
                             pipelines: updatedPipelines,
-                            activePipelineId: nextActiveId
+                            activePipelineId: nextActiveId as string
                           });
                         }
                         setActivePipelineMenuId(null);
@@ -765,7 +764,7 @@ export default function PipelineView({
                 )}
               </div>
             ))}
-            
+
             <button
               onClick={() => {
                 const newPipeline = {
@@ -779,12 +778,12 @@ export default function PipelineView({
                 })
               }}
               title="Add Page"
-              style={{ 
-                padding: '6px', 
-                background: 'transparent', 
-                border: 'none', 
-                borderRadius: '6px', 
-                color: 'var(--text-secondary)', 
+              style={{
+                padding: '6px',
+                background: 'transparent',
+                border: 'none',
+                borderRadius: '6px',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
                 display: 'flex',
                 alignItems: 'center',

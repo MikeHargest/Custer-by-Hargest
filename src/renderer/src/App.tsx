@@ -16,7 +16,6 @@ import {
   Plus,
   Pin,
   Pencil,
-  MoreVertical,
   Settings,
   ImageIcon,
   Move,
@@ -244,7 +243,7 @@ function App() {
   }, [isAlwaysOnTop])
 
   // Tab system
-  const [tabs, setTabs] = useState<{ id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline', selectedProjectId: string | null, activeNoteId: string | null, label: string }[]>([
+  const [tabs, setTabs] = useState<{ id: string, view: 'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline' | 'tasks', selectedProjectId: string | null, activeNoteId: string | null, label: string }[]>([
     { id: 'initial-tab', view: 'overview', selectedProjectId: null, activeNoteId: null, label: 'Overview' }
   ])
   const [activeTabId, setActiveTabId] = useState('initial-tab')
@@ -1843,8 +1842,8 @@ function App() {
 
               {currentView === 'tasks' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <button 
-                    className={`toolbar-action-btn ${hideEmptyProjects ? 'active' : ''}`} 
+                  <button
+                    className={`toolbar-action-btn ${hideEmptyProjects ? 'active' : ''}`}
                     onClick={() => setHideEmptyProjects(!hideEmptyProjects)}
                     title={hideEmptyProjects ? "Showing only projects with tasks" : "Showing all projects"}
                     style={{

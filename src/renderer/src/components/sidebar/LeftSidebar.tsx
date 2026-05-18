@@ -15,11 +15,11 @@ import ProjectItem from './subcomponents/ProjectItem'
 import TaskTree from './subcomponents/TaskTree'
 import EventItem from './subcomponents/EventItem'
 import ColorPicker from '../ColorPicker'
-import { 
-  removeTaskFromTree, 
-  removeTaskFromProjects, 
-  migrateProjectTasks, 
-  insertTaskIntoTree, 
+import {
+  removeTaskFromTree,
+  removeTaskFromProjects,
+  migrateProjectTasks,
+  insertTaskIntoTree,
   insertProjectIntoTree,
   removeProjectFromTree,
   findTaskRecursive
@@ -100,9 +100,10 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
     taskId: string
   } | null>(null)
   const dropTargetRef = useRef<{
-    type: 'project' | 'task'
+    type: 'project' | 'task' | 'timer' | 'alarm' | 'calendar'
     id: string
     position: 'before' | 'inside' | 'after'
+    targetProjectId?: string
   } | null>(null)
   const hasMigrated = useRef(false)
 
@@ -223,7 +224,7 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
     if (!isOpen) {
       setIsTasksExpanded(false)
       setIsEventsExpanded(false)
-      // Note: We no longer force isProjectsExpanded to false here 
+      // Note: We no longer force isProjectsExpanded to false here
       // to allow the compact project list to show in collapsed mode.
     }
   }, [isOpen])
@@ -460,7 +461,7 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
         const rect = taskEl.getBoundingClientRect()
         const ratio = (ev.clientY - rect.top) / rect.height
         const pos: 'before' | 'after' | 'inside' = ratio < 0.25 ? 'before' : ratio > 0.75 ? 'after' : 'inside'
-        
+
         setDropIndicator({ id: taskId, position: pos, type: 'task' })
         dropTargetRef.current = { type: 'task', id: taskId, position: pos, targetProjectId: projectId }
         return
@@ -539,7 +540,7 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
             setProjects((prev) => {
               const { projects: withoutTask, extracted } = removeTaskFromProjects(prev, source.taskId)
               if (!extracted) return prev
-              
+
               const updateRecursive = (list: Project[]): Project[] => {
                 return list.map((p) => {
                   if (p.id === target.id) {
@@ -628,22 +629,22 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 16px', height: '100%' }}>
                   <h3>Projects</h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    <button 
-                      onClick={async () => { const res = await onAddProject('New Project'); if (res) { setEditingId(res.id); setEditingValue(res.name) } }} 
-                      className="task-add-btn premium-sidebar-btn" 
-                      title="Add Project" 
-                      style={{ 
-                        width: '28px', 
-                        height: '28px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        background: 'none', 
-                        border: 'none', 
-                        borderRadius: '6px', 
-                        color: 'var(--text-secondary)', 
-                        cursor: 'pointer', 
-                        padding: 0 
+                    <button
+                      onClick={async () => { const res = await onAddProject('New Project'); if (res) { setEditingId(res.id); setEditingValue(res.name) } }}
+                      className="task-add-btn premium-sidebar-btn"
+                      title="Add Project"
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: 'none',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: 0
                       }}
                     >
                       <Plus size={14} />
@@ -696,23 +697,23 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
             {(isProjectsExpanded || !isOpen) && (
               <div className="task-list custom-scrollbar" style={{ marginBottom: isOpen ? '8px' : '16px', flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', scrollbarGutter: 'stable', padding: isOpen ? '0 12px' : '0', display: 'flex', flexDirection: 'column', alignItems: isOpen ? 'stretch' : 'center' }}>
                 {projects.map((project) => (
-                  <ProjectItem 
-                    key={project.id} 
-                    project={project} 
-                    level={0} 
-                    selectedProjectId={selectedProjectId} 
-                    setSelectedProjectId={setSelectedProjectId} 
-                    editingId={editingId} 
-                    editingValue={editingValue} 
-                    setEditingValue={setEditingValue} 
-                    saveProjectName={(id) => { onUpdateProject(id, { name: editingValue }); setEditingId(null) }} 
-                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }} 
-                    cancelEditing={() => setEditingId(null)} 
-                    activeDropdown={activeDropdown} 
-                    setActiveDropdown={setActiveDropdown} 
-                    updateProjectColor={(id, col) => onUpdateProject(id, { color: col })} 
-                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
-                    deleteProject={onDeleteProject} 
+                  <ProjectItem
+                    key={project.id}
+                    project={project}
+                    level={0}
+                    selectedProjectId={selectedProjectId}
+                    setSelectedProjectId={setSelectedProjectId}
+                    editingId={editingId}
+                    editingValue={editingValue}
+                    setEditingValue={setEditingValue}
+                    saveProjectName={(id) => { onUpdateProject(id, { name: editingValue }); setEditingId(null) }}
+                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }}
+                    cancelEditing={() => setEditingId(null)}
+                    activeDropdown={activeDropdown}
+                    setActiveDropdown={setActiveDropdown}
+                    updateProjectColor={(id, col) => onUpdateProject(id, { color: col })}
+                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }}
+                    deleteProject={onDeleteProject}
                     toggleProjectExpansion={(id) => {
                       const findProjectRecursive = (list: Project[]): Project | undefined => {
                         for (const p of list) {
@@ -726,9 +727,9 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       }
                       const project = findProjectRecursive(projects)
                       onUpdateProject(id, { isExpanded: !project?.isExpanded })
-                    }} 
-                    addSubProject={async (id) => { 
-                      const res = await onAddProject('New Sub-project'); 
+                    }}
+                    addSubProject={async (id) => {
+                      const res = await onAddProject('New Sub-project');
                       if (res) {
                         const findProjectRecursive = (list: Project[]): Project | undefined => {
                           for (const p of list) {
@@ -743,15 +744,15 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                         const targetProject = findProjectRecursive(projects);
                         onUpdateProject(id, { subprojects: [...(targetProject?.subprojects || []), res] })
                       }
-                    }} 
-                    quickAddTask={(id) => onTaskAdded(id, 'New Task', undefined)} 
-                    onDragStart={startMouseDrag} 
-                    dropIndicator={dropIndicator} 
-                    isDragging={isDragging} 
-                    openColorPickerFor={(id, rect) => setColorPickerState({ projectId: id, anchorRect: rect })} 
-                    showTaskCounts={showTaskCounts} 
-                    showColoredDots={showColoredDots} 
-                    isOpen={isOpen} 
+                    }}
+                    quickAddTask={(id) => onTaskAdded(id, 'New Task', undefined)}
+                    onDragStart={(e, info) => startMouseDrag(e, info as { type: 'project' | 'task'; projectId: string; taskId: string })}
+                    dropIndicator={dropIndicator}
+                    isDragging={isDragging}
+                    openColorPickerFor={(id, rect) => setColorPickerState({ projectId: id, anchorRect: rect })}
+                    showTaskCounts={showTaskCounts}
+                    showColoredDots={showColoredDots}
+                    isOpen={isOpen}
                   />
                 ))}
               </div>
@@ -761,16 +762,16 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
           {/* --- BOTTOM ANCHORED AREA (Tasks and Events) --- */}
           <div className="sidebar-bottom-area" style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--card-bg)' }}>
             {/* --- TASKS SECTION --- */}
-            <div 
-              className={`sidebar-resizer section-divider is-resizable ${isResizingTasks ? 'is-resizing' : ''}`} 
+            <div
+              className={`sidebar-resizer section-divider is-resizable ${isResizingTasks ? 'is-resizing' : ''}`}
               style={{ height: '12px', zIndex: 100 }}
-              onMouseDown={(e) => { 
+              onMouseDown={(e) => {
                 if (!isOpen) return;
-                e.preventDefault(); 
-                setResizeStartY(e.clientY); 
-                setResizeStartHeight(isTasksExpanded ? tasksHeight : 0); 
-                setIsResizingTasks(true) 
-              }} 
+                e.preventDefault();
+                setResizeStartY(e.clientY);
+                setResizeStartHeight(isTasksExpanded ? tasksHeight : 0);
+                setIsResizingTasks(true)
+              }}
             />
             <div className="sidebar-block" style={{ height: isTasksExpanded ? `${tasksHeight}px` : '40px', display: 'flex', flexDirection: 'column', transition: (isResizingTasks || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden', flexShrink: 0 }}>
               <div className="sidebar-section-header" style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
@@ -780,94 +781,94 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       <h3>{isArchiveView ? 'Archive' : 'Tasks'}</h3>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <button 
-                      onClick={() => setIsArchiveView(!isArchiveView)} 
-                      className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`} 
-                      title={isArchiveView ? 'View Active Tasks' : 'View Archive'} 
-                      style={{ 
-                        width: '28px', 
-                        height: '28px', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        background: isArchiveView ? 'rgba(255,255,255,0.1)' : 'none', 
-                        border: 'none', 
-                        borderRadius: '6px', 
-                        color: isArchiveView ? 'var(--text-primary)' : 'var(--text-secondary)', 
-                        cursor: 'pointer', 
-                        padding: 0 
+                      <button
+                      onClick={() => setIsArchiveView(!isArchiveView)}
+                      className={`premium-sidebar-btn ${isArchiveView ? 'active' : ''}`}
+                      title={isArchiveView ? 'View Active Tasks' : 'View Archive'}
+                      style={{
+                        width: '28px',
+                        height: '28px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        background: isArchiveView ? 'rgba(255,255,255,0.1)' : 'none',
+                        border: 'none',
+                        borderRadius: '6px',
+                        color: isArchiveView ? 'var(--text-primary)' : 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        padding: 0
                       }}
                     >
                       <Archive size={14} />
                     </button>
                     {isArchiveView ? (
-                      <button 
-                        onClick={(e) => { 
-                          e.stopPropagation(); 
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
                           if (selectedProject && window.confirm('Are you sure you want to clear the archive for this project? This action cannot be undone.')) {
-                            onClearArchive(selectedProject.id) 
+                            onClearArchive(selectedProject.id)
                           }
-                        }} 
-                        className="task-clear-btn premium-sidebar-btn" 
-                        title="Clear Archive" 
-                        disabled={!selectedProject || !selectedProject.archivedTasks || selectedProject.archivedTasks.length === 0} 
-                        style={{ 
-                          width: '28px', 
-                          height: '28px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center', 
-                          background: 'none', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          color: 'var(--text-secondary)', 
-                          cursor: (selectedProject?.archivedTasks?.length || 0) > 0 ? 'pointer' : 'default', 
-                          padding: 0, 
-                          opacity: (selectedProject?.archivedTasks?.length || 0) > 0 ? 1 : 0.3 
+                        }}
+                        className="task-clear-btn premium-sidebar-btn"
+                        title="Clear Archive"
+                        disabled={!selectedProject || !selectedProject.archivedTasks || selectedProject.archivedTasks.length === 0}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: (selectedProject?.archivedTasks?.length || 0) > 0 ? 'pointer' : 'default',
+                          padding: 0,
+                          opacity: (selectedProject?.archivedTasks?.length || 0) > 0 ? 1 : 0.3
                         }}
                       >
                         <Trash2 size={14} />
                       </button>
                     ) : (
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); if (isTasksExpanded && selectedProject) onTaskAdded(selectedProject.id, 'New Task', undefined) }} 
-                        className="task-add-btn premium-sidebar-btn" 
-                        title="Add Task" 
-                        disabled={!isTasksExpanded || !selectedProject} 
-                        style={{ 
-                          width: '28px', 
-                          height: '28px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center', 
-                          background: 'none', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          color: 'var(--text-secondary)', 
-                          cursor: isTasksExpanded ? 'pointer' : 'default', 
-                          padding: 0, 
-                          opacity: isTasksExpanded ? 1 : 0.3 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (isTasksExpanded && selectedProject) onTaskAdded(selectedProject.id, 'New Task', undefined) }}
+                        className="task-add-btn premium-sidebar-btn"
+                        title="Add Task"
+                        disabled={!isTasksExpanded || !selectedProject}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: isTasksExpanded ? 'pointer' : 'default',
+                          padding: 0,
+                          opacity: isTasksExpanded ? 1 : 0.3
                         }}
                       >
                         <Plus size={14} />
                       </button>
                     )}
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setIsTasksExpanded(!isTasksExpanded) }} 
-                        className="premium-sidebar-btn" 
-                        title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'} 
-                        style={{ 
-                          width: '28px', 
-                          height: '28px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center', 
-                          background: 'none', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          color: 'var(--text-secondary)', 
-                          cursor: 'pointer', 
-                          padding: 0 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setIsTasksExpanded(!isTasksExpanded) }}
+                        className="premium-sidebar-btn"
+                        title={isTasksExpanded ? 'Collapse Tasks' : 'Expand Tasks'}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: 0
                         }}
                       >
                         {isTasksExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -882,10 +883,10 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
               </div>
               {isTasksExpanded && selectedProject && (
                 <div className="tasks-list custom-scrollbar" style={{ flex: 1, padding: '0 12px 12px 12px', overflowY: 'auto' }}>
-                  <TaskTree 
-                    project={selectedProject} 
-                    isRoot={true} 
-                    isArchiveView={isArchiveView} 
+                  <TaskTree
+                    project={selectedProject}
+                    isRoot={true}
+                    isArchiveView={isArchiveView}
                     toggleTask={(pid, tid) => {
                       const findTaskInTree = (p: Project): TaskItem | null => {
                         const search = (list: TaskItem[]): TaskItem | null => {
@@ -942,12 +943,12 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       const task = findTaskInTree(selectedProject)
                       onUpdateTask(pid, tid, { isExpanded: !task?.isExpanded })
                     }}
-                    editingId={editingId} 
-                    editingValue={editingValue} 
-                    setEditingValue={setEditingValue} 
-                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }} 
-                    cancelEditing={() => setEditingId(null)} 
-                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
+                    editingId={editingId}
+                    editingValue={editingValue}
+                    setEditingValue={setEditingValue}
+                    saveTaskName={(pid, tid) => { onUpdateTask(pid, tid, { text: editingValue }); setEditingId(null) }}
+                    cancelEditing={() => setEditingId(null)}
+                    startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }}
                     deleteTask={(_pid, tid) => {
                       const findTaskInTree = (p: Project): TaskItem | null => {
                         const search = (list: TaskItem[]): TaskItem | null => {
@@ -975,32 +976,32 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       if (!selectedProject) return
                       const task = findTaskInTree(selectedProject)
                       onTaskDeleted(task?.text || '', tid)
-                      
+
                       // Also remove from project tree
                       setProjects(removeTaskFromProjects(projects, tid).projects)
-                    }} 
-                    getTaskTimelineDate={() => null} 
-                    onTaskAdded={onTaskAdded} 
-                    isDragging={isDragging} 
-                    dropIndicator={dropIndicator} 
-                    startMouseDrag={startMouseDrag} 
-                    showTaskCounts={showTaskCounts} 
+                    }}
+                    getTaskTimelineDate={() => null}
+                    onTaskAdded={onTaskAdded}
+                    isDragging={isDragging}
+                    dropIndicator={dropIndicator}
+                    startMouseDrag={startMouseDrag}
+                    showTaskCounts={showTaskCounts}
                   />
                 </div>
               )}
             </div>
 
             {/* --- EVENTS SECTION --- */}
-            <div 
-              className={`sidebar-resizer section-divider is-resizable ${isResizingEvents ? 'is-resizing' : ''}`} 
+            <div
+              className={`sidebar-resizer section-divider is-resizable ${isResizingEvents ? 'is-resizing' : ''}`}
               style={{ height: '12px', zIndex: 100 }}
-              onMouseDown={(e) => { 
+              onMouseDown={(e) => {
                 if (!isOpen) return;
-                e.preventDefault(); 
-                setResizeStartY(e.clientY); 
-                setResizeStartHeight(isEventsExpanded ? eventsHeight : 0); 
-                setIsResizingEvents(true) 
-              }} 
+                e.preventDefault();
+                setResizeStartY(e.clientY);
+                setResizeStartHeight(isEventsExpanded ? eventsHeight : 0);
+                setIsResizingEvents(true)
+              }}
             />
             <div className="sidebar-block" style={{ height: isEventsExpanded ? `${eventsHeight}px` : '40px', display: 'flex', flexDirection: 'column', transition: (isResizingEvents || isInitialLoading) ? 'none' : 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', overflow: 'hidden', flexShrink: 0 }}>
               <div className="sidebar-section-header" style={{ height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0 }}>
@@ -1010,44 +1011,44 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       <h3>Events</h3>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); if (isEventsExpanded && selectedProject) onAddEvent(selectedProject.id, 'New Event') }} 
-                        className="event-add-btn premium-sidebar-btn" 
-                        title="Add Event" 
-                        disabled={!isEventsExpanded || !selectedProject} 
-                        style={{ 
-                          width: '28px', 
-                          height: '28px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center', 
-                          background: 'none', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          color: 'var(--text-secondary)', 
-                          cursor: isEventsExpanded ? 'pointer' : 'default', 
-                          padding: 0, 
-                          opacity: isEventsExpanded ? 1 : 0.3 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (isEventsExpanded && selectedProject) onAddEvent(selectedProject.id, 'New Event') }}
+                        className="event-add-btn premium-sidebar-btn"
+                        title="Add Event"
+                        disabled={!isEventsExpanded || !selectedProject}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: isEventsExpanded ? 'pointer' : 'default',
+                          padding: 0,
+                          opacity: isEventsExpanded ? 1 : 0.3
                         }}
                       >
                         <Plus size={14} />
                       </button>
-                      <button 
-                        onClick={(e) => { e.stopPropagation(); setIsEventsExpanded(!isEventsExpanded) }} 
-                        className="premium-sidebar-btn" 
-                        title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'} 
-                        style={{ 
-                          width: '28px', 
-                          height: '28px', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'center', 
-                          background: 'none', 
-                          border: 'none', 
-                          borderRadius: '6px', 
-                          color: 'var(--text-secondary)', 
-                          cursor: 'pointer', 
-                          padding: 0 
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setIsEventsExpanded(!isEventsExpanded) }}
+                        className="premium-sidebar-btn"
+                        title={isEventsExpanded ? 'Collapse Events' : 'Expand Events'}
+                        style={{
+                          width: '28px',
+                          height: '28px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          background: 'none',
+                          border: 'none',
+                          borderRadius: '6px',
+                          color: 'var(--text-secondary)',
+                          cursor: 'pointer',
+                          padding: 0
                         }}
                       >
                         {isEventsExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
@@ -1064,20 +1065,20 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                 <div className="events-list custom-scrollbar" style={{ flex: 1, padding: '0 12px 12px 12px', overflowY: 'auto' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {selectedProject.events?.map((event) => (
-                      <EventItem 
-                        key={event.id} 
-                        selectedProjectId={selectedProject.id} 
-                        event={event} 
-                        editingId={editingId} 
-                        editingValue={editingValue} 
-                        setEditingValue={setEditingValue} 
-                        saveEventName={(pid, eid) => { onUpdateEvent(pid, eid, { title: editingValue }); setEditingId(null) }} 
-                        cancelEditing={() => setEditingId(null)} 
-                        startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }} 
-                        deleteEvent={onDeleteEvent} 
-                        updateEvent={onUpdateEvent} 
-                        isExpanded={expandedEventId === event.id} 
-                        setExpandedEventId={setExpandedEventId} 
+                      <EventItem
+                        key={event.id}
+                        selectedProjectId={selectedProject.id}
+                        event={event}
+                        editingId={editingId}
+                        editingValue={editingValue}
+                        setEditingValue={setEditingValue}
+                        saveEventName={(pid, eid) => { onUpdateEvent(pid, eid, { title: editingValue }); setEditingId(null) }}
+                        cancelEditing={() => setEditingId(null)}
+                        startEditing={(id, val) => { setEditingId(id); setEditingValue(val) }}
+                        deleteEvent={onDeleteEvent}
+                        updateEvent={onUpdateEvent}
+                        isExpanded={expandedEventId === event.id}
+                        setExpandedEventId={setExpandedEventId}
                         projectColor={selectedProject.color}
                       />
                     ))}

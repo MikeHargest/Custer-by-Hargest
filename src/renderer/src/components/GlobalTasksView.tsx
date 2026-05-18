@@ -1,7 +1,7 @@
 import React from 'react'
 import { Project, TaskItem } from '../types'
 import TaskTree from './sidebar/subcomponents/TaskTree'
-import { CheckSquare, Folder } from 'lucide-react'
+import { Folder } from 'lucide-react'
 
 interface GlobalTasksViewProps {
   projects: Project[]
@@ -26,24 +26,24 @@ const GlobalTasksView: React.FC<GlobalTasksViewProps> = ({
   })
 
   return (
-    <div className="global-tasks-view" style={{ 
-      flex: 1, 
-      height: '100%', 
-      overflowY: 'auto', 
+    <div className="global-tasks-view" style={{
+      flex: 1,
+      height: '100%',
+      overflowY: 'auto',
       padding: '24px'
     }}>
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', 
-          gap: '24px' 
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))',
+          gap: '24px'
         }}>
           {filteredProjects.map(project => (
-            <div 
-              key={project.id} 
-              style={{ 
-                background: 'var(--card-bg)', 
-                borderRadius: '12px', 
+            <div
+              key={project.id}
+              style={{
+                background: 'var(--card-bg)',
+                borderRadius: '12px',
                 border: '1px solid rgba(255,255,255,0.08)',
                 padding: '20px',
                 display: 'flex',
@@ -55,9 +55,9 @@ const GlobalTasksView: React.FC<GlobalTasksViewProps> = ({
                 <Folder size={18} style={{ color: project.color || 'var(--accent)' }} />
                 <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{project.name}</h3>
               </div>
-              
+
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <TaskTree 
+                <TaskTree
                   project={project}
                   isRoot={true}
                   isArchiveView={false}

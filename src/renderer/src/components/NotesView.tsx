@@ -16,7 +16,6 @@ import {
   List,
   ListTodo,
   Minus,
-  PanelRight,
   ArrowLeft,
   ChevronRight,
   ChevronDown,
