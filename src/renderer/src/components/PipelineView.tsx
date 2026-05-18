@@ -7,12 +7,15 @@ import {
   RefreshCw,
   Square,
   Check,
-  
   Calendar,
   Layout,
   Info,
-  ArrowLeft
+  ArrowLeft,
+  Pencil,
+  PlusCircle,
+  PanelRight
 } from 'lucide-react'
+import { v4 as uuidv4 } from 'uuid'
 import { Project, PipelineStage, PipelineItem, PipelineData } from '../types'
 import ColorPicker from './ColorPicker'
 
@@ -144,6 +147,8 @@ export default function PipelineView({
   )
 
   const [activeStageDropdown, setActiveStageDropdown] = useState<string | null>(null)
+  const [activePipelineMenuId, setActivePipelineMenuId] = useState<string | null>(null)
+  const pipelineMenuRef = useRef<HTMLDivElement>(null)
   const [showSidebar, setShowSidebar] = useState(true)
   const [stageColorPickerAnchor, setStageColorPickerAnchor] = useState<{
     stageId: string
@@ -618,6 +623,222 @@ export default function PipelineView({
         }}
       >
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
+          {/* Pipeline Pages (Tabs) */}
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '4px', 
+            padding: '10px 10px 0 10px',
+            flexShrink: 0
+          }}>
+            {pipelines.map((p) => (
+              <div key={p.id} style={{ position: 'relative' }}>
+                <button
+                  onClick={() => onUpdate(currentViewingProject.id, { activePipelineId: p.id })}
+                  className={`toolbar-action-btn ${activePipelineId === p.id ? 'active' : ''}`}
+                  style={{
+                    padding: '6px 12px',
+                    paddingRight: '32px',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    background: activePipelineId === p.id ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    border: `1px solid ${activePipelineId === p.id ? 'rgba(255,255,255,0.1)' : 'transparent'}`,
+                    borderRadius: '6px',
+                    color: activePipelineId === p.id ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    opacity: activePipelineId === p.id ? 1 : 0.6,
+                    position: 'relative',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {p.name}
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActivePipelineMenuId(activePipelineMenuId === p.id ? null : p.id);
+                    }}
+                    style={{
+                      position: 'absolute',
+                      right: '6px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      width: '20px',
+                      height: '20px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      borderRadius: '4px',
+                      opacity: 0.5,
+                      transition: 'opacity 0.2s, background 0.2s'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.opacity = '1';
+                      e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.opacity = '0.5';
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <MoreVertical size={12} />
+                  </span>
+                </button>
+
+                {activePipelineMenuId === p.id && (
+                  <div
+                    ref={pipelineMenuRef}
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      marginTop: '8px',
+                      background: '#1a1a1a',
+                      border: '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: '10px',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.5)',
+                      padding: '6px',
+                      minWidth: '160px',
+                      zIndex: 1000,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px'
+                    }}
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newName = prompt('Enter new page name:', p.name);
+                        if (newName && newName.trim()) {
+                          const updatedPipelines = pipelines.map(pl =>
+                            pl.id === p.id ? { ...pl, name: newName.trim() } : pl
+                          );
+                          onUpdate(currentViewingProject.id, { pipelines: updatedPipelines });
+                        }
+                        setActivePipelineMenuId(null);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '8px 12px', background: 'transparent', border: 'none',
+                        borderRadius: '6px', color: 'var(--text-primary)', fontSize: '13px',
+                        fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <Pencil size={14} style={{ opacity: 0.7 }} />
+                      Rename Page
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`Are you sure you want to delete page "${p.name}"?`)) {
+                          const updatedPipelines = pipelines.filter(pl => pl.id !== p.id);
+                          let nextActiveId = activePipelineId;
+                          if (nextActiveId === p.id) {
+                            nextActiveId = updatedPipelines && updatedPipelines.length > 0 ? updatedPipelines[0].id : undefined;
+                          }
+                          onUpdate(currentViewingProject.id, {
+                            pipelines: updatedPipelines,
+                            activePipelineId: nextActiveId
+                          });
+                        }
+                        setActivePipelineMenuId(null);
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '10px',
+                        padding: '8px 12px', background: 'transparent', border: 'none',
+                        borderRadius: '6px', color: '#ff4444', fontSize: '13px',
+                        fontWeight: 500, cursor: 'pointer', width: '100%', textAlign: 'left',
+                        transition: 'background 0.2s'
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,68,68,0.1)')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <Trash2 size={14} style={{ opacity: 0.7 }} />
+                      Delete Page
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            <button
+              onClick={() => {
+                const newPipeline = {
+                  id: uuidv4(),
+                  name: `Page ${pipelines.length + 1}`,
+                  stages: []
+                }
+                onUpdate(currentViewingProject.id, {
+                  pipelines: [...pipelines, newPipeline],
+                  activePipelineId: newPipeline.id
+                })
+              }}
+              title="Add Page"
+              style={{ 
+                padding: '6px', 
+                background: 'transparent', 
+                border: 'none', 
+                borderRadius: '6px', 
+                color: 'var(--text-secondary)', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.05)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <Plus size={16} />
+            </button>
+
+            <div style={{ flex: 1 }} />
+
+            <button
+              className="toolbar-action-btn"
+              onClick={handleAddStage}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '6px 12px',
+                fontSize: '11px',
+                fontWeight: 600,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '6px',
+                color: 'var(--text-primary)',
+                cursor: 'pointer'
+              }}
+            >
+              <PlusCircle size={14} /> Stage
+            </button>
+
+            <button
+              onClick={() => setShowSidebar(!showSidebar)}
+              title="Toggle Stage Sidebar"
+              style={{ 
+                padding: '6px', 
+                background: showSidebar ? 'rgba(255,255,255,0.08)' : 'transparent', 
+                border: 'none', 
+                borderRadius: '6px', 
+                color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)', 
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginLeft: '4px'
+              }}
+            >
+              <PanelRight size={18} />
+            </button>
+          </div>
+
           {/* Stages area */}
           <div
             className="pipeline-stages custom-scrollbar"
