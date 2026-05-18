@@ -20,13 +20,9 @@ import {
   ArrowLeft,
   ChevronRight,
   ChevronDown,
-  History,
   RotateCcw,
-  Layers,
   Presentation,
   Pencil,
-  Save,
-  Check,
   FolderOpen,
   Folder,
   Link2,
@@ -155,12 +151,6 @@ export default function NotesView({
     inclusive: false
   })
 
-  const handleToolbarWheel = (e: React.WheelEvent<HTMLDivElement>): void => {
-    if (e.deltaY !== 0) {
-      e.currentTarget.scrollLeft += e.deltaY
-    }
-  }
-
   const activeProjectId = selectedProjectId || 'default'
   const [showTrash, setShowTrash] = useState(false)
   const [showSidebar, setShowSidebar] = useState(true)
@@ -198,14 +188,11 @@ export default function NotesView({
   const [historyList, setHistoryList] = useState<any[]>([])
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false)
   const [boardHistoryMenuPos, setBoardHistoryMenuPos] = useState<{ top: number; left: number } | null>(null)
-  const boardHistoryButtonRef = useRef<HTMLDivElement | null>(null)
 
   // Board Versions State
   const [boardVersions, setBoardVersions] = useState<any[]>([])
   const [showBoardVersionsDropdown, setShowBoardVersionsDropdown] = useState(false)
   const [boardVersionsMenuPos, setBoardVersionsMenuPos] = useState<{ top: number; left: number } | null>(null)
-  const boardVersionsButtonRef = useRef<HTMLDivElement | null>(null)
-  const notesHistoryButtonRef = useRef<HTMLDivElement | null>(null)
 
   // Selection Bubble Menu Delay
   const [showBubbleMenu, setShowBubbleMenu] = useState(false)
@@ -457,17 +444,17 @@ export default function NotesView({
     reason: 'interval' | 'switch' | 'manual' | 'restore-preflight' = 'interval'
   ) => {
     const isBoard = noteToBackup.type === 'board'
-    
+
     // Check if we should create a backup using central logic
-    const lastHash = isBoard 
+    const lastHash = isBoard
       ? lastBoardBackupHashRef.current[noteToBackup.id] || ''
       : lastBackedUpContentRef.current[noteToBackup.id] || ''
-    
-    const currentHash = isBoard 
-      ? buildBoardPayload(noteToBackup) 
+
+    const currentHash = isBoard
+      ? buildBoardPayload(noteToBackup)
       : noteToBackup.content || ''
 
-    const lastBackupAt = isBoard 
+    const lastBackupAt = isBoard
       ? lastBoardBackupAtRef.current[noteToBackup.id] || 0
       : 0 // Notes don't use cooldown currently, but we could add it
 
@@ -510,7 +497,7 @@ export default function NotesView({
 
     // @ts-ignore
     const success = await window.api.createNoteBackup(targetDir, backupPayload, fileName)
-    
+
     if (success) {
       if (isBoard) {
         lastBoardBackupAtRef.current[noteToBackup.id] = Date.now()
@@ -739,7 +726,7 @@ export default function NotesView({
         if (document.activeElement instanceof HTMLElement) {
           document.activeElement.blur()
         }
-        // Increase delay to 150ms to ensure all sub-components (like text editor) 
+        // Increase delay to 150ms to ensure all sub-components (like text editor)
         // and debounced syncs in BoardsView have finished their work.
         setTimeout(() => handleManualSave(), 150)
       }
@@ -753,12 +740,11 @@ export default function NotesView({
       const target = e.target as HTMLElement
 
       // Проверка для меню бекапов/версий
-      const isMenuButton = target.closest('[data-history-menu-button="true"]') || 
+      const isMenuButton = target.closest('[data-history-menu-button="true"]') ||
                          target.closest('[data-versions-menu-button="true"]') ||
-                         target.closest('[data-history-menu-button="true"]') ||
-                         target.closest('[ref="notesHistoryButtonRef"]') // notesHistoryButtonRef doesn't have data attr yet, will add
+                         target.closest('[data-history-menu-button="true"]')
 
-      const isMenuRoot = target.closest('[data-history-menu-root="true"]') || 
+      const isMenuRoot = target.closest('[data-history-menu-root="true"]') ||
                        target.closest('[data-versions-menu-root="true"]')
 
       if (!isMenuButton && !isMenuRoot) {
@@ -2352,7 +2338,7 @@ export default function NotesView({
         .link-dialog-actions {
           display: flex;
           gap: 8px;
-          justify-content: flex-end;
+          justifyContent: flex-end;
         }
         .link-btn-secondary {
           padding: 8px 16px;
@@ -3121,7 +3107,7 @@ export default function NotesView({
                             >
                               <ArrowLeft size={16} />
                             </button>
-                            
+
                             {breadcrumbs.map((crumb) => (
                               <React.Fragment key={crumb.id}>
                                 <button
@@ -3792,51 +3778,5 @@ export default function NotesView({
         )}
       </AnimatePresence>
     </>
-  )
-}
-
-function ToolbarButton({
-  children,
-  onClick,
-  title,
-  className,
-  disabled
-}: {
-  children: React.ReactNode
-  onClick: () => void
-  title: string
-  className?: string
-  disabled?: boolean
-}): React.ReactElement {
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={className}
-      disabled={disabled}
-      style={{
-        padding: '6px',
-        background: 'transparent',
-        border: 'none',
-        color: 'var(--text-secondary)',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        borderRadius: '0px',
-        transition: 'all 0.2s',
-        flexShrink: 0
-      }}
-      onMouseEnter={(e): void => {
-        e.currentTarget.style.background = 'rgba(255,255,255,0.05)'
-        e.currentTarget.style.color = 'var(--text-primary)'
-      }}
-      onMouseLeave={(e): void => {
-        e.currentTarget.style.background = 'transparent'
-        e.currentTarget.style.color = 'var(--text-secondary)'
-      }}
-    >
-      {children}
-    </button>
   )
 }
