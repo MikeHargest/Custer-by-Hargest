@@ -21,7 +21,8 @@ import {
   migrateProjectTasks, 
   insertTaskIntoTree, 
   insertProjectIntoTree,
-  removeProjectFromTree
+  removeProjectFromTree,
+  findTaskRecursive
 } from './utils'
 
 interface LeftSidebarProps {
@@ -490,6 +491,32 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
         return
       }
 
+      // 4. Check for Timer/Alarm Cards
+      const timerEl = el.closest('[data-timer-id]') as HTMLElement | null
+      const alarmEl = el.closest('[data-alarm-id]') as HTMLElement | null
+      if ((timerEl || alarmEl) && info.type === 'task') {
+        const id = timerEl ? timerEl.dataset.timerId : alarmEl?.dataset.alarmId
+        if (id) {
+          // We can reuse the indicator state to show a "drop here" effect
+          // Or just let the component handle its own drag-over style if we trigger it
+          // Since we are using custom DND, we'll just set the drop target
+          dropTargetRef.current = { type: timerEl ? 'timer' : 'alarm' as any, id, position: 'inside' }
+          // No visual drop indicator in sidebar for these, but we could add one if needed
+          setDropIndicator(null)
+          return
+        }
+      }
+
+      // 5. Check for Calendar Cells
+      const calendarCell = el.closest('.timeline-cell[data-date]') as HTMLElement | null
+      if (calendarCell && info.type === 'task') {
+        const date = calendarCell.dataset.date || ''
+        const projId = calendarCell.dataset.projectId || ''
+        dropTargetRef.current = { type: 'calendar' as any, id: date, position: 'inside', targetProjectId: projId }
+        setDropIndicator(null)
+        return
+      }
+
       setDropIndicator(null)
       dropTargetRef.current = null
     }
@@ -526,6 +553,48 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
               }
               return updateRecursive(withoutTask)
             })
+          } else if (target.type === 'timer' || target.type === 'alarm') {
+            // Deep find task text across all projects and subprojects
+            const findDeep = (list: Project[]): TaskItem | undefined => {
+              for (const p of list) {
+                const found = findTaskRecursive([...(p.tasks || []), ...(p.archivedTasks || [])], source.taskId)
+                if (found) return found
+                if (p.subprojects) {
+                  const subFound = findDeep(p.subprojects)
+                  if (subFound) return subFound
+                }
+              }
+              return undefined
+            }
+            const task = findDeep(projects)
+            if (task) {
+              if (target.type === 'timer') props.onAssignTaskToTimer(target.id, task.text)
+              else props.onAssignTaskToAlarm(target.id, task.text)
+            }
+          } else if (target.type === 'calendar') {
+            const findDeep = (list: Project[]): TaskItem | undefined => {
+              for (const p of list) {
+                const found = findTaskRecursive([...(p.tasks || []), ...(p.archivedTasks || [])], source.taskId)
+                if (found) return found
+                if (p.subprojects) {
+                  const subFound = findDeep(p.subprojects)
+                  if (subFound) return subFound
+                }
+              }
+              return undefined
+            }
+            const task = findDeep(projects)
+            if (task) {
+              const dropEvent = new CustomEvent('task-dropped-on-timeline', {
+                detail: {
+                  date: target.id,
+                  projectId: target.targetProjectId,
+                  taskText: task.text,
+                  taskId: task.id
+                }
+              })
+              window.dispatchEvent(dropEvent)
+            }
           }
         } else if (source.type === 'project' && target.type === 'project') {
           performProjectDrop(source.projectId, target.id, target.position)

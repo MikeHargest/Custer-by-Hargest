@@ -8,6 +8,7 @@ import {
   MaximizeIcon,
   Search,
   LayoutDashboard,
+  CheckSquare,
   GitBranch,
   FileTextIcon,
   CalendarIcon,
@@ -48,6 +49,7 @@ import ProjectOverview from './components/ProjectOverview'
 import PipelineView from './components/PipelineView'
 import NotificationCenter from './components/NotificationCenter'
 import GlobalSearchModal from './components/GlobalSearchModal'
+import GlobalTasksView from './components/GlobalTasksView'
 import AlarmCard from './components/AlarmCard'
 import { Bell } from 'lucide-react'
 
@@ -160,7 +162,7 @@ function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<
-    'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline'
+    'overview' | 'clock' | 'timeline' | 'notes' | 'pipeline' | 'tasks'
   >('overview')
   const [showSettings, setShowSettings] = useState(false)
   const [showFPS, setShowFPS] = useState(false)
@@ -197,6 +199,7 @@ function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [showSearchModal, setShowSearchModal] = useState(false)
+  const [hideEmptyProjects, setHideEmptyProjects] = useState(false)
 
   // Notes toolbar state
   const notesToolbarActionsRef = useRef<NotesViewHandle | null>(null)
@@ -1323,6 +1326,52 @@ function App() {
     return newTaskId
   }
 
+  const onUpdateTask = (projectId: string, taskId: string, updates: Partial<TaskItem>) => {
+    pushToHistory()
+    const updateRecursive = (projs: Project[]): Project[] => {
+      return projs.map((p) => {
+        if (p.id === projectId) {
+          const upTask = (tasks: TaskItem[]): TaskItem[] =>
+            tasks.map((t) => {
+              if (t.id === taskId) return { ...t, ...updates }
+              if (t.subtasks) return { ...t, subtasks: upTask(t.subtasks) }
+              return t
+            })
+          return {
+            ...p,
+            tasks: upTask(p.tasks || []),
+            archivedTasks: upTask(p.archivedTasks || [])
+          }
+        }
+        if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
+        return p
+      })
+    }
+    setProjects((prev) => updateRecursive(prev))
+  }
+
+  const onDeleteTask = (projectId: string, taskId: string) => {
+    pushToHistory()
+    const updateRecursive = (projs: Project[]): Project[] => {
+      return projs.map((p) => {
+        if (p.id === projectId) {
+          const filterTask = (tasks: TaskItem[]): TaskItem[] =>
+            tasks
+              .filter((t) => t.id !== taskId)
+              .map((t) => (t.subtasks ? { ...t, subtasks: filterTask(t.subtasks) } : t))
+          return {
+            ...p,
+            tasks: filterTask(p.tasks || []),
+            archivedTasks: filterTask(p.archivedTasks || [])
+          }
+        }
+        if (p.subprojects) return { ...p, subprojects: updateRecursive(p.subprojects) }
+        return p
+      })
+    }
+    setProjects((prev) => updateRecursive(prev))
+    setTimelineTasks((prev) => prev.filter((t) => t.taskId !== taskId))
+  }
 
   const handleWorkspaceSelected = useCallback(
     (path: string): void => {
@@ -1357,13 +1406,14 @@ function App() {
   }, [])
 
   // --- Tab management ---
-  const VIEW_LABELS: Record<string, string> = { overview: 'Overview', pipeline: 'Pipeline', notes: 'Notes', timeline: 'Calendar', clock: 'Clock' }
+  const VIEW_LABELS: Record<string, string> = { overview: 'Overview', pipeline: 'Pipeline', notes: 'Notes', timeline: 'Calendar', clock: 'Clock', tasks: 'Tasks' }
   const VIEW_ICONS: Record<string, any> = {
     overview: LayoutDashboard,
     pipeline: GitBranch,
     notes: FileTextIcon,
     timeline: CalendarIcon,
-    clock: Clock
+    clock: Clock,
+    tasks: CheckSquare
   }
 
   // Sync active tab when view/project changes
@@ -1687,6 +1737,7 @@ function App() {
                   { id: 'pipeline', icon: GitBranch, label: 'Pipeline' },
                   { id: 'notes', icon: FileTextIcon, label: 'Notes' },
                   { id: 'separator', icon: null, label: 'separator' },
+                  { id: 'tasks', icon: CheckSquare, label: 'Tasks' },
                   { id: 'timeline', icon: CalendarIcon, label: 'Calendar' },
                   { id: 'clock', icon: Clock, label: 'Clock' }
                 ] as const).map((v) => (
@@ -1964,6 +2015,23 @@ function App() {
                   </button>
                   <button className="toolbar-action-btn" onClick={addAlarm}>
                     <Bell size={14} /> Alarm
+                  </button>
+                </div>
+              )}
+
+              {currentView === 'tasks' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button 
+                    className={`toolbar-action-btn ${hideEmptyProjects ? 'active' : ''}`} 
+                    onClick={() => setHideEmptyProjects(!hideEmptyProjects)}
+                    title={hideEmptyProjects ? "Showing only projects with tasks" : "Showing all projects"}
+                    style={{
+                      background: hideEmptyProjects ? 'rgba(255,255,255,0.1)' : 'transparent',
+                      color: hideEmptyProjects ? 'var(--accent)' : 'var(--text-secondary)'
+                    }}
+                  >
+                    <SlidersHorizontal size={14} />
+                    <span>{hideEmptyProjects ? "Filtered" : "All Projects"}</span>
                   </button>
                 </div>
               )}
@@ -2394,6 +2462,16 @@ function App() {
                 onSidebarChange={setNotesSidebarOpen}
                 onActiveNoteTypeChange={setNotesActiveNoteType}
                 notesToolbarActionsRef={notesToolbarActionsRef}
+              />
+            </div>
+            <div style={{ display: currentView === 'tasks' ? 'contents' : 'none' }}>
+              <GlobalTasksView
+                projects={projects}
+                onUpdateTask={onUpdateTask}
+                onTaskAdded={onAddProjectItem}
+                onTaskDeleted={onDeleteTask}
+                showTaskCounts={showTaskCounts}
+                hideEmptyProjects={hideEmptyProjects}
               />
             </div>
             <div

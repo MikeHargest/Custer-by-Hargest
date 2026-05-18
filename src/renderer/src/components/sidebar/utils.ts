@@ -196,6 +196,17 @@ export const insertTaskIntoTree = (
   })
 }
 
+export const findTaskRecursive = (tasks: TaskItem[], id: string): TaskItem | undefined => {
+  for (const t of tasks) {
+    if (t.id === id) return t
+    if (t.subtasks && t.subtasks.length > 0) {
+      const found = findTaskRecursive(t.subtasks, id)
+      if (found) return found
+    }
+  }
+  return undefined
+}
+
 export const insertProjectIntoTree = (
   projects: Project[],
   projectToInsert: Project,
