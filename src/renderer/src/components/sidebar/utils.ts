@@ -161,3 +161,87 @@ export const migrateProjectTasks = (p: Project): Project => {
     subprojects: (p.subprojects || []).map(migrateProjectTasks)
   }
 }
+
+export const insertTaskIntoTree = (
+  tasks: TaskItem[],
+  taskToInsert: TaskItem,
+  targetTaskId: string,
+  position: 'before' | 'after' | 'inside'
+): TaskItem[] => {
+  if (position === 'inside') {
+    return tasks.map((t) => {
+      if (t.id === targetTaskId) {
+        return { ...t, subtasks: [...(t.subtasks || []), taskToInsert], isExpanded: true }
+      }
+      if (t.subtasks && t.subtasks.length > 0) {
+        return { ...t, subtasks: insertTaskIntoTree(t.subtasks, taskToInsert, targetTaskId, position) }
+      }
+      return t
+    })
+  }
+
+  const idx = tasks.findIndex((t) => t.id === targetTaskId)
+  if (idx !== -1) {
+    const newTasks = [...tasks]
+    const insertIdx = position === 'before' ? idx : idx + 1
+    newTasks.splice(insertIdx, 0, taskToInsert)
+    return newTasks
+  }
+
+  return tasks.map((t) => {
+    if (t.subtasks && t.subtasks.length > 0) {
+      return { ...t, subtasks: insertTaskIntoTree(t.subtasks, taskToInsert, targetTaskId, position) }
+    }
+    return t
+  })
+}
+
+export const insertProjectIntoTree = (
+  projects: Project[],
+  projectToInsert: Project,
+  targetProjectId: string,
+  position: 'before' | 'after' | 'inside'
+): Project[] => {
+  if (position === 'inside') {
+    return projects.map((p) => {
+      if (p.id === targetProjectId) {
+        return {
+          ...p,
+          subprojects: [...(p.subprojects || []), projectToInsert],
+          isExpanded: true
+        }
+      }
+      if (p.subprojects && p.subprojects.length > 0) {
+        return {
+          ...p,
+          subprojects: insertProjectIntoTree(
+            p.subprojects,
+            projectToInsert,
+            targetProjectId,
+            position
+          )
+        }
+      }
+      return p
+    })
+  }
+
+  const idx = projects.findIndex((p) => p.id === targetProjectId)
+  if (idx !== -1) {
+    const newProjects = [...projects]
+    const insertIdx = position === 'before' ? idx : idx + 1
+    newProjects.splice(insertIdx, 0, projectToInsert)
+    return newProjects
+  }
+
+  return projects.map((p) => {
+    if (p.subprojects && p.subprojects.length > 0) {
+      return {
+        ...p,
+        subprojects: insertProjectIntoTree(p.subprojects, projectToInsert, targetProjectId, position)
+      }
+    }
+    return p
+  })
+}
+

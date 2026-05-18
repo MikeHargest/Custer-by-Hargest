@@ -15,7 +15,14 @@ import ProjectItem from './subcomponents/ProjectItem'
 import TaskTree from './subcomponents/TaskTree'
 import EventItem from './subcomponents/EventItem'
 import ColorPicker from '../ColorPicker'
-import { removeTaskFromTree, removeTaskFromProjects, migrateProjectTasks } from './utils'
+import { 
+  removeTaskFromTree, 
+  removeTaskFromProjects, 
+  migrateProjectTasks, 
+  insertTaskIntoTree, 
+  insertProjectIntoTree,
+  removeProjectFromTree
+} from './utils'
 
 interface LeftSidebarProps {
   projects: Project[]
@@ -76,8 +83,26 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
 
   const [isInitialLoading, setIsInitialLoading] = useState(true)
 
+  // Drag and drop states
+  const [isDragging, setIsDragging] = useState<string | null>(null)
+  const [dropIndicator, setDropIndicator] = useState<{
+    id: string
+    position: 'before' | 'inside' | 'after'
+    type: 'project' | 'task'
+  } | null>(null)
+
   // Refs
   const sidebarRef = useRef<HTMLDivElement>(null)
+  const dragDataRef = useRef<{
+    type: 'project' | 'task'
+    projectId: string
+    taskId: string
+  } | null>(null)
+  const dropTargetRef = useRef<{
+    type: 'project' | 'task'
+    id: string
+    position: 'before' | 'inside' | 'after'
+  } | null>(null)
   const hasMigrated = useRef(false)
 
   // Migration for old completed tasks
@@ -325,6 +350,200 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
     }
     return undefined
   }
+
+  // --- DRAG AND DROP HANDLERS ---
+  const performTaskDrop = (
+    sourceTaskId: string,
+    targetProjectId: string,
+    targetTaskId: string,
+    position: 'before' | 'after' | 'inside'
+  ) => {
+    setProjects((prev) => {
+      const { projects: withoutTask, extracted } = removeTaskFromProjects(prev, sourceTaskId)
+      if (!extracted) return prev
+
+      const updateRecursive = (list: Project[]): Project[] => {
+        return list.map((p) => {
+          if (p.id === targetProjectId) {
+            return {
+              ...p,
+              tasks: insertTaskIntoTree(p.tasks || [], extracted, targetTaskId, position)
+            }
+          }
+          if (p.subprojects && p.subprojects.length > 0) {
+            return { ...p, subprojects: updateRecursive(p.subprojects) }
+          }
+          return p
+        })
+      }
+      return updateRecursive(withoutTask)
+    })
+  }
+
+  const performProjectDrop = (
+    sourceId: string,
+    targetId: string,
+    position: 'before' | 'after' | 'inside'
+  ) => {
+    setProjects((prev) => {
+      const { projects: withoutProj, extracted } = removeProjectFromTree(prev, sourceId)
+      if (!extracted) return prev
+
+      if (position === 'inside') {
+        return insertProjectIntoTree(withoutProj, extracted, targetId, 'inside')
+      }
+
+      // Root level reordering?
+      const targetIdx = withoutProj.findIndex((p) => p.id === targetId)
+      if (targetIdx !== -1) {
+        const result = [...withoutProj]
+        const insertIdx = position === 'before' ? targetIdx : targetIdx + 1
+        result.splice(insertIdx, 0, extracted)
+        return result
+      }
+
+      // Nested reordering
+      return insertProjectIntoTree(withoutProj, extracted, targetId, position)
+    })
+  }
+
+  const startMouseDrag = (e: React.MouseEvent, info: { type: 'project' | 'task'; projectId: string; taskId: string }) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+
+    const id = info.type === 'project' ? info.projectId : info.taskId
+    setIsDragging(id)
+    dragDataRef.current = info
+
+    const handleMouseMove = (ev: MouseEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)
+      if (!el) {
+        setDropIndicator(null)
+        dropTargetRef.current = null
+        return
+      }
+
+      // 1. Check for DropZones (Explicit gaps/nesting areas)
+      const dropZone = el.closest('[data-dropzone="true"]') as HTMLElement | null
+      if (dropZone) {
+        const action = dropZone.dataset.dzAction as 'before' | 'after' | 'inside' | 'project'
+        const projectId = dropZone.dataset.dzProject || ''
+        const taskId = dropZone.dataset.dzTask || ''
+
+        if (info.type === 'task') {
+          if (action === 'project') {
+            // Drop at the end of project's tasks
+            setDropIndicator({ id: projectId, position: 'inside', type: 'project' })
+            dropTargetRef.current = { type: 'project', id: projectId, position: 'inside', targetProjectId: projectId }
+          } else if (action === 'inside' && taskId) {
+            // Drop inside another task
+            setDropIndicator({ id: taskId, position: 'inside', type: 'task' })
+            dropTargetRef.current = { type: 'task', id: taskId, position: 'inside', targetProjectId: projectId }
+          }
+          return
+        }
+      }
+
+      // 2. Check for Tasks
+      const taskEl = el.closest('[data-task-id]') as HTMLElement | null
+      if (taskEl && info.type === 'task') {
+        const taskId = taskEl.dataset.taskId || ''
+        const projectId = taskEl.dataset.projectId || ''
+        if (taskId === info.taskId) {
+          setDropIndicator(null)
+          dropTargetRef.current = null
+          return
+        }
+
+        const rect = taskEl.getBoundingClientRect()
+        const ratio = (ev.clientY - rect.top) / rect.height
+        const pos: 'before' | 'after' | 'inside' = ratio < 0.25 ? 'before' : ratio > 0.75 ? 'after' : 'inside'
+        
+        setDropIndicator({ id: taskId, position: pos, type: 'task' })
+        dropTargetRef.current = { type: 'task', id: taskId, position: pos, targetProjectId: projectId }
+        return
+      }
+
+      // 3. Check for Projects
+      const projectEl = el.closest('[data-project-id]') as HTMLElement | null
+      if (projectEl) {
+        const projectId = projectEl.dataset.projectId || ''
+        if (info.type === 'project' && projectId === info.projectId) {
+          setDropIndicator(null)
+          dropTargetRef.current = null
+          return
+        }
+
+        const rect = projectEl.getBoundingClientRect()
+        const ratio = (ev.clientY - rect.top) / rect.height
+        const pos = ratio < 0.3 ? 'before' : ratio > 0.7 ? 'after' : 'inside'
+
+        if (info.type === 'project') {
+          setDropIndicator({ id: projectId, position: pos, type: 'project' })
+          dropTargetRef.current = { type: 'project', id: projectId, position: pos }
+        } else if (info.type === 'task' && pos === 'inside') {
+          // Drop task into project
+          setDropIndicator({ id: projectId, position: 'inside', type: 'project' })
+          dropTargetRef.current = { type: 'project', id: projectId, position: 'inside', targetProjectId: projectId }
+        }
+        return
+      }
+
+      setDropIndicator(null)
+      dropTargetRef.current = null
+    }
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+
+      const source = dragDataRef.current
+      const target = dropTargetRef.current as any
+
+      if (source && target) {
+        if (source.type === 'task') {
+          if (target.type === 'task') {
+            performTaskDrop(source.taskId, target.targetProjectId || source.projectId, target.id, target.position)
+          } else if (target.type === 'project') {
+            // Move task to another project (or end of current project)
+            setProjects((prev) => {
+              const { projects: withoutTask, extracted } = removeTaskFromProjects(prev, source.taskId)
+              if (!extracted) return prev
+              
+              const updateRecursive = (list: Project[]): Project[] => {
+                return list.map((p) => {
+                  if (p.id === target.id) {
+                    return { ...p, tasks: [...(p.tasks || []), extracted] }
+                  }
+                  if (p.subprojects && p.subprojects.length > 0) {
+                    return { ...p, subprojects: updateRecursive(p.subprojects) }
+                  }
+                  return p
+                })
+              }
+              return updateRecursive(withoutTask)
+            })
+          }
+        } else if (source.type === 'project' && target.type === 'project') {
+          performProjectDrop(source.projectId, target.id, target.position)
+        }
+      }
+
+      setIsDragging(null)
+      setDropIndicator(null)
+      dragDataRef.current = null
+      dropTargetRef.current = null
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+    document.body.style.cursor = 'grabbing'
+    document.body.style.userSelect = 'none'
+  }
+
   const selectedProject = findProjectRecursive(projects, selectedProjectId)
 
   if (!projects) return null
@@ -457,9 +676,9 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                       }
                     }} 
                     quickAddTask={(id) => onTaskAdded(id, 'New Task', undefined)} 
-                    onDragStart={() => {}} 
-                    dropIndicator={null} 
-                    isDragging={null} 
+                    onDragStart={startMouseDrag} 
+                    dropIndicator={dropIndicator} 
+                    isDragging={isDragging} 
                     openColorPickerFor={(id, rect) => setColorPickerState({ projectId: id, anchorRect: rect })} 
                     showTaskCounts={showTaskCounts} 
                     showColoredDots={showColoredDots} 
@@ -693,9 +912,9 @@ const LeftSidebar = forwardRef<HTMLDivElement, LeftSidebarProps>((props, _ref) =
                     }} 
                     getTaskTimelineDate={() => null} 
                     onTaskAdded={onTaskAdded} 
-                    isDragging={null} 
-                    dropIndicator={null} 
-                    startMouseDrag={() => {}} 
+                    isDragging={isDragging} 
+                    dropIndicator={dropIndicator} 
+                    startMouseDrag={startMouseDrag} 
                     showTaskCounts={showTaskCounts} 
                   />
                 </div>

@@ -14,8 +14,8 @@ const DropZone: React.FC<DropZoneProps> = ({ dzAction, dzProject, dzTask }) => {
       data-dz-project={dzProject}
       data-dz-task={dzTask || ''}
       style={{
-        height: '20px',
-        margin: '-10px 0',
+        height: '10px',
+        margin: '-5px 0',
         position: 'relative',
         zIndex: 100
       }}
