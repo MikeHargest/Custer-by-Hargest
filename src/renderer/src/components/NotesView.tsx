@@ -3470,40 +3470,6 @@ export default function NotesView({
               >
                 <div
                   style={{
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    padding: '0 10px',
-                    alignItems: 'center',
-                    height: '45px',
-                    borderBottom: '1px solid rgba(255,255,255,0.05)',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <button
-                    onClick={() => setShowSidebar(!showSidebar)}
-                    title={showSidebar ? 'Hide sidebar' : 'Show sidebar'}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: showSidebar ? 0.6 : 0.4,
-                      flexShrink: 0
-                    }}
-                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.opacity = showSidebar ? '0.6' : '0.4')
-                    }
-                  >
-                    <PanelRight size={18} />
-                  </button>
-                </div>
-                <div
-                  style={{
                     flex: 1,
                     display: 'flex',
                     alignItems: 'center',

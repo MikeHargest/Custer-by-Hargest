@@ -1809,8 +1809,6 @@ function App() {
                   >
                     <PanelRight size={16} />
                   </button>
-
-                  <div className="content-toolbar-separator" />
                 </div>
               )}
 
