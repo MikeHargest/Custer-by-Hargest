@@ -1814,6 +1814,21 @@ function App() {
                 </div>
               )}
 
+              {currentView === 'pipeline' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <button
+                    className="view-icon-btn"
+                    onClick={() => {
+                      const event = new CustomEvent('pipeline-toggle-sidebar')
+                      window.dispatchEvent(event)
+                    }}
+                    title="Toggle Stage Sidebar"
+                  >
+                    <PanelRight size={18} />
+                  </button>
+                </div>
+              )}
+
               {currentView === 'clock' && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <button className="toolbar-action-btn" onClick={addTimer}>

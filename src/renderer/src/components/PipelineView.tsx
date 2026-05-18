@@ -818,25 +818,6 @@ export default function PipelineView({
             >
               <PlusCircle size={14} /> Stage
             </button>
-
-            <button
-              onClick={() => setShowSidebar(!showSidebar)}
-              title="Toggle Stage Sidebar"
-              style={{ 
-                padding: '6px', 
-                background: showSidebar ? 'rgba(255,255,255,0.08)' : 'transparent', 
-                border: 'none', 
-                borderRadius: '6px', 
-                color: showSidebar ? 'var(--text-primary)' : 'var(--text-secondary)', 
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginLeft: '4px'
-              }}
-            >
-              <PanelRight size={18} />
-            </button>
           </div>
 
           {/* Stages area */}
